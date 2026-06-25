@@ -18,7 +18,8 @@ status from one place.
 Installers are published from GitHub Releases:
 
 - **Windows**: NSIS/MSI installer from the `ishell-windows-x64` artifact.
-- **macOS Intel / Apple Silicon**: universal DMG from the `ishell-macos-universal` artifact.
+- **macOS Intel**: DMG from the `ishell-macos-intel` artifact.
+- **macOS Apple Silicon**: DMG from the `ishell-macos-arm` artifact.
 - **Linux**: DEB/RPM/AppImage bundles from the `ishell-linux-x64` artifact.
 
 Release builds are generated automatically when a `v*` tag is pushed. They can
@@ -82,11 +83,14 @@ npm run tauri -- build
 
 Build outputs are written under `src-tauri/target/*/release/bundle/`.
 
-For a macOS universal build:
+For macOS Intel and Apple Silicon builds:
 
 ```bash
-rustup target add x86_64-apple-darwin aarch64-apple-darwin
-npm run tauri -- build --target universal-apple-darwin
+rustup target add x86_64-apple-darwin
+npm run tauri -- build --target x86_64-apple-darwin
+
+rustup target add aarch64-apple-darwin
+npm run tauri -- build --target aarch64-apple-darwin
 ```
 
 ## Release

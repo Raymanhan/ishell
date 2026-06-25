@@ -27,11 +27,16 @@ jobs:
             target: x86_64-unknown-linux-gnu
             rustTargets: x86_64-unknown-linux-gnu
             artifact: ishell-linux-x64
-          - label: macOS Universal
+          - label: macOS Intel
+            os: macos-13
+            target: x86_64-apple-darwin
+            rustTargets: x86_64-apple-darwin
+            artifact: ishell-macos-intel
+          - label: macOS Arm
             os: macos-latest
-            target: universal-apple-darwin
-            rustTargets: x86_64-apple-darwin,aarch64-apple-darwin
-            artifact: ishell-macos-universal
+            target: aarch64-apple-darwin
+            rustTargets: aarch64-apple-darwin
+            artifact: ishell-macos-arm
 
     steps:
       - name: Checkout
