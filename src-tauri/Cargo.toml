@@ -1,0 +1,28 @@
+[package]
+name = "ishell"
+version = "0.1.0"
+description = "A lightweight SSH and SFTP manager"
+authors = ["iShell"]
+license = "MIT"
+repository = "https://github.com/Raymanhan/ishell"
+edition = "2021"
+
+[lib]
+name = "ishell_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+uuid = { version = "1", features = ["v4"] }
+ssh2 = "0.9"
+# Local encrypted storage: SQLite (bundled, no system dependency) + AES-256-GCM.
+rusqlite = { version = "0.32", features = ["bundled"] }
+aes-gcm = "0.10"
+getrandom = "0.2"

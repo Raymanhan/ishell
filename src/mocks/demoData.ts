@@ -1,0 +1,84 @@
+import type { ServerRecord, ServerStatus, SftpEntry } from "../types";
+
+export const demoServers: ServerRecord[] = [
+  {
+    id: "demo-prod",
+    name: "Tokyo API",
+    host: "10.42.0.18",
+    port: 22,
+    username: "deploy",
+    group: "Production",
+    tags: ["api", "ubuntu"],
+    authType: "password",
+    keyPath: null,
+    color: "#59c3a6",
+    notes: "Primary API node",
+    createdAt: 0,
+    updatedAt: 0,
+    lastConnectedAt: 0,
+  },
+  {
+    id: "demo-edge",
+    name: "Singapore Edge",
+    host: "edge.internal",
+    port: 22,
+    username: "root",
+    group: "Edge",
+    tags: ["cdn", "sftp"],
+    authType: "key",
+    keyPath: "~/.ssh/id_ed25519",
+    color: "#ffb454",
+    notes: "Regional file gateway",
+    createdAt: 0,
+    updatedAt: 0,
+    lastConnectedAt: null,
+  },
+];
+
+export const demoFiles: SftpEntry[] = [
+  { name: "etc", path: "/etc", isDir: true, size: null, permissions: 0o40755, modifiedAt: null },
+  { name: "var", path: "/var", isDir: true, size: null, permissions: 0o40755, modifiedAt: null },
+  { name: "home", path: "/home", isDir: true, size: null, permissions: 0o40755, modifiedAt: null },
+  { name: "release.tar.gz", path: "/release.tar.gz", isDir: false, size: 48_700_000, permissions: 0o100644, modifiedAt: null },
+  { name: "health.log", path: "/health.log", isDir: false, size: 182_020, permissions: 0o100644, modifiedAt: null },
+];
+
+export const demoStatus: ServerStatus = {
+  id: "empty",
+  os: "Linux 6.8.0 x86_64",
+  uptimeSeconds: 968_240,
+  load1: 0.42,
+  load5: 0.55,
+  load15: 0.61,
+  cpuPercent: 18,
+  memoryTotalMb: 8192,
+  memoryAvailableMb: 4890,
+  diskUsedPercent: 42,
+  diskUsedGb: 38.4,
+  diskTotalGb: 91.5,
+  diskMounts: [
+    {
+      filesystem: "/dev/vda1",
+      mountPoint: "/",
+      usedPercent: 42,
+      usedGb: 38.4,
+      totalGb: 91.5,
+    },
+    {
+      filesystem: "/dev/vdb1",
+      mountPoint: "/data",
+      usedPercent: 68,
+      usedGb: 326.2,
+      totalGb: 480.0,
+    },
+    {
+      filesystem: "tmpfs",
+      mountPoint: "/run",
+      usedPercent: 7,
+      usedGb: 0.3,
+      totalGb: 4.0,
+    },
+  ],
+  processes: 148,
+  sampledAt: Date.now() / 1000,
+};
