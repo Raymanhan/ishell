@@ -17,6 +17,7 @@ export interface ShellTab {
   networkHistory: NetworkPoint[];
   files: FileColumn[];
   selectedPath: string | null;
+  selectedPaths: string[];
   /** Cache of directory listings keyed by absolute path, for instant revisits. */
   cache: Record<string, SftpEntry[]>;
 }

@@ -1,44 +1,28 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <defs>
-    <linearGradient id="bg" x1="184" y1="132" x2="846" y2="898" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#2b3358"/>
-      <stop offset="0.45" stop-color="#131a34"/>
-      <stop offset="1" stop-color="#070b18"/>
+    <linearGradient id="bg" x1="200" y1="160" x2="824" y2="864" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2b3a6b"/>
+      <stop offset="0.5" stop-color="#1b2347"/>
+      <stop offset="1" stop-color="#0d1226"/>
     </linearGradient>
-    <radialGradient id="aqua" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(670 314) rotate(124) scale(470)">
-      <stop stop-color="#7df8dd" stop-opacity="0.52"/>
-      <stop offset="0.48" stop-color="#47a8ff" stop-opacity="0.18"/>
-      <stop offset="1" stop-color="#47a8ff" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="mark" x1="344" y1="276" x2="704" y2="724" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#efffff"/>
-      <stop offset="0.42" stop-color="#80f3de"/>
-      <stop offset="1" stop-color="#77a7ff"/>
+    <linearGradient id="gloss" x1="512" y1="100" x2="512" y2="560" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
     </linearGradient>
-    <linearGradient id="ring" x1="286" y1="648" x2="764" y2="444" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#7df8dd"/>
-      <stop offset="0.55" stop-color="#7cb7ff"/>
-      <stop offset="1" stop-color="#f1f7ff"/>
+    <linearGradient id="glyph" x1="360" y1="400" x2="680" y2="640" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#cfe0ff"/>
     </linearGradient>
-    <filter id="lift" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#01040d" flood-opacity="0.58"/>
-    </filter>
-    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="13" result="blur"/>
-      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.37 0 0 0 0 0.78 0 0 0 0 1 0 0 0 0.55 0"/>
-      <feBlend in="SourceGraphic"/>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#03060f" flood-opacity="0.5"/>
     </filter>
   </defs>
-  <rect x="100" y="100" width="824" height="824" rx="188" fill="url(#bg)"/>
-  <rect x="100" y="100" width="824" height="824" rx="188" fill="url(#aqua)"/>
-  <path d="M148 255C188 167 265 124 380 124H752C850 124 900 180 900 291V754C900 845 846 900 755 900H270C206 900 160 872 134 816C228 850 338 866 465 864C679 860 807 777 850 616C879 505 860 390 794 272C754 201 675 165 557 165H338C249 165 186 195 148 255Z" fill="#ffffff" opacity="0.08"/>
-  <g filter="url(#lift)">
-    <path d="M516 330C516 303.5 537.5 282 564 282C590.5 282 612 303.5 612 330C612 356.5 590.5 378 564 378C537.5 378 516 356.5 516 330Z" fill="url(#mark)"/>
-    <path d="M531 436C531 410.6 551.6 390 577 390H590C615.4 390 636 410.6 636 436V682C636 707.4 615.4 728 590 728H577C551.6 728 531 707.4 531 682V436Z" fill="url(#mark)"/>
-    <path d="M334 594C392 512 505 468 632 484C704 493 758 521 790 565" fill="none" stroke="url(#ring)" stroke-width="56" stroke-linecap="round" filter="url(#glow)"/>
-    <path d="M333 594C392 675 504 717 630 701C704 691 759 662 790 618" fill="none" stroke="url(#ring)" stroke-width="56" stroke-linecap="round" opacity="0.68"/>
-    <circle cx="333" cy="594" r="34" fill="#efffff"/>
-    <circle cx="790" cy="594" r="28" fill="#7df8dd"/>
+  <!-- macOS icon grid: 824x824 shape centered in 1024 canvas with transparent margins -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#gloss)"/>
+  <!-- prompt glyph, scaled to fit inside the shape -->
+  <g filter="url(#soft)" transform="translate(512 512) scale(0.8) translate(-512 -512)">
+    <path d="M336 392 L508 512 L336 632" fill="none" stroke="url(#glyph)" stroke-width="86" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M560 636 H720" fill="none" stroke="url(#glyph)" stroke-width="86" stroke-linecap="round"/>
   </g>
-  <rect x="114" y="114" width="796" height="796" rx="176" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="5"/>
 </svg>

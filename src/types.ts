@@ -38,6 +38,7 @@ export interface ServerStatus {
   load1: number;
   load5: number;
   load15: number;
+  cpuCores?: number | null;
   cpuPercent: number;
   memoryTotalMb?: number | null;
   memoryAvailableMb?: number | null;
@@ -74,6 +75,8 @@ export interface SftpEntry {
   path: string;
   isDir: boolean;
   size?: number | null;
+  uid?: number | null;
+  gid?: number | null;
   permissions?: number | null;
   modifiedAt?: number | null;
 }
@@ -86,6 +89,7 @@ export interface FileColumn {
 }
 
 export type UploadStatus = "pending" | "uploading" | "done" | "error" | "canceled";
+export type DownloadStatus = "pending" | "downloading" | "done" | "error" | "canceled";
 
 export interface UploadItem {
   id: string;
@@ -100,7 +104,27 @@ export interface UploadItem {
   error?: string;
 }
 
+export interface DownloadItem {
+  id: string;
+  tabId: string;
+  name: string;
+  remotePath: string;
+  serverId: string;
+  transferred: number;
+  total: number;
+  status: DownloadStatus;
+  savedPath?: string;
+  error?: string;
+}
+
 export interface UploadProgressPayload {
+  transferId: string;
+  transferred: number;
+  total: number;
+  done: boolean;
+}
+
+export interface DownloadProgressPayload {
   transferId: string;
   transferred: number;
   total: number;
@@ -109,7 +133,14 @@ export interface UploadProgressPayload {
 
 export interface TerminalDataPayload {
   sessionId: string;
+  offset: number;
   data: string;
+}
+
+export interface TerminalSnapshotPayload {
+  data: string;
+  startOffset: number;
+  endOffset: number;
 }
 
 export interface TerminalClosedPayload {

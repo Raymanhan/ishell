@@ -7,7 +7,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type WheelEvent as ReactWheelEvent,
 } from "react";
-import { Activity, ArrowLeft, ArrowRight, FolderTree, Plus, Server, Settings, X } from "lucide-react";
+import { Activity, ArrowLeft, ArrowRight, Clock3, FolderTree, Server, Settings, X } from "lucide-react";
 import type { ShellTab } from "../features/shell/types";
 
 export function TabBar({
@@ -15,31 +15,33 @@ export function TabBar({
   activeTabId,
   filesOpen,
   statusOpen,
+  historyOpen,
   serverCount,
   onOpenConnections,
   onOpenSettings,
   onToggleFiles,
   onToggleStatus,
+  onToggleHistory,
   notice,
   onActivate,
   onClose,
   onCloseTabs,
-  onNew,
 }: {
   tabs: ShellTab[];
   activeTabId: string | null;
   filesOpen: boolean;
   statusOpen: boolean;
+  historyOpen: boolean;
   serverCount: number;
   onOpenConnections: () => void;
   onOpenSettings: () => void;
   onToggleFiles: () => void;
   onToggleStatus: () => void;
+  onToggleHistory: () => void;
   notice: string;
   onActivate: (id: string) => void;
   onClose: (id: string) => void;
   onCloseTabs: (ids: string[]) => void;
-  onNew: () => void;
 }) {
   const tabsRef = useRef<HTMLDivElement>(null);
   const activeTabRef = useRef<HTMLDivElement>(null);
@@ -188,9 +190,6 @@ export function TabBar({
               </span>
             </div>
           ))}
-          <button type="button" className="tab-add" onClick={onNew} title="新建会话">
-            <Plus size={15} />
-          </button>
         </div>
         <div className={`tab-scrollbar ${scrollbar.visible ? "visible" : ""}`} aria-hidden>
           <span
@@ -227,6 +226,18 @@ export function TabBar({
             >
               <span className="dock-toggle-icon">
                 <Activity size={14} />
+              </span>
+            </button>
+            <button
+              type="button"
+              className={`dock-toggle ${historyOpen ? "on" : ""}`}
+              onClick={onToggleHistory}
+              title="历史命令"
+              aria-label="历史命令"
+              aria-pressed={historyOpen}
+            >
+              <span className="dock-toggle-icon">
+                <Clock3 size={14} />
               </span>
             </button>
             </>

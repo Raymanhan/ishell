@@ -52,6 +52,7 @@ pub struct ServerStatus {
     pub load1: f64,
     pub load5: f64,
     pub load15: f64,
+    pub cpu_cores: Option<u64>,
     pub cpu_percent: f64,
     pub memory_total_mb: Option<u64>,
     pub memory_available_mb: Option<u64>,
@@ -88,6 +89,8 @@ pub struct SftpEntry {
     pub path: String,
     pub is_dir: bool,
     pub size: Option<u64>,
+    pub uid: Option<u32>,
+    pub gid: Option<u32>,
     pub permissions: Option<u32>,
     pub modified_at: Option<u64>,
 }
@@ -105,7 +108,16 @@ pub struct UploadProgress {
 #[serde(rename_all = "camelCase")]
 pub struct TerminalDataPayload {
     pub session_id: String,
+    pub offset: usize,
     pub data: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalSnapshotPayload {
+    pub data: String,
+    pub start_offset: usize,
+    pub end_offset: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]

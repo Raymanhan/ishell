@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   ChevronRight,
+  Columns3,
   Download,
   File,
   Folder,
@@ -10,6 +11,7 @@ import {
   HardDrive,
   Pencil,
   RefreshCw,
+  TableProperties,
   Trash2,
   Upload,
   UploadCloud,
@@ -37,6 +39,8 @@ interface CreateDirState {
   value: string;
 }
 
+type SftpViewMode = "tree" | "columns";
+
 export function SftpBrowser({
   tab,
   busy,
@@ -57,19 +61,31 @@ export function SftpBrowser({
   dragOver: boolean;
   onOpen: (entry: SftpEntry, columnIndex: number) => void;
   onPathSubmit: (path: string) => void;
-  onSelect: (path: string | null) => void;
+  onSelect: (path: string | null, paths?: string[]) => void;
   onRefresh: () => void;
   onUpload: (targetDir?: string) => void;
-  onDownload: (entry: SftpEntry) => void;
+  onDownload: (entries: SftpEntry[]) => void;
   onMkdir: (name: string, targetDir?: string) => void;
   onRename: (entry: SftpEntry, columnIndex: number, nextName: string) => void;
-  onDelete: (entry: SftpEntry, columnIndex: number) => void;
+  onDelete: (entries: SftpEntry[], columnIndex: number) => void;
   onClose: () => void;
 }) {
   const columns = tab.files;
   const currentDir = columns.length ? columns[columns.length - 1].path : "/";
+  const currentColumnIndex = Math.max(0, columns.length - 1);
+  const currentColumn = columns[currentColumnIndex] ?? null;
+  const treeRows = buildDirectoryTreeRows(columns);
+  const selectedPaths = tab.selectedPaths?.length
+    ? tab.selectedPaths
+    : tab.selectedPath
+      ? [tab.selectedPath]
+      : [];
+  const selectedPathSet = new Set(selectedPaths);
+  const selectedEntries = selectedPaths.map((path) => findEntry(tab, path)).filter((entry): entry is SftpEntry => Boolean(entry));
+  const selectedDownloadEntries = selectedEntries.filter((entry) => !entry.isDir);
   const selected = findEntry(tab, tab.selectedPath);
   const selectedColumnIndex = findEntryColumnIndex(tab, tab.selectedPath);
+  const [viewMode, setViewMode] = useState<SftpViewMode>("tree");
   const [pathValue, setPathValue] = useState(currentDir);
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
   const [renaming, setRenaming] = useState<RenameState | null>(null);
@@ -83,9 +99,10 @@ export function SftpBrowser({
   // Keep the most recently opened column in view as the browser overflows right.
   const columnsRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    if (viewMode !== "columns") return;
     const node = columnsRef.current;
     if (node) node.scrollTo({ left: node.scrollWidth, behavior: "smooth" });
-  }, [columns.length]);
+  }, [columns.length, viewMode]);
 
   useEffect(() => {
     setPathValue(currentDir);
@@ -157,7 +174,7 @@ export function SftpBrowser({
   ) {
     event.preventDefault();
     event.stopPropagation();
-    if (entry) onSelect(entry.path);
+    if (entry && !selectedPathSet.has(entry.path)) onSelect(entry.path, [entry.path]);
     setMenu({
       x: event.clientX,
       y: event.clientY,
@@ -239,6 +256,27 @@ export function SftpBrowser({
     onPathSubmit(nextPath);
   }
 
+  function selectEntry(entry: SftpEntry, columnIndex: number, event: React.MouseEvent) {
+    if (event.shiftKey) {
+      const column = columns[columnIndex];
+      const anchorPath = tab.selectedPath;
+      const anchorIndex = column?.entries.findIndex((item) => item.path === anchorPath) ?? -1;
+      const entryIndex = column?.entries.findIndex((item) => item.path === entry.path) ?? -1;
+      if (column && anchorIndex >= 0 && entryIndex >= 0) {
+        const start = Math.min(anchorIndex, entryIndex);
+        const end = Math.max(anchorIndex, entryIndex);
+        const paths = column.entries.slice(start, end + 1).map((item) => item.path);
+        onSelect(entry.path, paths);
+        return;
+      }
+    }
+    onSelect(entry.path, [entry.path]);
+  }
+
+  function selectedBatchFor(entry: SftpEntry) {
+    return selectedPathSet.has(entry.path) ? selectedEntries : [entry];
+  }
+
   return (
     <div className="sftp" onContextMenu={openEmptyMenu}>
       <div className="sftp-bar">
@@ -265,15 +303,34 @@ export function SftpBrowser({
         </label>
 
         <div className="sftp-tools">
+          <button
+            type="button"
+            className={`tool ${viewMode === "tree" ? "on" : ""}`}
+            onClick={() => setViewMode("tree")}
+            title="目录树明细视图"
+            aria-pressed={viewMode === "tree"}
+          >
+            <TableProperties size={15} />
+          </button>
+          <button
+            type="button"
+            className={`tool ${viewMode === "columns" ? "on" : ""}`}
+            onClick={() => setViewMode("columns")}
+            title="多列视图"
+            aria-pressed={viewMode === "columns"}
+          >
+            <Columns3 size={15} />
+          </button>
+          <span className="tool-sep" />
           <button type="button" className="tool" onClick={() => onUpload(currentDir)} title="上传到当前目录">
             <Upload size={15} />
           </button>
           <button
             type="button"
             className="tool"
-            disabled={!selected || selected.isDir}
-            onClick={() => selected && onDownload(selected)}
-            title="下载所选文件"
+            disabled={selectedDownloadEntries.length === 0}
+            onClick={() => onDownload(selectedDownloadEntries)}
+            title={selectedDownloadEntries.length > 1 ? `下载所选 ${selectedDownloadEntries.length} 个文件` : "下载所选文件"}
           >
             <Download size={15} />
           </button>
@@ -283,7 +340,7 @@ export function SftpBrowser({
           <button
             type="button"
             className="tool"
-            disabled={!selected}
+            disabled={selectedEntries.length !== 1 || !selected}
             onClick={() => selected && startRename(selected, selectedColumnIndex)}
             title="重命名"
           >
@@ -292,9 +349,9 @@ export function SftpBrowser({
           <button
             type="button"
             className="tool danger"
-            disabled={!selected}
-            onClick={() => selected && onDelete(selected, selectedColumnIndex)}
-            title="删除"
+            disabled={selectedEntries.length === 0}
+            onClick={() => selectedEntries.length > 0 && onDelete(selectedEntries, selectedColumnIndex)}
+            title={selectedEntries.length > 1 ? `删除所选 ${selectedEntries.length} 项` : "删除"}
           >
             <Trash2 size={15} />
           </button>
@@ -308,128 +365,301 @@ export function SftpBrowser({
         </div>
       </div>
 
-      <div className="columns" ref={columnsRef}>
-        {columns.length === 0 ? (
-          <div className="sftp-empty">
-            <Folder size={22} />
-            <p>正在打开目录…</p>
-          </div>
-        ) : (
-          columns.map((column, index) => {
-            const className = [
-              "column",
-              column.loading ? "loading" : "",
-              column.loading && column.entries.length ? "refreshing" : "",
-            ]
-              .filter(Boolean)
-              .join(" ");
-
-            return (
-              <section key={`${column.path}-${index}`} className={className}>
-                <div className="column-body" onContextMenu={(event) => openMenu(event, null, index)}>
-                  {creatingDir?.parentPath === column.path && (
-                    <div className="entry creating">
+      {viewMode === "tree" ? (
+        <div className="sftp-split">
+          <aside className="sftp-tree" onContextMenu={(event) => openMenu(event, null, currentColumnIndex)}>
+            <div className="tree-scroll">
+              {columns.length === 0 ? (
+                <div className="column-state">正在打开目录…</div>
+              ) : (
+                treeRows.map((row) => {
+                  const isRoot = row.entry.path === "/";
+                  const isCurrent = currentDir === row.entry.path;
+                  const isActive = selectedPathSet.has(row.entry.path);
+                  const rowClassName = [
+                    "tree-row",
+                    isCurrent ? "current" : "",
+                    isActive ? "on" : "",
+                    row.inTrail ? "trail" : "",
+                    row.loading ? "busy" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ");
+                  return (
+                    <button
+                      key={`${row.entry.path}-${row.level}`}
+                      type="button"
+                      className={rowClassName}
+                      style={{ paddingLeft: `${8 + row.level * 14}px` }}
+                      onClick={() => {
+                        onSelect(row.entry.path);
+                        onOpen(row.entry, isRoot ? 0 : row.columnIndex + 1);
+                      }}
+                      onContextMenu={(event) =>
+                        isRoot ? openMenu(event, null, 0) : openMenu(event, row.entry, row.columnIndex)
+                      }
+                    >
+                      <ChevronRight size={12} className="tree-caret" />
                       <Folder size={14} className="ic-dir" />
-                      <input
-                        ref={createInputRef}
-                        className="entry-rename"
-                        value={creatingDir.value}
-                        aria-label="新建文件夹名称"
-                        onChange={(event) =>
-                          setCreatingDir((current) =>
-                            current ? { ...current, value: event.target.value } : current,
-                          )
-                        }
-                        onClick={(event) => event.stopPropagation()}
-                        onDoubleClick={(event) => event.stopPropagation()}
-                        onContextMenu={(event) => event.stopPropagation()}
-                        onBlur={commitCreateDir}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") commitCreateDir();
-                          if (event.key === "Escape") cancelCreateDir();
-                        }}
-                      />
-                    </div>
-                  )}
-                  {column.error ? (
-                    <div className="column-state bad">{column.error}</div>
-                  ) : column.entries.length === 0 && column.loading ? (
-                    <div className="column-skeleton">
-                      {Array.from({ length: 7 }).map((_, skeleton) => (
-                        <span key={skeleton} className="skeleton-row" />
-                      ))}
-                    </div>
-                  ) : column.entries.length === 0 ? (
-                    <div className="column-state">空目录</div>
-                  ) : (
-                    column.entries.map((entry) => {
-                      const isActive = tab.selectedPath === entry.path;
-                      const inPath = columns[index + 1]?.path === entry.path;
-                      const isOpening = entry.isDir && inPath && columns[index + 1]?.loading;
-                      const isRenaming = renaming?.entry.path === entry.path;
-                      const entryClassName = [
-                        "entry",
-                        isActive ? "on" : "",
-                        inPath ? "trail" : "",
-                        isOpening ? "busy" : "",
-                        isRenaming ? "renaming" : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ");
-                      return (
-                        <button
-                          key={entry.path}
-                          type="button"
-                          className={entryClassName}
-                          onClick={() => {
-                            if (isRenaming) return;
-                            onSelect(entry.path);
-                            if (entry.isDir) onOpen(entry, index + 1);
+                      <span>{isRoot ? "/" : row.entry.name}</span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </aside>
+
+          <section className="sftp-detail">
+            <div className="detail-table">
+              <div className="detail-row detail-header">
+                <span>文件名</span>
+                <span>大小</span>
+                <span>修改时间</span>
+                <span>权限</span>
+                <span>用户/组</span>
+              </div>
+              <div className="detail-body" onContextMenu={(event) => openMenu(event, null, currentColumnIndex)}>
+                {columns.length === 0 ? (
+                  <div className="sftp-empty">
+                    <Folder size={22} />
+                    <p>正在打开目录…</p>
+                  </div>
+                ) : currentColumn?.error ? (
+                  <div className="column-state bad">{currentColumn.error}</div>
+                ) : currentColumn?.entries.length === 0 && currentColumn.loading ? (
+                  <div className="column-skeleton">
+                    {Array.from({ length: 7 }).map((_, skeleton) => (
+                      <span key={skeleton} className="skeleton-row" />
+                    ))}
+                  </div>
+                ) : (
+                  <>
+                    {creatingDir?.parentPath === currentDir && (
+                      <div className="detail-row creating">
+                        <span className="detail-name">
+                          <Folder size={14} className="ic-dir" />
+                          <input
+                            ref={createInputRef}
+                            className="entry-rename"
+                            value={creatingDir.value}
+                            aria-label="新建文件夹名称"
+                            onChange={(event) =>
+                              setCreatingDir((current) =>
+                                current ? { ...current, value: event.target.value } : current,
+                              )
+                            }
+                            onClick={(event) => event.stopPropagation()}
+                            onDoubleClick={(event) => event.stopPropagation()}
+                            onContextMenu={(event) => event.stopPropagation()}
+                            onBlur={commitCreateDir}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") commitCreateDir();
+                              if (event.key === "Escape") cancelCreateDir();
+                            }}
+                          />
+                        </span>
+                        <span />
+                        <span />
+                        <span />
+                        <span />
+                      </div>
+                    )}
+                    {currentColumn?.entries.length === 0 ? (
+                      <div className="column-state">空目录</div>
+                    ) : (
+                      currentColumn?.entries.map((entry) => {
+                        const isActive = selectedPathSet.has(entry.path);
+                        const inPath = columns[currentColumnIndex + 1]?.path === entry.path;
+                        const isOpening = entry.isDir && inPath && columns[currentColumnIndex + 1]?.loading;
+                        const isRenaming = renaming?.entry.path === entry.path;
+                        const rowClassName = [
+                          "detail-row",
+                          isActive ? "on" : "",
+                          inPath ? "trail" : "",
+                          isOpening ? "busy" : "",
+                          isRenaming ? "renaming" : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ");
+                        return (
+                          <button
+                            key={entry.path}
+                            type="button"
+                            className={rowClassName}
+                            onClick={(event) => {
+                              if (isRenaming) return;
+                              selectEntry(entry, currentColumnIndex, event);
+                              if (entry.isDir) onOpen(entry, currentColumnIndex + 1);
+                            }}
+                            onContextMenu={(event) => openMenu(event, entry, currentColumnIndex)}
+                          >
+                            <span className="detail-name">
+                              {entry.isDir ? (
+                                <Folder size={14} className="ic-dir" />
+                              ) : (
+                                <File size={14} className="ic-file" />
+                              )}
+                              {isRenaming ? (
+                                <input
+                                  ref={renameInputRef}
+                                  className="entry-rename"
+                                  value={renaming.value}
+                                  onChange={(event) =>
+                                    setRenaming((current) =>
+                                      current ? { ...current, value: event.target.value } : current,
+                                    )
+                                  }
+                                  onClick={(event) => event.stopPropagation()}
+                                  onDoubleClick={(event) => event.stopPropagation()}
+                                  onContextMenu={(event) => event.stopPropagation()}
+                                  onBlur={commitRename}
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter") commitRename();
+                                    if (event.key === "Escape") cancelRename();
+                                  }}
+                                />
+                              ) : (
+                                <span>{entry.name}</span>
+                              )}
+                            </span>
+                            <span className="mono">{entry.isDir ? "文件夹" : formatBytes(entry.size)}</span>
+                            <span className="mono">{formatModifiedAt(entry.modifiedAt)}</span>
+                            <span className="mono">{formatPermissions(entry)}</span>
+                            <span className="mono">{formatOwnerGroup(entry)}</span>
+                          </button>
+                        );
+                      })
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : (
+        <div className="columns" ref={columnsRef}>
+          {columns.length === 0 ? (
+            <div className="sftp-empty">
+              <Folder size={22} />
+              <p>正在打开目录…</p>
+            </div>
+          ) : (
+            columns.map((column, index) => {
+              const className = [
+                "column",
+                column.loading ? "loading" : "",
+                column.loading && column.entries.length ? "refreshing" : "",
+              ]
+                .filter(Boolean)
+                .join(" ");
+
+              return (
+                <section key={`${column.path}-${index}`} className={className}>
+                  <div className="column-body" onContextMenu={(event) => openMenu(event, null, index)}>
+                    {creatingDir?.parentPath === column.path && (
+                      <div className="entry creating">
+                        <Folder size={14} className="ic-dir" />
+                        <input
+                          ref={createInputRef}
+                          className="entry-rename"
+                          value={creatingDir.value}
+                          aria-label="新建文件夹名称"
+                          onChange={(event) =>
+                            setCreatingDir((current) =>
+                              current ? { ...current, value: event.target.value } : current,
+                            )
+                          }
+                          onClick={(event) => event.stopPropagation()}
+                          onDoubleClick={(event) => event.stopPropagation()}
+                          onContextMenu={(event) => event.stopPropagation()}
+                          onBlur={commitCreateDir}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") commitCreateDir();
+                            if (event.key === "Escape") cancelCreateDir();
                           }}
-                          onContextMenu={(event) => openMenu(event, entry, index)}
-                        >
-                          {entry.isDir ? (
-                            <Folder size={14} className="ic-dir" />
-                          ) : (
-                            <File size={14} className="ic-file" />
-                          )}
-                          {isRenaming ? (
-                            <input
-                              ref={renameInputRef}
-                              className="entry-rename"
-                              value={renaming.value}
-                              onChange={(event) =>
-                                setRenaming((current) =>
-                                  current ? { ...current, value: event.target.value } : current,
-                                )
-                              }
-                              onClick={(event) => event.stopPropagation()}
-                              onDoubleClick={(event) => event.stopPropagation()}
-                              onContextMenu={(event) => event.stopPropagation()}
-                              onBlur={commitRename}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter") commitRename();
-                                if (event.key === "Escape") cancelRename();
-                              }}
-                            />
-                          ) : (
-                            <span className="entry-name">{entry.name}</span>
-                          )}
-                          {entry.isDir ? (
-                            <ChevronRight size={13} className="entry-chev" />
-                          ) : (
-                            <small>{formatBytes(entry.size)}</small>
-                          )}
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              </section>
-            );
-          })
-        )}
-      </div>
+                        />
+                      </div>
+                    )}
+                    {column.error ? (
+                      <div className="column-state bad">{column.error}</div>
+                    ) : column.entries.length === 0 && column.loading ? (
+                      <div className="column-skeleton">
+                        {Array.from({ length: 7 }).map((_, skeleton) => (
+                          <span key={skeleton} className="skeleton-row" />
+                        ))}
+                      </div>
+                    ) : column.entries.length === 0 ? (
+                      <div className="column-state">空目录</div>
+                    ) : (
+                      column.entries.map((entry) => {
+                        const isActive = selectedPathSet.has(entry.path);
+                        const inPath = columns[index + 1]?.path === entry.path;
+                        const isOpening = entry.isDir && inPath && columns[index + 1]?.loading;
+                        const isRenaming = renaming?.entry.path === entry.path;
+                        const entryClassName = [
+                          "entry",
+                          isActive ? "on" : "",
+                          inPath ? "trail" : "",
+                          isOpening ? "busy" : "",
+                          isRenaming ? "renaming" : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ");
+                        return (
+                          <button
+                            key={entry.path}
+                            type="button"
+                            className={entryClassName}
+                            onClick={(event) => {
+                              if (isRenaming) return;
+                              selectEntry(entry, index, event);
+                              if (entry.isDir) onOpen(entry, index + 1);
+                            }}
+                            onContextMenu={(event) => openMenu(event, entry, index)}
+                          >
+                            {entry.isDir ? (
+                              <Folder size={14} className="ic-dir" />
+                            ) : (
+                              <File size={14} className="ic-file" />
+                            )}
+                            {isRenaming ? (
+                              <input
+                                ref={renameInputRef}
+                                className="entry-rename"
+                                value={renaming.value}
+                                onChange={(event) =>
+                                  setRenaming((current) =>
+                                    current ? { ...current, value: event.target.value } : current,
+                                  )
+                                }
+                                onClick={(event) => event.stopPropagation()}
+                                onDoubleClick={(event) => event.stopPropagation()}
+                                onContextMenu={(event) => event.stopPropagation()}
+                                onBlur={commitRename}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter") commitRename();
+                                  if (event.key === "Escape") cancelRename();
+                                }}
+                              />
+                            ) : (
+                              <span className="entry-name">{entry.name}</span>
+                            )}
+                            {entry.isDir ? (
+                              <ChevronRight size={13} className="entry-chev" />
+                            ) : (
+                              <small>{formatBytes(entry.size)}</small>
+                            )}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </section>
+              );
+            })
+          )}
+        </div>
+      )}
 
       {dragOver && (
         <div className="sftp-drop">
@@ -459,8 +689,13 @@ export function SftpBrowser({
                   <FolderOpen size={14} /> 打开
                 </button>
               ) : (
-                <button type="button" onClick={() => runMenu(() => menu.entry && onDownload(menu.entry))}>
-                  <Download size={14} /> 下载
+                <button
+                  type="button"
+                  onClick={() =>
+                    runMenu(() => menu.entry && onDownload(selectedBatchFor(menu.entry).filter((entry) => !entry.isDir)))
+                  }
+                >
+                  <Download size={14} /> 下载{selectedBatchFor(menu.entry).filter((entry) => !entry.isDir).length > 1 ? "所选" : ""}
                 </button>
               )}
               <button type="button" onClick={() => runMenu(() => onUpload(targetDirFor(menu.entry, menu.columnIndex)))}>
@@ -476,9 +711,9 @@ export function SftpBrowser({
               <button
                 type="button"
                 className="danger"
-                onClick={() => runMenu(() => menu.entry && onDelete(menu.entry, menu.columnIndex))}
+                onClick={() => runMenu(() => menu.entry && onDelete(selectedBatchFor(menu.entry), menu.columnIndex))}
               >
-                <Trash2 size={14} /> 删除
+                <Trash2 size={14} /> 删除{menu.entry && selectedBatchFor(menu.entry).length > 1 ? "所选" : ""}
               </button>
             </>
           ) : (
@@ -502,6 +737,65 @@ export function SftpBrowser({
   );
 }
 
+interface DirectoryTreeRow {
+  entry: SftpEntry;
+  columnIndex: number;
+  level: number;
+  inTrail: boolean;
+  loading: boolean;
+}
+
+function buildDirectoryTreeRows(columns: ShellTab["files"]): DirectoryTreeRow[] {
+  const rows: DirectoryTreeRow[] = [
+    {
+      entry: rootEntry(),
+      columnIndex: -1,
+      level: 0,
+      inTrail: true,
+      loading: columns[0]?.loading ?? false,
+    },
+  ];
+
+  appendDirectoryRows(rows, columns, 0, 1);
+  return rows;
+}
+
+function appendDirectoryRows(
+  rows: DirectoryTreeRow[],
+  columns: ShellTab["files"],
+  columnIndex: number,
+  level: number,
+) {
+  const column = columns[columnIndex];
+  if (!column) return;
+  const nextColumn = columns[columnIndex + 1];
+  for (const entry of column.entries) {
+    if (!entry.isDir) continue;
+    const inTrail = nextColumn?.path === entry.path;
+    rows.push({
+      entry,
+      columnIndex,
+      level,
+      inTrail,
+      loading: inTrail && Boolean(nextColumn?.loading),
+    });
+    if (inTrail) appendDirectoryRows(rows, columns, columnIndex + 1, level + 1);
+  }
+}
+
+function rootEntry(): SftpEntry {
+  return {
+    name: "/",
+    path: "/",
+    isDir: true,
+    size: null,
+    uid: null,
+    gid: null,
+    permissions: null,
+    modifiedAt: null,
+  };
+}
+
 function findEntry(tab: ShellTab, path: string | null): SftpEntry | null {
   if (!path) return null;
   for (const column of tab.files) {
@@ -523,4 +817,39 @@ function normalizePath(path: string) {
   const absolute = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
   const collapsed = absolute.replace(/\/+/g, "/");
   return collapsed.length > 1 ? collapsed.replace(/\/$/, "") : collapsed;
+}
+
+function formatModifiedAt(value: number | null | undefined) {
+  if (!value) return "--";
+  return new Date(value * 1000).toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatPermissions(entry: SftpEntry) {
+  const mode = entry.permissions;
+  if (mode == null) return "--";
+  const bits = [
+    0o400,
+    0o200,
+    0o100,
+    0o040,
+    0o020,
+    0o010,
+    0o004,
+    0o002,
+    0o001,
+  ];
+  const chars = ["r", "w", "x", "r", "w", "x", "r", "w", "x"];
+  return `${entry.isDir ? "d" : "-"}${bits.map((bit, index) => (mode & bit ? chars[index] : "-")).join("")}`;
+}
+
+function formatOwnerGroup(entry: SftpEntry) {
+  const owner = entry.uid == null ? "-" : String(entry.uid);
+  const group = entry.gid == null ? "-" : String(entry.gid);
+  return owner === "-" && group === "-" ? "--" : `${owner}:${group}`;
 }

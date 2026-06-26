@@ -24,9 +24,11 @@ const STATUS_SCRIPT: &str = "A=\"$(uname -srmo 2>/dev/null || uname -a)\"; \
 B=\"$(cat /proc/uptime 2>/dev/null)\"; \
 C=\"$(cat /proc/loadavg 2>/dev/null || sysctl -n vm.loadavg 2>/dev/null)\"; \
 D=\"$(awk '/MemTotal|MemAvailable/{print $1,$2}' /proc/meminfo 2>/dev/null)\"; \
+E=\"$(awk 'NR==1{print $2,$3,$4,$5,$6,$7,$8,$9}' /proc/stat 2>/dev/null; sleep 0.2; awk 'NR==1{print $2,$3,$4,$5,$6,$7,$8,$9}' /proc/stat 2>/dev/null)\"; \
 F=\"$(ps -e --no-headers 2>/dev/null | wc -l || ps -ax 2>/dev/null | wc -l)\"; \
-printf '@@OS@@\\n%s\\n@@UP@@\\n%s\\n@@LOAD@@\\n%s\\n@@MEM@@\\n%s\\n@@PROC@@\\n%s\\n' \
-\"$A\" \"$B\" \"$C\" \"$D\" \"$F\"";
+G=\"$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null)\"; \
+printf '@@OS@@\\n%s\\n@@UP@@\\n%s\\n@@LOAD@@\\n%s\\n@@MEM@@\\n%s\\n@@CPU@@\\n%s\\n@@PROC@@\\n%s\\n@@CORES@@\\n%s\\n' \
+\"$A\" \"$B\" \"$C\" \"$D\" \"$E\" \"$F\" \"$G\"";
 
 const DISK_SCRIPT: &str = "df -Pk 2>/dev/null | tail -n +2";
 
@@ -103,8 +105,6 @@ fn try_handshake(address: &std::net::SocketAddr) -> Result<Session, String> {
     let tcp = TcpStream::connect_timeout(address, Duration::from_secs(8))
         .map_err(|err| format!("无法连接到 {address}：{err}"))?;
     tcp.set_nodelay(true).ok();
-    tcp.set_read_timeout(Some(Duration::from_secs(20))).ok();
-    tcp.set_write_timeout(Some(Duration::from_secs(20))).ok();
 
     let mut session = Session::new().map_err(|err| format!("无法创建 SSH 会话：{err}"))?;
     session.set_timeout(15000);
@@ -128,6 +128,9 @@ pub fn fetch_status(
     let section = |key: &str| sections.get(key).map(String::as_str).unwrap_or("");
 
     let (load1, load5, load15) = parse_load(section("LOAD"));
+    let cpu_cores = parse_cpu_cores(section("CORES"));
+    let cpu_percent = parse_cpu_percent(section("CPU"))
+        .unwrap_or_else(|| cpu_percent_from_load(load1, cpu_cores));
     let (memory_total_mb, memory_available_mb) = parse_memory(section("MEM"));
     let disk_mounts = if include_disk {
         let raw_disk =
@@ -141,7 +144,6 @@ pub fn fetch_status(
         .find(|mount| mount.mount_point == "/")
         .or_else(|| disk_mounts.first());
     let processes = section("PROC").trim().parse::<u64>().ok();
-    let cpu_percent = (load1 * 25.0).clamp(0.0, 100.0);
 
     Ok(ServerStatus {
         id: id.to_string(),
@@ -150,6 +152,7 @@ pub fn fetch_status(
         load1,
         load5,
         load15,
+        cpu_cores,
         cpu_percent,
         memory_total_mb,
         memory_available_mb,
@@ -229,6 +232,8 @@ fn list_dir(sftp: &Sftp, path: &str) -> Result<Vec<SftpEntry>, String> {
                 path: full_path,
                 is_dir,
                 size: stat.size,
+                uid: stat.uid,
+                gid: stat.gid,
                 permissions: stat.perm,
                 modified_at: stat.mtime,
             })
@@ -249,16 +254,31 @@ pub fn download_file(
     app: &AppHandle,
     id: &str,
     remote_path: &str,
+    transfer_id: &str,
+    is_canceled: &dyn Fn() -> bool,
 ) -> Result<String, String> {
-    with_sftp(pool, app, id, |sftp| download_with(app, sftp, remote_path))
+    with_sftp(pool, app, id, |sftp| {
+        download_with(app, sftp, remote_path, transfer_id, is_canceled)
+    })
 }
 
-fn download_with(app: &AppHandle, sftp: &Sftp, remote_path: &str) -> Result<String, String> {
+fn download_with(
+    app: &AppHandle,
+    sftp: &Sftp,
+    remote_path: &str,
+    transfer_id: &str,
+    is_canceled: &dyn Fn() -> bool,
+) -> Result<String, String> {
     let file_name = Path::new(remote_path)
         .file_name()
         .map(|name| name.to_string_lossy().to_string())
         .unwrap_or_else(|| "download".to_string());
 
+    let total = sftp
+        .stat(Path::new(remote_path))
+        .ok()
+        .and_then(|stat| stat.size)
+        .unwrap_or(0);
     let mut remote = sftp
         .open(Path::new(remote_path))
         .map_err(|err| format!("无法打开远程文件：{err}"))?;
@@ -286,8 +306,26 @@ fn download_with(app: &AppHandle, sftp: &Sftp, remote_path: &str) -> Result<Stri
 
     let mut local =
         fs::File::create(&local_path).map_err(|err| format!("无法创建本地文件：{err}"))?;
-    io::copy(&mut remote, &mut local).map_err(|err| format!("下载失败：{err}"))?;
+    match copy_with_progress(
+        app,
+        &mut remote,
+        &mut local,
+        total,
+        transfer_id,
+        "sftp-download-progress",
+        "下载已停止",
+        is_canceled,
+    ) {
+        Ok(()) => {}
+        Err(err) if err.kind() == io::ErrorKind::Interrupted => {
+            drop(local);
+            let _ = fs::remove_file(&local_path);
+            return Err("下载已停止".to_string());
+        }
+        Err(err) => return Err(format!("下载失败：{err}")),
+    }
 
+    emit_progress(app, "sftp-download-progress", transfer_id, total, total, true);
     Ok(local_path.to_string_lossy().to_string())
 }
 
@@ -335,6 +373,8 @@ fn upload_with(
         &mut remote,
         total,
         transfer_id,
+        "sftp-upload-progress",
+        "上传已停止",
         is_canceled,
     ) {
         Ok(()) => {}
@@ -346,42 +386,44 @@ fn upload_with(
         Err(err) => return Err(format!("上传失败：{err}")),
     }
 
-    emit_progress(app, transfer_id, total, total, true);
+    emit_progress(app, "sftp-upload-progress", transfer_id, total, total, true);
     Ok(remote_path)
 }
 
-/// Stream the file in chunks, emitting a throttled `sftp-upload-progress` event
-/// (at most every ~80ms) so the UI can render a live progress bar without being
-/// flooded by one event per chunk on large transfers.
+/// Stream the file in chunks, emitting throttled progress events (at most every
+/// ~80ms) so the UI can render a live progress bar without being flooded by one
+/// event per chunk on large transfers.
 fn copy_with_progress(
     app: &AppHandle,
     reader: &mut impl Read,
     writer: &mut impl Write,
     total: u64,
     transfer_id: &str,
+    event_name: &str,
+    stop_message: &str,
     is_canceled: &dyn Fn() -> bool,
 ) -> io::Result<()> {
     let mut buffer = vec![0u8; 64 * 1024];
     let mut transferred: u64 = 0;
     let mut last_emit = Instant::now();
-    emit_progress(app, transfer_id, 0, total, false);
+    emit_progress(app, event_name, transfer_id, 0, total, false);
 
     loop {
         if is_canceled() {
-            return Err(io::Error::new(io::ErrorKind::Interrupted, "上传已停止"));
+            return Err(io::Error::new(io::ErrorKind::Interrupted, stop_message));
         }
         let read = reader.read(&mut buffer)?;
         if read == 0 {
             break;
         }
         if is_canceled() {
-            return Err(io::Error::new(io::ErrorKind::Interrupted, "上传已停止"));
+            return Err(io::Error::new(io::ErrorKind::Interrupted, stop_message));
         }
         writer.write_all(&buffer[..read])?;
         transferred += read as u64;
 
         if last_emit.elapsed() >= Duration::from_millis(80) {
-            emit_progress(app, transfer_id, transferred, total, false);
+            emit_progress(app, event_name, transfer_id, transferred, total, false);
             last_emit = Instant::now();
         }
     }
@@ -389,9 +431,16 @@ fn copy_with_progress(
     Ok(())
 }
 
-fn emit_progress(app: &AppHandle, transfer_id: &str, transferred: u64, total: u64, done: bool) {
+fn emit_progress(
+    app: &AppHandle,
+    event_name: &str,
+    transfer_id: &str,
+    transferred: u64,
+    total: u64,
+    done: bool,
+) {
     app.emit(
-        "sftp-upload-progress",
+        event_name,
         UploadProgress {
             transfer_id: transfer_id.to_string(),
             transferred,
@@ -543,6 +592,44 @@ fn parse_uptime(raw: &str) -> Option<u64> {
         .next()
         .and_then(|part| part.parse::<f64>().ok())
         .map(|seconds| seconds as u64)
+}
+
+fn parse_cpu_cores(raw: &str) -> Option<u64> {
+    raw.split_whitespace()
+        .find_map(|part| part.parse::<u64>().ok())
+        .filter(|cores| *cores > 0)
+}
+
+fn parse_cpu_percent(raw: &str) -> Option<f64> {
+    let samples: Vec<Vec<u64>> = raw
+        .lines()
+        .map(|line| {
+            line.split_whitespace()
+                .filter_map(|part| part.parse::<u64>().ok())
+                .collect::<Vec<_>>()
+        })
+        .filter(|values| values.len() >= 4)
+        .collect();
+
+    let first = samples.first()?;
+    let second = samples.get(1)?;
+    let total_a: u64 = first.iter().sum();
+    let total_b: u64 = second.iter().sum();
+    let idle_a = first.get(3).copied().unwrap_or(0) + first.get(4).copied().unwrap_or(0);
+    let idle_b = second.get(3).copied().unwrap_or(0) + second.get(4).copied().unwrap_or(0);
+    let total_delta = total_b.checked_sub(total_a)?;
+    if total_delta == 0 {
+        return None;
+    }
+    let idle_delta = idle_b.saturating_sub(idle_a);
+    let busy_delta = total_delta.saturating_sub(idle_delta);
+
+    Some(((busy_delta as f64 / total_delta as f64) * 100.0).clamp(0.0, 100.0))
+}
+
+fn cpu_percent_from_load(load1: f64, cpu_cores: Option<u64>) -> f64 {
+    let cores = cpu_cores.unwrap_or(4).max(1) as f64;
+    ((load1 / cores) * 100.0).clamp(0.0, 100.0)
 }
 
 fn parse_memory(raw: &str) -> (Option<u64>, Option<u64>) {

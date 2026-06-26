@@ -24,7 +24,8 @@ export function StatusDashboard({
   const status = tab.status;
   const mem = memoryPercent(status);
   const cpu = Math.round(status?.cpuPercent ?? 0);
-  const load1Percent = Math.min(Math.round((status?.load1 ?? 0) * 25), 100);
+  const cpuCores = Math.max(1, status?.cpuCores ?? 1);
+  const load1Percent = Math.min(Math.round(((status?.load1 ?? 0) / cpuCores) * 100), 100);
   const memoryUsedGb =
     status?.memoryTotalMb != null
       ? (status.memoryTotalMb - (status.memoryAvailableMb ?? 0)) / 1024
@@ -70,7 +71,7 @@ export function StatusDashboard({
             label="CPU"
             value={cpu}
             valueText={`${cpu}%`}
-            detail="按 1 分钟负载估算"
+            detail="按 CPU 时间实时采样"
             tone="ok"
           />
           <MetricBar
@@ -90,7 +91,7 @@ export function StatusDashboard({
             label="负载"
             value={load1Percent}
             valueText={(status?.load1 ?? 0).toFixed(2)}
-            detail={`5m ${(status?.load5 ?? 0).toFixed(2)} · 15m ${(status?.load15 ?? 0).toFixed(2)}`}
+            detail={`${cpuCores} 核 · 5m ${(status?.load5 ?? 0).toFixed(2)} · 15m ${(status?.load15 ?? 0).toFixed(2)}`}
             tone="violet"
           />
         </div>

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { open } from "@tauri-apps/plugin-dialog";
 import { command, isTauri } from "./api/tauri";
 import { ConnectionManager } from "./components/ConnectionManager";
+import { CommandHistoryPanel } from "./components/CommandHistoryPanel";
+import { DownloadQueue } from "./components/DownloadQueue";
 import { ServerDetail } from "./components/ServerDetail";
 import { ServerEditor, type ServerForm } from "./components/ServerEditor";
 import { SettingsModal, type AppTheme } from "./components/SettingsModal";
@@ -15,6 +17,8 @@ import { createTabId, type ShellTab } from "./features/shell/types";
 import { demoFiles, demoServers, demoStatus } from "./mocks/demoData";
 import type {
   AuthType,
+  DownloadItem,
+  DownloadProgressPayload,
   FileColumn,
   NetworkSample,
   ServerInput,
@@ -45,9 +49,11 @@ const defaultForm: ServerForm = {
 const SFTP_BUSY_MIN_MS = 520;
 const SFTP_COLUMN_MIN_MS = 420;
 const NOTICE_DURATION_MS = 4200;
+const COMMAND_HISTORY_LIMIT = 10_000;
+const DEMO_COMMAND_HISTORY_KEY = "ishell.commandHistory";
 
 interface DeleteConfirmState {
-  entry: SftpEntry;
+  entries: SftpEntry[];
   columnIndex: number;
   tabId: string;
   serverId: string;
@@ -77,9 +83,14 @@ export default function App() {
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
   const [filesRatio, setFilesRatio] = useState(0.4); // file dock height as a fraction
+  const [filesDragging, setFilesDragging] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [statusPanelWidth, setStatusPanelWidth] = useState(360);
+  const [pasteRequest, setPasteRequest] = useState<{ tabId: string; id: number; command: string } | null>(null);
   const [uploads, setUploads] = useState<UploadItem[]>([]);
+  const [downloads, setDownloads] = useState<DownloadItem[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null);
   const terminalDockRef = useRef<HTMLDivElement>(null);
@@ -91,7 +102,9 @@ export default function App() {
   const dropEnabledRef = useRef(false);
   const enqueueUploadsRef = useRef<(paths: string[], remoteDir?: string) => void>(() => {});
   const uploadChainRef = useRef<Promise<void>>(Promise.resolve());
+  const downloadChainRef = useRef<Promise<void>>(Promise.resolve());
   const uploadsRef = useRef<UploadItem[]>([]);
+  const downloadsRef = useRef<DownloadItem[]>([]);
   const [statusLoading, setStatusLoading] = useState(false);
   const [sftpBusy, setSftpBusy] = useState(false);
   const sftpBusyCount = useRef(0);
@@ -120,6 +133,7 @@ export default function App() {
   dropEnabledRef.current = filesOpen && Boolean(activeTab);
   enqueueUploadsRef.current = enqueueUploads;
   uploadsRef.current = uploads;
+  downloadsRef.current = downloads;
   statusOpenRef.current = statusOpen;
 
   async function refreshServers() {
@@ -139,6 +153,7 @@ export default function App() {
 
   useEffect(() => {
     refreshServers();
+    loadCommandHistory();
   }, []);
 
   useEffect(() => {
@@ -159,6 +174,13 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!activeTab) {
+      setStatusOpen(false);
+      setHistoryOpen(false);
+    }
+  }, [activeTab]);
+
   // Live upload progress emitted from the Rust side, keyed by transfer id.
   useEffect(() => {
     if (!isTauri) return;
@@ -169,6 +191,30 @@ export default function App() {
       const un = await listen<UploadProgressPayload>("sftp-upload-progress", (event) => {
         const { transferId, transferred, total } = event.payload;
         setUploads((current) =>
+          current.map((item) =>
+            item.id === transferId ? { ...item, transferred, total } : item,
+          ),
+        );
+      });
+      if (active) unlisten = un;
+      else un();
+    })();
+    return () => {
+      active = false;
+      unlisten?.();
+    };
+  }, []);
+
+  // Live download progress emitted from the Rust side, keyed by transfer id.
+  useEffect(() => {
+    if (!isTauri) return;
+    let unlisten: (() => void) | undefined;
+    let active = true;
+    (async () => {
+      const { listen } = await import("@tauri-apps/api/event");
+      const un = await listen<DownloadProgressPayload>("sftp-download-progress", (event) => {
+        const { transferId, transferred, total } = event.payload;
+        setDownloads((current) =>
           current.map((item) =>
             item.id === transferId ? { ...item, transferred, total } : item,
           ),
@@ -271,6 +317,7 @@ export default function App() {
       }
       document.body.style.cursor = previousCursor;
       document.body.style.userSelect = previousUserSelect;
+      setFilesDragging(false);
       dockDragCleanupRef.current = null;
     };
 
@@ -280,6 +327,7 @@ export default function App() {
 
     document.body.style.cursor = "row-resize";
     document.body.style.userSelect = "none";
+    setFilesDragging(true);
     if (!divider.hasPointerCapture(pointerId)) {
       divider.setPointerCapture(pointerId);
     }
@@ -339,6 +387,64 @@ export default function App() {
     window.addEventListener("pointercancel", onUp);
     window.addEventListener("blur", stopDrag);
     statusDragCleanupRef.current = stopDrag;
+  }
+
+  function toggleStatusPanel() {
+    setStatusOpen((open) => {
+      const next = !open;
+      if (next) setHistoryOpen(false);
+      return next;
+    });
+  }
+
+  function toggleHistoryPanel() {
+    setHistoryOpen((open) => {
+      const next = !open;
+      if (next) setStatusOpen(false);
+      return next;
+    });
+  }
+
+  function handleCommandSubmitted(commandText: string) {
+    const trimmed = commandText.trim();
+    if (!trimmed) return;
+    setCommandHistory((current) => {
+      const next = [trimmed, ...current].slice(0, COMMAND_HISTORY_LIMIT);
+      if (!isTauri) {
+        window.localStorage.setItem(DEMO_COMMAND_HISTORY_KEY, JSON.stringify(next));
+      }
+      return next;
+    });
+    if (isTauri) {
+      command("save_command_history", { commandText: trimmed }).catch((error) =>
+        showNotice(String(error)),
+      );
+    }
+  }
+
+  async function loadCommandHistory() {
+    try {
+      if (!isTauri) {
+        const saved = window.localStorage.getItem(DEMO_COMMAND_HISTORY_KEY);
+        const parsed = saved ? JSON.parse(saved) : [];
+        setCommandHistory(
+          Array.isArray(parsed)
+            ? parsed.filter((item) => typeof item === "string").slice(0, COMMAND_HISTORY_LIMIT)
+            : [],
+        );
+        return;
+      }
+      const next = await command<string[]>("list_command_history");
+      setCommandHistory(next.slice(0, COMMAND_HISTORY_LIMIT));
+    } catch (error) {
+      showNotice(String(error));
+    }
+  }
+
+  function pasteHistoryCommand(commandText: string) {
+    if (!activeTab) return;
+    setPasteRequest({ tabId: activeTab.id, id: Date.now() + Math.random(), command: commandText });
+    showNotice("已粘贴历史命令");
   }
 
   // Auto-refresh the dashboard with different cadences:
@@ -524,6 +630,7 @@ export default function App() {
       networkHistory: [],
       files: [],
       selectedPath: null,
+      selectedPaths: [],
       cache: {},
     };
 
@@ -539,6 +646,32 @@ export default function App() {
         return;
       }
       const sessionId = await command<string>("open_terminal", { id: server.id });
+      patchTab(tabId, { sessionId });
+    } catch (error) {
+      patchTab(tabId, { state: "closed" });
+      showNotice(String(error));
+    }
+  }
+
+  async function reconnectShell(tabId: string) {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+
+    terminalReadyTabs.current.delete(tabId);
+    patchTab(tabId, { sessionId: null, state: "connecting" });
+    showNotice(`正在重新连接 ${tab.title}…`);
+
+    try {
+      if (isTauri && tab.sessionId) {
+        await command("close_terminal", { sessionId: tab.sessionId }).catch(() => undefined);
+      }
+      if (!isTauri) {
+        await new Promise((resolve) => setTimeout(resolve, 320));
+        patchTab(tabId, { sessionId: `demo-${tabId}-${Date.now()}`, state: "connected" });
+        showNotice(`${tab.title} 已连接`);
+        return;
+      }
+      const sessionId = await command<string>("open_terminal", { id: tab.serverId });
       patchTab(tabId, { sessionId });
     } catch (error) {
       patchTab(tabId, { state: "closed" });
@@ -787,6 +920,7 @@ export default function App() {
     const targetIndex = pathChain.length - 1;
     patchTab(tabId, {
       selectedPath: null,
+      selectedPaths: [],
       files: buildPathColumns(pathChain, activeTab.cache),
     });
     loadFilesFor(tabId, serverId, path, targetIndex);
@@ -812,27 +946,31 @@ export default function App() {
           ...tab.cache,
           [tab.files[columnIndex]?.path ?? "/"]: files[columnIndex]?.entries ?? [],
         };
-        return { ...tab, selectedPath: toPath, files, cache };
+        const selectedPaths = (tab.selectedPaths ?? []).map((path) => (path === from.path ? toPath : path));
+        return { ...tab, selectedPath: toPath, selectedPaths, files, cache };
       }),
     );
   }
 
-  function patchDeletedEntry(tabId: string, columnIndex: number, entry: SftpEntry) {
+  function patchDeletedEntries(tabId: string, columnIndex: number, entriesToDelete: SftpEntry[]) {
+    const deletedPaths = new Set(entriesToDelete.map((entry) => entry.path));
+    const deletesDirectory = entriesToDelete.some((entry) => entry.isDir);
     setTabs((current) =>
       current.map((tab) => {
         if (tab.id !== tabId) return tab;
         const files = tab.files
-          .slice(0, entry.isDir ? columnIndex + 1 : tab.files.length)
+          .slice(0, deletesDirectory ? columnIndex + 1 : tab.files.length)
           .map((column, index) =>
             index === columnIndex
-              ? { ...column, entries: column.entries.filter((item) => item.path !== entry.path) }
+              ? { ...column, entries: column.entries.filter((item) => !deletedPaths.has(item.path)) }
               : column,
           );
         const cache = {
           ...tab.cache,
           [tab.files[columnIndex]?.path ?? "/"]: files[columnIndex]?.entries ?? [],
         };
-        return { ...tab, selectedPath: null, files, cache };
+        const selectedPaths = (tab.selectedPaths ?? []).filter((path) => !deletedPaths.has(path));
+        return { ...tab, selectedPath: selectedPaths[selectedPaths.length - 1] ?? null, selectedPaths, files, cache };
       }),
     );
   }
@@ -952,25 +1090,125 @@ export default function App() {
     );
   }
 
-  async function downloadFile(entry: SftpEntry) {
-    if (!activeTab || entry.isDir) return;
+  function downloadFiles(entries: SftpEntry[]) {
+    if (!activeTab) return;
+    const files = entries.filter((entry) => !entry.isDir);
+    if (files.length === 0) return;
+    enqueueDownloads(files);
+  }
+
+  function enqueueDownloads(entries: SftpEntry[]) {
+    if (!activeTab) return;
+    const tabId = activeTab.id;
+    const serverId = activeTab.serverId;
+    const items: DownloadItem[] = entries.map((entry) => ({
+      id: crypto.randomUUID(),
+      tabId,
+      name: entry.name,
+      remotePath: entry.path,
+      serverId,
+      transferred: 0,
+      total: entry.size ?? 0,
+      status: "pending",
+    }));
+    setDownloads((current) => [...current, ...items]);
+    showNotice(`已加入下载队列：${items.length} 个文件`);
+
+    downloadChainRef.current = downloadChainRef.current.then(async () => {
+      for (const item of items) {
+        await runDownload(item);
+      }
+    });
+  }
+
+  async function runDownload(item: DownloadItem) {
+    let skip = false;
+    setDownloads((current) =>
+      current.map((download) => {
+        if (download.id !== item.id) return download;
+        if (download.status === "canceled") {
+          skip = true;
+          return download;
+        }
+        return { ...download, status: "downloading" };
+      }),
+    );
+    if (skip || downloadsRef.current.find((download) => download.id === item.id)?.status === "canceled") return;
+
+    beginSftpBusy();
     try {
-      if (!isTauri) {
-        showNotice(`演示模式：将下载 ${entry.name}`);
+      const saved = isTauri
+        ? await command<string>("sftp_download", {
+            id: item.serverId,
+            path: item.remotePath,
+            transferId: item.id,
+          })
+        : await simulateDemoDownload(item, (transferred, total) => {
+            setDownloads((current) =>
+              current.map((download) =>
+                download.id === item.id && download.status !== "canceled"
+                  ? { ...download, transferred, total }
+                  : download,
+              ),
+            );
+          });
+      if (downloadsRef.current.find((download) => download.id === item.id)?.status === "canceled") return;
+      setDownloads((current) =>
+        current.map((download) =>
+          download.id === item.id
+            ? {
+                ...download,
+                status: "done",
+                transferred: download.total || download.transferred,
+                savedPath: saved,
+              }
+            : download,
+        ),
+      );
+      showNotice(`已保存 ${item.name}`);
+    } catch (error) {
+      const message = String(error);
+      if (message.includes("下载已停止")) {
+        setDownloads((current) =>
+          current.map((download) =>
+            download.id === item.id ? { ...download, status: "canceled", error: undefined } : download,
+          ),
+        );
         return;
       }
-      beginSftpBusy();
-      showNotice(`下载 ${entry.name}…`);
-      const saved = await command<string>("sftp_download", {
-        id: activeTab.serverId,
-        path: entry.path,
-      });
-      showNotice(`已保存到 ${saved}`);
-    } catch (error) {
-      showNotice(String(error));
+      setDownloads((current) =>
+        current.map((download) =>
+          download.id === item.id ? { ...download, status: "error", error: message } : download,
+        ),
+      );
+      showNotice(message);
     } finally {
       endSftpBusy();
     }
+  }
+
+  async function stopDownload(id: string) {
+    const target = downloadsRef.current.find((item) => item.id === id);
+    setDownloads((current) =>
+      current.map((item) =>
+        item.id === id && (item.status === "pending" || item.status === "downloading")
+          ? { ...item, status: "canceled", error: undefined }
+          : item,
+      ),
+    );
+    if (target?.status === "downloading" && isTauri) {
+      await command("cancel_download", { transferId: id }).catch(() => undefined);
+    }
+  }
+
+  function dismissDownload(id: string) {
+    setDownloads((current) => current.filter((item) => item.id !== id));
+  }
+
+  function clearDoneDownloads() {
+    setDownloads((current) =>
+      current.filter((item) => item.status !== "done" && item.status !== "error" && item.status !== "canceled"),
+    );
   }
 
   async function makeDir(rawName: string, targetDir = currentDir()) {
@@ -992,6 +1230,8 @@ export default function App() {
       path,
       isDir: true,
       size: null,
+      uid: null,
+      gid: null,
       permissions: 0o40755,
       modifiedAt: null,
     };
@@ -1021,6 +1261,7 @@ export default function App() {
         return {
           ...tab,
           selectedPath: entry.path,
+          selectedPaths: [entry.path],
           files,
           cache: { ...tab.cache, [column.path]: entries },
         };
@@ -1045,10 +1286,12 @@ export default function App() {
     }
   }
 
-  function deleteEntry(entry: SftpEntry, columnIndex: number) {
+  function deleteEntries(entries: SftpEntry[], columnIndex: number) {
     if (!activeTab) return;
+    const targets = entries.filter(Boolean);
+    if (targets.length === 0) return;
     setDeleteConfirm({
-      entry,
+      entries: targets,
       columnIndex,
       tabId: activeTab.id,
       serverId: activeTab.serverId,
@@ -1057,14 +1300,18 @@ export default function App() {
 
   async function confirmDeleteEntry() {
     if (!deleteConfirm || deleteConfirm.busy) return;
-    const { entry, columnIndex, tabId, serverId } = deleteConfirm;
+    const { entries, columnIndex, tabId, serverId } = deleteConfirm;
     setDeleteConfirm((current) => (current ? { ...current, busy: true, error: undefined } : current));
     beginSftpBusy();
     try {
-      if (isTauri)
-        await command("sftp_remove", { id: serverId, path: entry.path, isDir: entry.isDir });
-      else showNotice(`演示模式：删除 ${entry.name}`);
-      patchDeletedEntry(tabId, columnIndex, entry);
+      if (isTauri) {
+        for (const entry of entries) {
+          await command("sftp_remove", { id: serverId, path: entry.path, isDir: entry.isDir });
+        }
+      } else {
+        showNotice(`演示模式：删除 ${entries.length} 项`);
+      }
+      patchDeletedEntries(tabId, columnIndex, entries);
       setDeleteConfirm(null);
     } catch (error) {
       const message = String(error);
@@ -1085,23 +1332,24 @@ export default function App() {
           activeTabId={activeTabId}
           filesOpen={filesOpen}
           statusOpen={statusOpen}
+          historyOpen={historyOpen}
           serverCount={servers.length}
           onOpenConnections={() => setConnectionsOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
           onToggleFiles={() => setFilesOpen((open) => !open)}
-          onToggleStatus={() => setStatusOpen((open) => !open)}
+          onToggleStatus={toggleStatusPanel}
+          onToggleHistory={toggleHistoryPanel}
           notice={notice}
           onActivate={setActiveTabId}
           onClose={closeShell}
           onCloseTabs={closeShells}
-          onNew={() => (selectedServer ? openShell(selectedServer) : editServer())}
         />
 
         <div className={`workbench-body ${statusOpen && activeTab ? "has-status-panel" : ""}`}>
           <div className="workbench-main" ref={workbenchMainRef}>
             {/* Terminal + docked file panel. Kept mounted so xterm survives tab switches. */}
             {tabs.length > 0 && (
-              <div className="terminal-dock" ref={terminalDockRef}>
+              <div className={`terminal-dock ${filesDragging ? "dragging" : ""}`} ref={terminalDockRef}>
                 <div className="terminal-region">
                   {tabs.map((tab) => (
                     <TerminalPane
@@ -1110,13 +1358,16 @@ export default function App() {
                       visible={tab.id === activeTabId}
                       theme={theme}
                       fontSize={terminalFontSize}
-                      layoutSignal={`${filesOpen}:${filesRatio}:${statusOpen}:${statusPanelWidth}`}
+                      layoutSignal={`${filesOpen}:${filesRatio}:${filesDragging}:${statusOpen}:${statusPanelWidth}`}
                       setNotice={showNotice}
                       onReady={() => handleTerminalReady(tab.id, tab.serverId, tab.title)}
+                      onCommandSubmitted={handleCommandSubmitted}
+                      pasteRequest={pasteRequest?.tabId === tab.id ? pasteRequest : null}
                       onClosed={() => {
                         terminalReadyTabs.current.delete(tab.id);
                         patchTab(tab.id, { state: "closed" });
                       }}
+                      onReconnect={() => reconnectShell(tab.id)}
                     />
                   ))}
                 </div>
@@ -1141,21 +1392,31 @@ export default function App() {
                         dragOver={dragOver}
                         onOpen={(entry, columnIndex) => loadFiles(entry.path, columnIndex)}
                         onPathSubmit={jumpToPath}
-                        onSelect={(path) => patchTab(activeTab.id, { selectedPath: path })}
+                        onSelect={(path, paths = path ? [path] : []) =>
+                          patchTab(activeTab.id, { selectedPath: path, selectedPaths: paths })
+                        }
                         onRefresh={refreshFiles}
                         onUpload={uploadFile}
-                        onDownload={downloadFile}
+                        onDownload={downloadFiles}
                         onMkdir={makeDir}
                         onRename={renameEntry}
-                        onDelete={deleteEntry}
+                        onDelete={deleteEntries}
                         onClose={() => setFilesOpen(false)}
                       />
-                      <UploadQueue
-                      uploads={uploads}
-                      onDismiss={dismissUpload}
-                      onStop={stopUpload}
-                      onClearDone={clearDoneUploads}
-                    />
+                      <div className="transfer-queues">
+                        <UploadQueue
+                          uploads={uploads}
+                          onDismiss={dismissUpload}
+                          onStop={stopUpload}
+                          onClearDone={clearDoneUploads}
+                        />
+                        <DownloadQueue
+                          downloads={downloads}
+                          onDismiss={dismissDownload}
+                          onStop={stopDownload}
+                          onClearDone={clearDoneDownloads}
+                        />
+                      </div>
                     </div>
                   </>
                 )}
@@ -1166,21 +1427,25 @@ export default function App() {
           {activeTab && (
             <>
               <div
-                className={`status-divider ${statusOpen ? "open" : ""}`}
+                className={`status-divider ${statusOpen || historyOpen ? "open" : ""}`}
                 onPointerDown={startStatusDrag}
-                title="拖动调整监控面板宽度"
+                title="拖动调整面板宽度"
               >
                 <span className="status-grip" />
               </div>
               <aside
-                className={`status-panel ${statusOpen ? "open" : ""}`}
+                className={`status-panel ${statusOpen || historyOpen ? "open" : ""}`}
                 style={{ "--status-panel-width": `${statusPanelWidth}px` } as CSSProperties}
               >
-                <StatusDashboard
-                  tab={activeTab}
-                  loading={statusLoading}
-                  onRefresh={() => refreshStatus()}
-                />
+                {statusOpen ? (
+                  <StatusDashboard
+                    tab={activeTab}
+                    loading={statusLoading}
+                    onRefresh={() => refreshStatus()}
+                  />
+                ) : historyOpen ? (
+                  <CommandHistoryPanel commands={commandHistory} onPick={pasteHistoryCommand} />
+                ) : null}
               </aside>
             </>
           )}
@@ -1236,12 +1501,16 @@ export default function App() {
           >
             <h2 id="delete-confirm-title">确认删除</h2>
             <p>
-              {deleteConfirm.entry.isDir
-                ? "该文件夹及其中所有内容都会被删除。"
-                : "该文件会被删除。"}
+              {deleteConfirm.entries.length > 1
+                ? `将删除 ${deleteConfirm.entries.length} 项，文件夹及其中所有内容也会被删除。`
+                : deleteConfirm.entries[0]?.isDir
+                  ? "该文件夹及其中所有内容都会被删除。"
+                  : "该文件会被删除。"}
             </p>
-            <div className="delete-target" title={deleteConfirm.entry.path}>
-              {deleteConfirm.entry.path}
+            <div className="delete-target" title={deleteConfirm.entries.map((entry) => entry.path).join("\n")}>
+              {deleteConfirm.entries.length > 1
+                ? deleteConfirm.entries.map((entry) => entry.name).join("、")
+                : deleteConfirm.entries[0]?.path}
             </div>
             {deleteConfirm.error && <div className="delete-error">{deleteConfirm.error}</div>}
             <div className="delete-actions">
@@ -1311,6 +1580,25 @@ function loadDemoFiles(path: string) {
   });
 }
 
+function simulateDemoDownload(
+  item: DownloadItem,
+  onProgress?: (transferred: number, total: number) => void,
+) {
+  return new Promise<string>((resolve) => {
+    const total = item.total || 1_000_000;
+    let transferred = 0;
+    const step = Math.max(1, Math.ceil(total / 20));
+    const timer = window.setInterval(() => {
+      transferred = Math.min(total, transferred + step);
+      onProgress?.(transferred, total);
+      if (transferred >= total) {
+        window.clearInterval(timer);
+        resolve(`~/Downloads/${item.name}`);
+      }
+    }, 120);
+  });
+}
+
 function waitAtLeast(startedAt: number, minimumMs: number) {
   const remaining = minimumMs - (performance.now() - startedAt);
   if (remaining <= 0) return Promise.resolve();
@@ -1370,6 +1658,8 @@ function entryForPath(path: string): SftpEntry {
     path,
     isDir: true,
     size: null,
+    uid: null,
+    gid: null,
     permissions: null,
     modifiedAt: null,
   };

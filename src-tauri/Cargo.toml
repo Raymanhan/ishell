@@ -1,6 +1,6 @@
 [package]
 name = "ishell"
-version = "0.1.0"
+version = "0.1.1"
 description = "A lightweight SSH and SFTP manager"
 authors = ["iShell"]
 license = "MIT"
@@ -22,6 +22,7 @@ tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 uuid = { version = "1", features = ["v4"] }
 ssh2 = "0.9"
+portable-pty = "0.9"
 # Local encrypted storage: SQLite (bundled, no system dependency) + AES-256-GCM.
 rusqlite = { version = "0.32", features = ["bundled"] }
 aes-gcm = "0.10"

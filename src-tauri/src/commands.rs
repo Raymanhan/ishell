@@ -7,14 +7,18 @@ use tauri::{AppHandle, State};
 use uuid::Uuid;
 
 use crate::{
-    models::{ConnectionTest, NetworkSample, ServerInput, ServerRecord, ServerStatus, SftpEntry},
+    models::{
+        ConnectionTest, NetworkSample, ServerInput, ServerRecord, ServerStatus, SftpEntry,
+        TerminalSnapshotPayload,
+    },
     pool::SshPool,
     ssh::{
         connect_server, download_file, fetch_network_sample as fetch_network, fetch_status,
         list_sftp, make_directory, remove_entry, rename_entry, upload_file,
     },
     store::{
-        delete_server as remove_server, get_server, list_servers as load_servers, mark_connected,
+        append_command_history, delete_server as remove_server, get_server,
+        list_command_history as load_command_history, list_servers as load_servers, mark_connected,
         normalize_tags, upsert_server, validate_server,
     },
     terminal::{self, TerminalRegistry},
@@ -27,6 +31,32 @@ pub struct UploadCancelRegistry {
 }
 
 impl UploadCancelRegistry {
+    fn clear(&self, transfer_id: &str) {
+        if let Ok(mut canceled) = self.canceled.lock() {
+            canceled.remove(transfer_id);
+        }
+    }
+
+    fn cancel(&self, transfer_id: &str) {
+        if let Ok(mut canceled) = self.canceled.lock() {
+            canceled.insert(transfer_id.to_string());
+        }
+    }
+
+    fn is_canceled(&self, transfer_id: &str) -> bool {
+        self.canceled
+            .lock()
+            .map(|canceled| canceled.contains(transfer_id))
+            .unwrap_or(false)
+    }
+}
+
+#[derive(Default)]
+pub struct DownloadCancelRegistry {
+    canceled: Mutex<HashSet<String>>,
+}
+
+impl DownloadCancelRegistry {
     fn clear(&self, transfer_id: &str) {
         if let Ok(mut canceled) = self.canceled.lock() {
             canceled.remove(transfer_id);
@@ -113,6 +143,16 @@ pub fn delete_server(
 }
 
 #[tauri::command]
+pub fn list_command_history(app: AppHandle) -> Result<Vec<String>, String> {
+    load_command_history(&app)
+}
+
+#[tauri::command]
+pub fn save_command_history(app: AppHandle, command_text: String) -> Result<(), String> {
+    append_command_history(&app, &command_text)
+}
+
+#[tauri::command]
 pub async fn test_connection(app: AppHandle, id: String) -> Result<ConnectionTest, String> {
     run_blocking(move || {
         let started = SystemTime::now();
@@ -165,11 +205,21 @@ pub async fn sftp_list(
 pub async fn sftp_download(
     app: AppHandle,
     pool: State<'_, Arc<SshPool>>,
+    cancels: State<'_, Arc<DownloadCancelRegistry>>,
     id: String,
     path: String,
+    transfer_id: String,
 ) -> Result<String, String> {
     let pool = pool.inner().clone();
-    run_blocking(move || download_file(&pool, &app, &id, &path)).await
+    let cancels = cancels.inner().clone();
+    cancels.clear(&transfer_id);
+    run_blocking(move || {
+        let is_canceled = || cancels.is_canceled(&transfer_id);
+        let result = download_file(&pool, &app, &id, &path, &transfer_id, &is_canceled);
+        cancels.clear(&transfer_id);
+        result
+    })
+    .await
 }
 
 #[tauri::command]
@@ -204,6 +254,11 @@ pub async fn sftp_upload(
 
 #[tauri::command]
 pub fn cancel_upload(cancels: State<'_, Arc<UploadCancelRegistry>>, transfer_id: String) {
+    cancels.cancel(&transfer_id);
+}
+
+#[tauri::command]
+pub fn cancel_download(cancels: State<'_, Arc<DownloadCancelRegistry>>, transfer_id: String) {
     cancels.cancel(&transfer_id);
 }
 
@@ -261,6 +316,16 @@ pub fn terminal_input(
 }
 
 #[tauri::command]
+pub fn terminal_resize(
+    registry: State<'_, Arc<TerminalRegistry>>,
+    session_id: String,
+    cols: u16,
+    rows: u16,
+) -> Result<(), String> {
+    terminal::terminal_resize(registry, session_id, cols, rows)
+}
+
+#[tauri::command]
 pub fn close_terminal(
     registry: State<'_, Arc<TerminalRegistry>>,
     session_id: String,
@@ -272,6 +337,6 @@ pub fn close_terminal(
 pub fn terminal_snapshot(
     registry: State<'_, Arc<TerminalRegistry>>,
     session_id: String,
-) -> Result<String, String> {
+) -> Result<TerminalSnapshotPayload, String> {
     terminal::terminal_snapshot(registry, session_id)
 }

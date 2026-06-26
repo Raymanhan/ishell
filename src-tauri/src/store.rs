@@ -15,6 +15,7 @@ use crate::{
 const DB_FILE: &str = "ishell.db";
 const KEY_FILE: &str = "secret.key";
 const LEGACY_JSON: &str = "servers.json";
+const COMMAND_HISTORY_LIMIT: i64 = 10_000;
 
 const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS servers (
     id TEXT PRIMARY KEY,
@@ -33,6 +34,13 @@ const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS servers (
     updated_at INTEGER NOT NULL,
     last_connected_at INTEGER
 );";
+
+const COMMAND_HISTORY_SCHEMA: &str = "CREATE TABLE IF NOT EXISTS command_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    command TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_command_history_created_at ON command_history(created_at DESC);";
 
 const COLUMNS: &str = "id,name,host,port,username,\"group\",tags,auth_type,key_path,color,notes,created_at,updated_at,last_connected_at";
 
@@ -146,6 +154,52 @@ pub fn read_secret(app: &AppHandle, id: &str) -> Result<String, String> {
     }
 }
 
+pub fn list_command_history(app: &AppHandle) -> Result<Vec<String>, String> {
+    let conn = open_db(app)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT command
+             FROM command_history
+             ORDER BY id DESC
+             LIMIT ?1",
+        )
+        .map_err(db_err)?;
+    let rows = stmt
+        .query_map([COMMAND_HISTORY_LIMIT], |row| row.get::<_, String>(0))
+        .map_err(db_err)?;
+
+    let mut commands = Vec::new();
+    for row in rows {
+        commands.push(row.map_err(db_err)?);
+    }
+    Ok(commands)
+}
+
+pub fn append_command_history(app: &AppHandle, command_text: &str) -> Result<(), String> {
+    let command_text = command_text.trim();
+    if command_text.is_empty() {
+        return Ok(());
+    }
+
+    let mut conn = open_db(app)?;
+    let tx = conn.transaction().map_err(db_err)?;
+    tx.execute(
+        "INSERT INTO command_history (command, created_at) VALUES (?1, ?2)",
+        params![command_text, now() as i64],
+    )
+    .map_err(db_err)?;
+    tx.execute(
+        "DELETE FROM command_history
+         WHERE id NOT IN (
+           SELECT id FROM command_history ORDER BY id DESC LIMIT ?1
+         )",
+        [COMMAND_HISTORY_LIMIT],
+    )
+    .map_err(db_err)?;
+    tx.commit().map_err(db_err)?;
+    Ok(())
+}
+
 pub fn normalize_tags(tags: Vec<String>) -> Vec<String> {
     tags.into_iter()
         .map(|tag| tag.trim().to_string())
@@ -202,6 +256,7 @@ fn row_to_record(row: &rusqlite::Row) -> rusqlite::Result<ServerRecord> {
 fn open_db(app: &AppHandle) -> Result<Connection, String> {
     let conn = Connection::open(db_path(app)?).map_err(db_err)?;
     conn.execute_batch(SCHEMA).map_err(db_err)?;
+    conn.execute_batch(COMMAND_HISTORY_SCHEMA).map_err(db_err)?;
     migrate_legacy_json(app, &conn)?;
     Ok(conn)
 }
