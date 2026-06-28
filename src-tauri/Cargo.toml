@@ -26,4 +26,4 @@ portable-pty = "0.9"
 # Local encrypted storage: SQLite (bundled, no system dependency) + AES-256-GCM.
 rusqlite = { version = "0.32", features = ["bundled"] }
 aes-gcm = "0.10"
-getrandom = "0.2"
+keyring = "3"

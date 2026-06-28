@@ -53,6 +53,8 @@ export const demoStatus: ServerStatus = {
   cpuPercent: 18,
   memoryTotalMb: 8192,
   memoryAvailableMb: 4890,
+  swapTotalMb: 2048,
+  swapFreeMb: 1840,
   diskUsedPercent: 42,
   diskUsedGb: 38.4,
   diskTotalGb: 91.5,

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal, type ITheme } from "@xterm/xterm";
@@ -41,7 +41,7 @@ const terminalThemes = {
 
 const passwordPromptPattern = /(?:password|passphrase|密码|口令)[^:\n\r]*[:：]\s*$/i;
 
-export function TerminalPane({
+function TerminalPaneBase({
   tab,
   visible,
   theme,
@@ -395,3 +395,19 @@ export function TerminalPane({
     </section>
   );
 }
+
+export const TerminalPane = memo(TerminalPaneBase, (previous, next) => {
+  const prevTab = previous.tab;
+  const nextTab = next.tab;
+  return (
+    prevTab.id === nextTab.id &&
+    prevTab.title === nextTab.title &&
+    prevTab.sessionId === nextTab.sessionId &&
+    prevTab.state === nextTab.state &&
+    previous.visible === next.visible &&
+    previous.theme === next.theme &&
+    previous.fontSize === next.fontSize &&
+    previous.layoutSignal === next.layoutSignal &&
+    previous.pasteRequest?.id === next.pasteRequest?.id
+  );
+});

@@ -142,7 +142,10 @@ pub fn with_sftp_session<T>(
         conn.sftp = Some(sftp);
     }
 
-    let result = action(&conn.session, conn.sftp.as_ref().expect("sftp just initialized"));
+    let result = action(
+        &conn.session,
+        conn.sftp.as_ref().expect("sftp just initialized"),
+    );
     if result.is_err() {
         conn.sftp = None;
     }

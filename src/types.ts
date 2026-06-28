@@ -42,6 +42,8 @@ export interface ServerStatus {
   cpuPercent: number;
   memoryTotalMb?: number | null;
   memoryAvailableMb?: number | null;
+  swapTotalMb?: number | null;
+  swapFreeMb?: number | null;
   diskUsedPercent?: number | null;
   diskUsedGb?: number | null;
   diskTotalGb?: number | null;

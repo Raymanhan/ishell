@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { command, isTauri } from "./api/tauri";
 import { ConnectionManager } from "./components/ConnectionManager";
@@ -7,10 +7,8 @@ import { DownloadQueue } from "./components/DownloadQueue";
 import { ServerDetail } from "./components/ServerDetail";
 import { ServerEditor, type ServerForm } from "./components/ServerEditor";
 import { SettingsModal, type AppTheme } from "./components/SettingsModal";
-import { SftpBrowser } from "./components/SftpBrowser";
 import { StatusDashboard } from "./components/StatusDashboard";
 import { TabBar } from "./components/TabBar";
-import { TerminalPane } from "./components/TerminalPane";
 import { UploadQueue } from "./components/UploadQueue";
 import { swatches } from "./constants/theme";
 import { createTabId, type ShellTab } from "./features/shell/types";
@@ -29,6 +27,13 @@ import type {
   UploadProgressPayload,
 } from "./types";
 import { filterServers, groupServers } from "./utils/servers";
+
+const TerminalPane = lazy(() =>
+  import("./components/TerminalPane").then((module) => ({ default: module.TerminalPane })),
+);
+const SftpBrowser = lazy(() =>
+  import("./components/SftpBrowser").then((module) => ({ default: module.SftpBrowser })),
+);
 
 const defaultForm: ServerForm = {
   id: null,
@@ -804,7 +809,8 @@ export default function App() {
         current.map((tab) => {
           if (tab.id !== tabId) return tab;
           const previous = tab.networkSample;
-          const seconds = previous ? Math.max(1, sample.sampledAt - previous.sampledAt) : 1;
+          if (previous && sample.sampledAt <= previous.sampledAt) return tab;
+          const seconds = previous ? Math.max(0.2, sample.sampledAt - previous.sampledAt) : 1;
           const rxBps = previous
             ? Math.max(0, (sample.rxBytes - previous.rxBytes) / seconds)
             : tab.networkRxBps;
@@ -1354,25 +1360,27 @@ export default function App() {
             {tabs.length > 0 && (
               <div className={`terminal-dock ${filesDragging ? "dragging" : ""}`} ref={terminalDockRef}>
                 <div className="terminal-region">
-                  {tabs.map((tab) => (
-                    <TerminalPane
-                      key={tab.id}
-                      tab={tab}
-                      visible={tab.id === activeTabId}
-                      theme={theme}
-                      fontSize={terminalFontSize}
-                      layoutSignal={`${filesOpen}:${filesRatio}:${filesDragging}:${statusOpen}:${statusPanelWidth}`}
-                      setNotice={showNotice}
-                      onReady={() => handleTerminalReady(tab.id, tab.serverId, tab.title)}
-                      onCommandSubmitted={handleCommandSubmitted}
-                      pasteRequest={pasteRequest?.tabId === tab.id ? pasteRequest : null}
-                      onClosed={() => {
-                        terminalReadyTabs.current.delete(tab.id);
-                        patchTab(tab.id, { state: "closed" });
-                      }}
-                      onReconnect={() => reconnectShell(tab.id)}
-                    />
-                  ))}
+                  <Suspense fallback={null}>
+                    {tabs.map((tab) => (
+                      <TerminalPane
+                        key={tab.id}
+                        tab={tab}
+                        visible={tab.id === activeTabId}
+                        theme={theme}
+                        fontSize={terminalFontSize}
+                        layoutSignal={`${filesOpen}:${filesRatio}:${filesDragging}:${statusOpen}:${statusPanelWidth}`}
+                        setNotice={showNotice}
+                        onReady={() => handleTerminalReady(tab.id, tab.serverId, tab.title)}
+                        onCommandSubmitted={handleCommandSubmitted}
+                        pasteRequest={pasteRequest?.tabId === tab.id ? pasteRequest : null}
+                        onClosed={() => {
+                          terminalReadyTabs.current.delete(tab.id);
+                          patchTab(tab.id, { state: "closed" });
+                        }}
+                        onReconnect={() => reconnectShell(tab.id)}
+                      />
+                    ))}
+                  </Suspense>
                 </div>
 
                 {activeTab && (
@@ -1389,23 +1397,25 @@ export default function App() {
                       ref={filesRegionRef}
                       style={{ "--files-panel-height": `${filesRatio * 100}%` } as CSSProperties}
                     >
-                      <SftpBrowser
-                        tab={activeTab}
-                        busy={sftpBusy}
-                        dragOver={dragOver}
-                        onOpen={(entry, columnIndex) => loadFiles(entry.path, columnIndex)}
-                        onPathSubmit={jumpToPath}
-                        onSelect={(path, paths = path ? [path] : []) =>
-                          patchTab(activeTab.id, { selectedPath: path, selectedPaths: paths })
-                        }
-                        onRefresh={refreshFiles}
-                        onUpload={uploadFile}
-                        onDownload={downloadFiles}
-                        onMkdir={makeDir}
-                        onRename={renameEntry}
-                        onDelete={deleteEntries}
-                        onClose={() => setFilesOpen(false)}
-                      />
+                      <Suspense fallback={<div className="column-state">正在打开文件面板…</div>}>
+                        <SftpBrowser
+                          tab={activeTab}
+                          busy={sftpBusy}
+                          dragOver={dragOver}
+                          onOpen={(entry, columnIndex) => loadFiles(entry.path, columnIndex)}
+                          onPathSubmit={jumpToPath}
+                          onSelect={(path, paths = path ? [path] : []) =>
+                            patchTab(activeTab.id, { selectedPath: path, selectedPaths: paths })
+                          }
+                          onRefresh={refreshFiles}
+                          onUpload={uploadFile}
+                          onDownload={downloadFiles}
+                          onMkdir={makeDir}
+                          onRename={renameEntry}
+                          onDelete={deleteEntries}
+                          onClose={() => setFilesOpen(false)}
+                        />
+                      </Suspense>
                       <div className="transfer-queues">
                         <UploadQueue
                           uploads={uploads}

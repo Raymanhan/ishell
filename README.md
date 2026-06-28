@@ -8,7 +8,7 @@ status from one place.
 
 ## Features
 
-- **SSH manager** — grouped, searchable host list with keychain-encrypted secrets.
+- **SSH manager** — grouped, searchable host list with secrets stored in the OS keychain.
 - **Interactive terminal** — real PTY sessions rendered with xterm, one per tab.
 - **SFTP** — Miller-column file browser with upload, download, mkdir, rename and delete.
 - **Live monitoring** — per-host CPU / memory / disk / load dashboard.
@@ -30,6 +30,8 @@ also be run manually from the **Build installers** workflow in GitHub Actions.
 - Node.js 22 or newer
 - Rust stable toolchain
 - Tauri system dependencies for your platform
+- Linux runtime secret storage requires a Secret Service provider such as
+  GNOME Keyring or KWallet.
 
 On Linux, install the WebKitGTK and bundling dependencies required by Tauri:
 
@@ -54,7 +56,7 @@ src-tauri/src/
   commands.rs       Tauri command boundary
   models.rs         Serializable DTOs shared by commands
   ssh.rs            SSH, SFTP and status sampling
-  store.rs          Server persistence and keychain secrets
+  store.rs          Server persistence and OS keychain secret storage
   terminal.rs       Interactive terminal session registry
   time.rs           Small time helper
   lib.rs            Tauri application assembly

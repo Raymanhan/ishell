@@ -56,6 +56,8 @@ pub struct ServerStatus {
     pub cpu_percent: f64,
     pub memory_total_mb: Option<u64>,
     pub memory_available_mb: Option<u64>,
+    pub swap_total_mb: Option<u64>,
+    pub swap_free_mb: Option<u64>,
     pub disk_used_percent: Option<f64>,
     pub disk_used_gb: Option<f64>,
     pub disk_total_gb: Option<f64>,
@@ -69,7 +71,7 @@ pub struct ServerStatus {
 pub struct NetworkSample {
     pub rx_bytes: u64,
     pub tx_bytes: u64,
-    pub sampled_at: u64,
+    pub sampled_at: f64,
 }
 
 #[derive(Debug, Serialize)]

@@ -31,6 +31,12 @@ export function StatusDashboard({
       ? (status.memoryTotalMb - (status.memoryAvailableMb ?? 0)) / 1024
       : null;
   const memoryTotalGb = status?.memoryTotalMb != null ? status.memoryTotalMb / 1024 : null;
+  const memoryAvailableGb = status?.memoryAvailableMb != null ? status.memoryAvailableMb / 1024 : null;
+  const swapTotalMb = status?.swapTotalMb;
+  const swapFreeMb = status?.swapFreeMb;
+  const swapUsedMb = swapTotalMb != null && swapFreeMb != null ? Math.max(0, swapTotalMb - swapFreeMb) : null;
+  const swapEnabled = (swapTotalMb ?? 0) > 0;
+  const swapPercent = swapEnabled && swapUsedMb != null && swapTotalMb ? Math.round((swapUsedMb / swapTotalMb) * 100) : 0;
   const diskMounts = getDiskMounts(status);
 
   return (
@@ -51,8 +57,8 @@ export function StatusDashboard({
         <div className="network-head">
           <span>网络速度</span>
           <div className="network-speeds">
-            <SpeedPill icon={<ArrowDown size={12} />} value={tab.networkTxBps} label="下行" />
-            <SpeedPill icon={<ArrowUp size={12} />} value={tab.networkRxBps} label="上行" />
+            <SpeedPill icon={<ArrowDown size={12} />} value={tab.networkRxBps} label="下载" />
+            <SpeedPill icon={<ArrowUp size={12} />} value={tab.networkTxBps} label="上传" />
           </div>
         </div>
         <NetworkWave history={tab.networkHistory} />
@@ -80,11 +86,25 @@ export function StatusDashboard({
             value={mem}
             valueText={`${mem}%`}
             detail={
-              memoryUsedGb != null && memoryTotalGb != null
-                ? `${memoryUsedGb.toFixed(1)} / ${memoryTotalGb.toFixed(1)} GB`
+              memoryUsedGb != null && memoryTotalGb != null && memoryAvailableGb != null
+                ? `${memoryUsedGb.toFixed(1)} / ${memoryTotalGb.toFixed(1)} GB · 可用 ${memoryAvailableGb.toFixed(1)} GB`
                 : "—"
             }
             tone="warn"
+          />
+          <MetricBar
+            icon={<MemoryStick size={14} />}
+            label="交换"
+            value={swapPercent}
+            valueText={swapTotalMb == null ? "—" : swapEnabled ? `${swapPercent}%` : "关闭"}
+            detail={
+              swapTotalMb == null
+                ? "暂不可用"
+                : swapEnabled && swapUsedMb != null
+                  ? `${formatCapacityMb(swapUsedMb)} / ${formatCapacityMb(swapTotalMb)} · 可用 ${formatCapacityMb(swapFreeMb ?? 0)}`
+                  : "未启用交换空间"
+            }
+            tone={swapEnabled && swapPercent >= 70 ? "warn" : "info"}
           />
           <MetricBar
             icon={<GaugeIcon size={14} />}
@@ -134,8 +154,8 @@ function NetworkWave({ history }: { history: ShellTab["networkHistory"] }) {
   const width = 220;
   const height = 58;
   const max = Math.max(1, ...history.flatMap((point) => [point.rxBps, point.txBps]));
-  const downloadPath = wavePath(history.map((point) => point.txBps), max, width, height);
-  const uploadPath = wavePath(history.map((point) => point.rxBps), max, width, height);
+  const downloadPath = wavePath(history.map((point) => point.rxBps), max, width, height);
+  const uploadPath = wavePath(history.map((point) => point.txBps), max, width, height);
   const downloadArea = areaPath(downloadPath.points, downloadPath.d, height);
   const uploadArea = areaPath(uploadPath.points, uploadPath.d, height);
 
@@ -223,12 +243,20 @@ function MetricBar({
         {icon}
         {label}
       </span>
-      <div className="metric-track" aria-label={`${label} ${valueText}`}>
-        <span className="metric-fill" style={{ width: `${clamped}%` }} />
+      <div className="metric-main">
+        <div className="metric-track" aria-label={`${label} ${valueText}`}>
+          <span className="metric-fill" style={{ width: `${clamped}%` }} />
+        </div>
+        <span className="metric-detail">{detail}</span>
       </div>
       <strong>{valueText}</strong>
     </article>
   );
+}
+
+function formatCapacityMb(value: number) {
+  if (value >= 1024) return `${(value / 1024).toFixed(1)} GB`;
+  return `${Math.round(value)} MB`;
 }
 
 function MountBar({ mount }: { mount: DiskMount }) {

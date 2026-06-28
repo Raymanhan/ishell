@@ -13,7 +13,7 @@ use crate::{
     models::{DiskMount, NetworkSample, ServerRecord, ServerStatus, SftpEntry, UploadProgress},
     pool::{with_monitor_session, with_sftp, with_sftp_session, SshPool},
     store::{get_server, read_secret},
-    time::now,
+    time::{now, now_fractional},
 };
 
 const S_IFMT: u32 = 0o170000;
@@ -22,9 +22,9 @@ const S_IFDIR: u32 = 0o040000;
 /// Collect every status metric in a single remote command to avoid paying a
 /// round trip per metric. Sections are delimited by `@@KEY@@` markers.
 const STATUS_SCRIPT: &str = "A=\"$(uname -srmo 2>/dev/null || uname -a)\"; \
-B=\"$(cat /proc/uptime 2>/dev/null)\"; \
-C=\"$(cat /proc/loadavg 2>/dev/null || sysctl -n vm.loadavg 2>/dev/null)\"; \
-D=\"$(awk '/MemTotal|MemAvailable/{print $1,$2}' /proc/meminfo 2>/dev/null)\"; \
+if [ -r /proc/uptime ]; then B=\"$(cat /proc/uptime 2>/dev/null)\"; else BOOT=\"$(sysctl -n kern.boottime 2>/dev/null | sed 's/.*sec = \\([0-9][0-9]*\\).*/\\1/')\"; NOW=\"$(date +%s 2>/dev/null)\"; if [ -n \"$BOOT\" ] && [ -n \"$NOW\" ]; then B=\"$((NOW - BOOT)).00\"; else B=\"\"; fi; fi; \
+C=\"$(cat /proc/loadavg 2>/dev/null || sysctl -n vm.loadavg 2>/dev/null || uptime 2>/dev/null)\"; \
+if [ -r /proc/meminfo ]; then D=\"$(awk '/MemTotal|MemAvailable|SwapTotal|SwapFree/{print $1,$2}' /proc/meminfo 2>/dev/null)\"; elif command -v vm_stat >/dev/null 2>&1; then D=\"$(TOTAL=$(sysctl -n hw.memsize 2>/dev/null); PAGE=$(vm_stat 2>/dev/null | awk '/page size of/{print $8}' | tr -d '.'); [ -z \"$PAGE\" ] && PAGE=$(pagesize 2>/dev/null); vm_stat 2>/dev/null | awk -v total=\"$TOTAL\" -v page=\"$PAGE\" '/Pages free/{free=$3} /Pages inactive/{inactive=$3} /Pages speculative/{spec=$3} END {gsub(/\\./,\"\",free); gsub(/\\./,\"\",inactive); gsub(/\\./,\"\",spec); if (total > 0) printf \"MemTotal: %d\\n\", total / 1024; if (page > 0) printf \"MemAvailable: %d\\n\", (free + inactive + spec) * page / 1024}')\"; else D=\"$(TOTAL=$(sysctl -n hw.physmem 2>/dev/null || sysctl -n hw.memsize 2>/dev/null); AVAIL=$(sysctl -n hw.usermem 2>/dev/null); [ -n \"$TOTAL\" ] && printf 'MemTotal: %s\\n' $((TOTAL / 1024)); [ -n \"$AVAIL\" ] && printf 'MemAvailable: %s\\n' $((AVAIL / 1024)))\"; fi; \
 E=\"$(awk 'NR==1{print $2,$3,$4,$5,$6,$7,$8,$9}' /proc/stat 2>/dev/null; sleep 0.2; awk 'NR==1{print $2,$3,$4,$5,$6,$7,$8,$9}' /proc/stat 2>/dev/null)\"; \
 F=\"$(ps -e --no-headers 2>/dev/null | wc -l || ps -ax 2>/dev/null | wc -l)\"; \
 G=\"$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null)\"; \
@@ -33,7 +33,7 @@ printf '@@OS@@\\n%s\\n@@UP@@\\n%s\\n@@LOAD@@\\n%s\\n@@MEM@@\\n%s\\n@@CPU@@\\n%s\
 
 const DISK_SCRIPT: &str = "df -Pk 2>/dev/null | tail -n +2";
 
-const NETWORK_SCRIPT: &str = "awk -F'[: ]+' 'NR>2 && $2 != \"lo\" {rx += $3; tx += $11} END {printf \"%s %s\\n\", rx+0, tx+0}' /proc/net/dev 2>/dev/null";
+const NETWORK_SCRIPT: &str = "if [ -r /proc/net/dev ]; then awk -F'[: ]+' 'NR>2 && $2 != \"lo\" {rx += $3; tx += $11} END {printf \"%s %s\\n\", rx+0, tx+0}' /proc/net/dev 2>/dev/null; else netstat -ibn 2>/dev/null | awk 'NR>1 && $1 !~ /^lo/ {rx += $7; tx += $10} END {printf \"%s %s\\n\", rx+0, tx+0}'; fi";
 
 pub fn connect_server(app: &AppHandle, id: &str) -> Result<(Session, ServerRecord), String> {
     let server = get_server(app, id)?;
@@ -132,7 +132,8 @@ pub fn fetch_status(
     let cpu_cores = parse_cpu_cores(section("CORES"));
     let cpu_percent = parse_cpu_percent(section("CPU"))
         .unwrap_or_else(|| cpu_percent_from_load(load1, cpu_cores));
-    let (memory_total_mb, memory_available_mb) = parse_memory(section("MEM"));
+    let (memory_total_mb, memory_available_mb, swap_total_mb, swap_free_mb) =
+        parse_memory(section("MEM"));
     let disk_mounts = if include_disk {
         let raw_disk =
             with_monitor_session(pool, app, id, |session| exec_command(session, DISK_SCRIPT))?;
@@ -157,6 +158,8 @@ pub fn fetch_status(
         cpu_percent,
         memory_total_mb,
         memory_available_mb,
+        swap_total_mb,
+        swap_free_mb,
         disk_used_percent: root_disk.map(|mount| mount.used_percent),
         disk_used_gb: root_disk.map(|mount| mount.used_gb),
         disk_total_gb: root_disk.map(|mount| mount.total_gb),
@@ -187,7 +190,7 @@ pub fn fetch_network_sample(
     Ok(NetworkSample {
         rx_bytes,
         tx_bytes,
-        sampled_at: now(),
+        sampled_at: now_fractional(),
     })
 }
 
@@ -197,9 +200,7 @@ pub fn list_sftp(
     id: &str,
     path: &str,
 ) -> Result<Vec<SftpEntry>, String> {
-    with_sftp_session(pool, app, id, |session, sftp| {
-        list_dir(session, sftp, path)
-    })
+    with_sftp_session(pool, app, id, |session, sftp| list_dir(session, sftp, path))
 }
 
 fn list_dir(session: &Session, sftp: &Sftp, path: &str) -> Result<Vec<SftpEntry>, String> {
@@ -309,7 +310,10 @@ fn parse_owner_group_output(raw: &str) -> (HashMap<u32, String>, HashMap<u32, St
         let mut parts = line.splitn(3, '\t');
         let kind = parts.next().unwrap_or_default();
         let id = parts.next().and_then(|value| value.parse::<u32>().ok());
-        let name = parts.next().map(str::trim).filter(|value| !value.is_empty());
+        let name = parts
+            .next()
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
         let (Some(id), Some(name)) = (id, name) else {
             continue;
         };
@@ -385,16 +389,15 @@ fn download_with(
 
     let mut local =
         fs::File::create(&local_path).map_err(|err| format!("无法创建本地文件：{err}"))?;
-    match copy_with_progress(
+    let progress = ProgressConfig {
         app,
-        &mut remote,
-        &mut local,
         total,
         transfer_id,
-        "sftp-download-progress",
-        "下载已停止",
+        event_name: "sftp-download-progress",
+        stop_message: "下载已停止",
         is_canceled,
-    ) {
+    };
+    match copy_with_progress(&mut remote, &mut local, progress) {
         Ok(()) => {}
         Err(err) if err.kind() == io::ErrorKind::Interrupted => {
             drop(local);
@@ -404,7 +407,14 @@ fn download_with(
         Err(err) => return Err(format!("下载失败：{err}")),
     }
 
-    emit_progress(app, "sftp-download-progress", transfer_id, total, total, true);
+    emit_progress(
+        app,
+        "sftp-download-progress",
+        transfer_id,
+        total,
+        total,
+        true,
+    );
     Ok(local_path.to_string_lossy().to_string())
 }
 
@@ -446,16 +456,15 @@ fn upload_with(
         .create(Path::new(&remote_path))
         .map_err(|err| format!("无法创建远程文件：{err}"))?;
 
-    match copy_with_progress(
+    let progress = ProgressConfig {
         app,
-        &mut local,
-        &mut remote,
         total,
         transfer_id,
-        "sftp-upload-progress",
-        "上传已停止",
+        event_name: "sftp-upload-progress",
+        stop_message: "上传已停止",
         is_canceled,
-    ) {
+    };
+    match copy_with_progress(&mut local, &mut remote, progress) {
         Ok(()) => {}
         Err(err) if err.kind() == io::ErrorKind::Interrupted => {
             drop(remote);
@@ -472,37 +481,61 @@ fn upload_with(
 /// Stream the file in chunks, emitting throttled progress events (at most every
 /// ~80ms) so the UI can render a live progress bar without being flooded by one
 /// event per chunk on large transfers.
+struct ProgressConfig<'a> {
+    app: &'a AppHandle,
+    total: u64,
+    transfer_id: &'a str,
+    event_name: &'a str,
+    stop_message: &'a str,
+    is_canceled: &'a dyn Fn() -> bool,
+}
+
 fn copy_with_progress(
-    app: &AppHandle,
     reader: &mut impl Read,
     writer: &mut impl Write,
-    total: u64,
-    transfer_id: &str,
-    event_name: &str,
-    stop_message: &str,
-    is_canceled: &dyn Fn() -> bool,
+    progress: ProgressConfig<'_>,
 ) -> io::Result<()> {
     let mut buffer = vec![0u8; 64 * 1024];
     let mut transferred: u64 = 0;
     let mut last_emit = Instant::now();
-    emit_progress(app, event_name, transfer_id, 0, total, false);
+    emit_progress(
+        progress.app,
+        progress.event_name,
+        progress.transfer_id,
+        0,
+        progress.total,
+        false,
+    );
 
     loop {
-        if is_canceled() {
-            return Err(io::Error::new(io::ErrorKind::Interrupted, stop_message));
+        if (progress.is_canceled)() {
+            return Err(io::Error::new(
+                io::ErrorKind::Interrupted,
+                progress.stop_message.to_string(),
+            ));
         }
         let read = reader.read(&mut buffer)?;
         if read == 0 {
             break;
         }
-        if is_canceled() {
-            return Err(io::Error::new(io::ErrorKind::Interrupted, stop_message));
+        if (progress.is_canceled)() {
+            return Err(io::Error::new(
+                io::ErrorKind::Interrupted,
+                progress.stop_message.to_string(),
+            ));
         }
         writer.write_all(&buffer[..read])?;
         transferred += read as u64;
 
         if last_emit.elapsed() >= Duration::from_millis(80) {
-            emit_progress(app, event_name, transfer_id, transferred, total, false);
+            emit_progress(
+                progress.app,
+                progress.event_name,
+                progress.transfer_id,
+                transferred,
+                progress.total,
+                false,
+            );
             last_emit = Instant::now();
         }
     }
@@ -614,9 +647,28 @@ pub fn exec_command(session: &Session, command: &str) -> Result<String, String> 
 
     let mut stdout = String::new();
     let mut stderr = String::new();
-    channel.read_to_string(&mut stdout).ok();
-    channel.stderr().read_to_string(&mut stderr).ok();
-    channel.wait_close().ok();
+    channel
+        .read_to_string(&mut stdout)
+        .map_err(|err| format!("读取远程命令输出失败：{err}"))?;
+    channel
+        .stderr()
+        .read_to_string(&mut stderr)
+        .map_err(|err| format!("读取远程命令错误输出失败：{err}"))?;
+    channel
+        .wait_close()
+        .map_err(|err| format!("等待远程命令结束失败：{err}"))?;
+
+    let exit_status = channel
+        .exit_status()
+        .map_err(|err| format!("读取远程命令退出码失败：{err}"))?;
+    if exit_status != 0 {
+        let message = if stderr.trim().is_empty() {
+            stdout.trim()
+        } else {
+            stderr.trim()
+        };
+        return Err(format!("远程命令退出码 {exit_status}：{message}"));
+    }
 
     if stdout.trim().is_empty() && !stderr.trim().is_empty() {
         Ok(stderr)
@@ -660,7 +712,7 @@ fn parse_load(raw: &str) -> (f64, f64, f64) {
         .collect();
 
     (
-        values.get(0).copied().unwrap_or(0.0),
+        values.first().copied().unwrap_or(0.0),
         values.get(1).copied().unwrap_or(0.0),
         values.get(2).copied().unwrap_or(0.0),
     )
@@ -711,9 +763,11 @@ fn cpu_percent_from_load(load1: f64, cpu_cores: Option<u64>) -> f64 {
     ((load1 / cores) * 100.0).clamp(0.0, 100.0)
 }
 
-fn parse_memory(raw: &str) -> (Option<u64>, Option<u64>) {
+fn parse_memory(raw: &str) -> (Option<u64>, Option<u64>, Option<u64>, Option<u64>) {
     let mut total = None;
     let mut available = None;
+    let mut swap_total = None;
+    let mut swap_free = None;
 
     for line in raw.lines() {
         let mut parts = line.split_whitespace();
@@ -723,11 +777,13 @@ fn parse_memory(raw: &str) -> (Option<u64>, Option<u64>) {
         match key {
             "MemTotal" => total = value.map(|kb| kb / 1024),
             "MemAvailable" => available = value.map(|kb| kb / 1024),
+            "SwapTotal" => swap_total = value.map(|kb| kb / 1024),
+            "SwapFree" => swap_free = value.map(|kb| kb / 1024),
             _ => {}
         }
     }
 
-    (total, available)
+    (total, available, swap_total, swap_free)
 }
 
 fn parse_disk_mounts(raw: &str) -> Vec<DiskMount> {

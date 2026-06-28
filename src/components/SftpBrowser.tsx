@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   ChevronRight,
@@ -41,7 +41,7 @@ interface CreateDirState {
 
 type SftpViewMode = "tree" | "columns";
 
-export function SftpBrowser({
+function SftpBrowserBase({
   tab,
   busy,
   dragOver,
@@ -74,17 +74,28 @@ export function SftpBrowser({
   const currentDir = columns.length ? columns[columns.length - 1].path : "/";
   const currentColumnIndex = Math.max(0, columns.length - 1);
   const currentColumn = columns[currentColumnIndex] ?? null;
-  const treeRows = buildDirectoryTreeRows(columns);
-  const selectedPaths = tab.selectedPaths?.length
-    ? tab.selectedPaths
-    : tab.selectedPath
-      ? [tab.selectedPath]
-      : [];
-  const selectedPathSet = new Set(selectedPaths);
-  const selectedEntries = selectedPaths.map((path) => findEntry(tab, path)).filter((entry): entry is SftpEntry => Boolean(entry));
-  const selectedDownloadEntries = selectedEntries.filter((entry) => !entry.isDir);
-  const selected = findEntry(tab, tab.selectedPath);
-  const selectedColumnIndex = findEntryColumnIndex(tab, tab.selectedPath);
+  const treeRows = useMemo(() => buildDirectoryTreeRows(columns), [columns]);
+  const selectedPaths = useMemo(
+    () => (
+      tab.selectedPaths?.length
+        ? tab.selectedPaths
+        : tab.selectedPath
+          ? [tab.selectedPath]
+          : []
+    ),
+    [tab.selectedPath, tab.selectedPaths],
+  );
+  const selectedPathSet = useMemo(() => new Set(selectedPaths), [selectedPaths]);
+  const selectedEntries = useMemo(
+    () => selectedPaths.map((path) => findEntry(tab, path)).filter((entry): entry is SftpEntry => Boolean(entry)),
+    [selectedPaths, tab],
+  );
+  const selectedDownloadEntries = useMemo(
+    () => selectedEntries.filter((entry) => !entry.isDir),
+    [selectedEntries],
+  );
+  const selected = useMemo(() => findEntry(tab, tab.selectedPath), [tab]);
+  const selectedColumnIndex = useMemo(() => findEntryColumnIndex(tab, tab.selectedPath), [tab]);
   const [viewMode, setViewMode] = useState<SftpViewMode>("tree");
   const [pathValue, setPathValue] = useState(currentDir);
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
@@ -736,6 +747,15 @@ export function SftpBrowser({
     </div>
   );
 }
+
+export const SftpBrowser = memo(SftpBrowserBase, (previous, next) => (
+  previous.tab.id === next.tab.id &&
+  previous.tab.files === next.tab.files &&
+  previous.tab.selectedPath === next.tab.selectedPath &&
+  previous.tab.selectedPaths === next.tab.selectedPaths &&
+  previous.busy === next.busy &&
+  previous.dragOver === next.dragOver
+));
 
 interface DirectoryTreeRow {
   entry: SftpEntry;
