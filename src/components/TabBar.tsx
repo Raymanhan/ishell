@@ -7,7 +7,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type WheelEvent as ReactWheelEvent,
 } from "react";
-import { Activity, ArrowLeft, ArrowRight, Clock3, FolderTree, Server, Settings, X } from "lucide-react";
+import { Activity, ArrowLeft, ArrowRight, Clock3, FolderTree, RefreshCw, Server, Settings, X } from "lucide-react";
 import type { ShellTab } from "../features/shell/types";
 
 export function TabBar({
@@ -24,6 +24,7 @@ export function TabBar({
   onToggleHistory,
   notice,
   onActivate,
+  onReconnect,
   onClose,
   onCloseTabs,
 }: {
@@ -40,6 +41,7 @@ export function TabBar({
   onToggleHistory: () => void;
   notice: string;
   onActivate: (id: string) => void;
+  onReconnect: (id: string) => void;
   onClose: (id: string) => void;
   onCloseTabs: (ids: string[]) => void;
 }) {
@@ -144,7 +146,7 @@ export function TabBar({
     setMenu({
       tabId,
       x: Math.min(event.clientX, window.innerWidth - 180),
-      y: Math.min(event.clientY, window.innerHeight - 118),
+      y: Math.min(event.clientY, window.innerHeight - 150),
     });
   }
 
@@ -154,7 +156,8 @@ export function TabBar({
   }
 
   return (
-    <header className="workbench-bar" data-tauri-drag-region>
+    <header className="workbench-bar">
+      <div className="topbar-drag-strip" data-tauri-drag-region aria-hidden />
       <button type="button" className="connection-trigger" onClick={onOpenConnections} title="连接管理" aria-label={`连接管理，${serverCount} 台主机`}>
         <Server size={15} />
         <span>连接</span>
@@ -197,9 +200,11 @@ export function TabBar({
             onPointerDown={startScrollbarDrag}
           />
         </div>
+        <div className="tabs-drag-fill" data-tauri-drag-region aria-hidden />
       </div>
 
       <div className="bar-right">
+        <div className="bar-right-drag-fill" data-tauri-drag-region aria-hidden />
         {notice && <span className="notice">{notice}</span>}
         <div className="dock-switcher" role="group" aria-label="工具">
           {activeTabId && (
@@ -264,6 +269,10 @@ export function TabBar({
           role="menu"
           onContextMenu={(event) => event.preventDefault()}
         >
+          <button type="button" role="menuitem" onClick={() => runMenu(() => onReconnect(menu.tabId))}>
+            <RefreshCw size={14} />
+            重新连接
+          </button>
           <button type="button" role="menuitem" onClick={() => runMenu(() => onClose(menu.tabId))}>
             <X size={14} />
             关闭标签

@@ -36,11 +36,11 @@ export const demoServers: ServerRecord[] = [
 ];
 
 export const demoFiles: SftpEntry[] = [
-  { name: "etc", path: "/etc", isDir: true, size: null, uid: 0, gid: 0, permissions: 0o40755, modifiedAt: 1_782_000_000 },
-  { name: "var", path: "/var", isDir: true, size: null, uid: 0, gid: 0, permissions: 0o40755, modifiedAt: 1_782_002_400 },
-  { name: "home", path: "/home", isDir: true, size: null, uid: 1000, gid: 1000, permissions: 0o40755, modifiedAt: 1_782_004_800 },
-  { name: "release.tar.gz", path: "/release.tar.gz", isDir: false, size: 48_700_000, uid: 1000, gid: 1000, permissions: 0o100644, modifiedAt: 1_782_007_200 },
-  { name: "health.log", path: "/health.log", isDir: false, size: 182_020, uid: 1000, gid: 4, permissions: 0o100644, modifiedAt: 1_782_009_600 },
+  { name: "etc", path: "/etc", isDir: true, size: null, uid: 0, gid: 0, owner: "root", group: "root", permissions: 0o40755, modifiedAt: 1_782_000_000 },
+  { name: "var", path: "/var", isDir: true, size: null, uid: 0, gid: 0, owner: "root", group: "root", permissions: 0o40755, modifiedAt: 1_782_002_400 },
+  { name: "home", path: "/home", isDir: true, size: null, uid: 1000, gid: 1000, owner: "deploy", group: "deploy", permissions: 0o40755, modifiedAt: 1_782_004_800 },
+  { name: "release.tar.gz", path: "/release.tar.gz", isDir: false, size: 48_700_000, uid: 1000, gid: 1000, owner: "deploy", group: "deploy", permissions: 0o100644, modifiedAt: 1_782_007_200 },
+  { name: "health.log", path: "/health.log", isDir: false, size: 182_020, uid: 1000, gid: 4, owner: "deploy", group: "adm", permissions: 0o100644, modifiedAt: 1_782_009_600 },
 ];
 
 export const demoStatus: ServerStatus = {

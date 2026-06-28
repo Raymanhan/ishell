@@ -36,7 +36,6 @@ export function CommandHistoryPanel({
       <div className="history-head">
         <div>
           <span className="eyebrow">历史命令</span>
-          <strong>{commands.length}/10000</strong>
         </div>
         <Clock3 size={16} />
       </div>

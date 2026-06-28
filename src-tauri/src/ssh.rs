@@ -1,5 +1,6 @@
 use ssh2::{RenameFlags, Session, Sftp};
 use std::{
+    collections::HashMap,
     fs,
     io::{self, Read, Write},
     net::{TcpStream, ToSocketAddrs},
@@ -10,7 +11,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::{
     models::{DiskMount, NetworkSample, ServerRecord, ServerStatus, SftpEntry, UploadProgress},
-    pool::{with_monitor_session, with_sftp, SshPool},
+    pool::{with_monitor_session, with_sftp, with_sftp_session, SshPool},
     store::{get_server, read_secret},
     time::now,
 };
@@ -196,10 +197,12 @@ pub fn list_sftp(
     id: &str,
     path: &str,
 ) -> Result<Vec<SftpEntry>, String> {
-    with_sftp(pool, app, id, |sftp| list_dir(sftp, path))
+    with_sftp_session(pool, app, id, |session, sftp| {
+        list_dir(session, sftp, path)
+    })
 }
 
-fn list_dir(sftp: &Sftp, path: &str) -> Result<Vec<SftpEntry>, String> {
+fn list_dir(session: &Session, sftp: &Sftp, path: &str) -> Result<Vec<SftpEntry>, String> {
     let current_path = if path.trim().is_empty() {
         "/"
     } else {
@@ -234,11 +237,19 @@ fn list_dir(sftp: &Sftp, path: &str) -> Result<Vec<SftpEntry>, String> {
                 size: stat.size,
                 uid: stat.uid,
                 gid: stat.gid,
+                owner: None,
+                group: None,
                 permissions: stat.perm,
                 modified_at: stat.mtime,
             })
         })
         .collect();
+
+    let (owners, groups) = resolve_owner_group_names(session, &mapped);
+    for entry in &mut mapped {
+        entry.owner = entry.uid.and_then(|uid| owners.get(&uid).cloned());
+        entry.group = entry.gid.and_then(|gid| groups.get(&gid).cloned());
+    }
 
     mapped.sort_by(|a, b| {
         b.is_dir
@@ -247,6 +258,74 @@ fn list_dir(sftp: &Sftp, path: &str) -> Result<Vec<SftpEntry>, String> {
     });
 
     Ok(mapped)
+}
+
+fn resolve_owner_group_names(
+    session: &Session,
+    entries: &[SftpEntry],
+) -> (HashMap<u32, String>, HashMap<u32, String>) {
+    let user_ids = format_id_list(entries.iter().filter_map(|entry| entry.uid));
+    let group_ids = format_id_list(entries.iter().filter_map(|entry| entry.gid));
+    if user_ids.is_empty() && group_ids.is_empty() {
+        return (HashMap::new(), HashMap::new());
+    }
+
+    let command = format!(
+        "uids='{user_ids}'; gids='{group_ids}'; \
+for id in $uids; do \
+name=$(getent passwd \"$id\" 2>/dev/null | awk -F: 'NR==1{{print $1}}'); \
+if [ -z \"$name\" ] && [ -r /etc/passwd ]; then name=$(awk -F: -v id=\"$id\" '$3 == id {{print $1; exit}}' /etc/passwd 2>/dev/null); fi; \
+if [ -n \"$name\" ]; then printf 'u\\t%s\\t%s\\n' \"$id\" \"$name\"; fi; \
+done; \
+for id in $gids; do \
+name=$(getent group \"$id\" 2>/dev/null | awk -F: 'NR==1{{print $1}}'); \
+if [ -z \"$name\" ] && [ -r /etc/group ]; then name=$(awk -F: -v id=\"$id\" '$3 == id {{print $1; exit}}' /etc/group 2>/dev/null); fi; \
+if [ -n \"$name\" ]; then printf 'g\\t%s\\t%s\\n' \"$id\" \"$name\"; fi; \
+done"
+    );
+
+    let Ok(raw) = exec_command(session, &command) else {
+        return (HashMap::new(), HashMap::new());
+    };
+    parse_owner_group_output(&raw)
+}
+
+fn format_id_list(ids: impl Iterator<Item = u32>) -> String {
+    let mut values: Vec<u32> = ids.collect();
+    values.sort_unstable();
+    values.dedup();
+    values
+        .into_iter()
+        .map(|id| id.to_string())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn parse_owner_group_output(raw: &str) -> (HashMap<u32, String>, HashMap<u32, String>) {
+    let mut owners = HashMap::new();
+    let mut groups = HashMap::new();
+
+    for line in raw.lines() {
+        let mut parts = line.splitn(3, '\t');
+        let kind = parts.next().unwrap_or_default();
+        let id = parts.next().and_then(|value| value.parse::<u32>().ok());
+        let name = parts.next().map(str::trim).filter(|value| !value.is_empty());
+        let (Some(id), Some(name)) = (id, name) else {
+            continue;
+        };
+
+        match kind {
+            "u" => {
+                owners.insert(id, name.to_string());
+            }
+            "g" => {
+                groups.insert(id, name.to_string());
+            }
+            _ => {}
+        }
+    }
+
+    (owners, groups)
 }
 
 pub fn download_file(

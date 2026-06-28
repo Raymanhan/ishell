@@ -123,3 +123,28 @@ pub fn with_sftp<T>(
     }
     result
 }
+
+/// Run a closure against the pooled SSH session and cached SFTP handle.
+pub fn with_sftp_session<T>(
+    pool: &SshPool,
+    app: &AppHandle,
+    id: &str,
+    action: impl FnOnce(&Session, &Sftp) -> Result<T, String>,
+) -> Result<T, String> {
+    let arc = pool.get_or_connect(app, id, false)?;
+    let mut conn = arc.lock().map_err(|_| "SSH 会话繁忙，请重试".to_string())?;
+
+    if conn.sftp.is_none() {
+        let sftp = conn
+            .session
+            .sftp()
+            .map_err(|err| format!("无法打开 SFTP 会话：{err}"))?;
+        conn.sftp = Some(sftp);
+    }
+
+    let result = action(&conn.session, conn.sftp.as_ref().expect("sftp just initialized"));
+    if result.is_err() {
+        conn.sftp = None;
+    }
+    result
+}

@@ -77,6 +77,8 @@ export interface SftpEntry {
   size?: number | null;
   uid?: number | null;
   gid?: number | null;
+  owner?: string | null;
+  group?: string | null;
   permissions?: number | null;
   modifiedAt?: number | null;
 }

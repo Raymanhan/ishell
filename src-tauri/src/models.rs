@@ -91,6 +91,8 @@ pub struct SftpEntry {
     pub size: Option<u64>,
     pub uid: Option<u32>,
     pub gid: Option<u32>,
+    pub owner: Option<String>,
+    pub group: Option<String>,
     pub permissions: Option<u32>,
     pub modified_at: Option<u64>,
 }

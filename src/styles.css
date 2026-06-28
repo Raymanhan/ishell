@@ -29,6 +29,7 @@
 
   --r: 10px;
   --r-sm: 7px;
+  --tab-width: 150px;
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
 
   font-family: -apple-system, "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
@@ -876,7 +877,7 @@ textarea {
 /* ===== Workspace ===== */
 .workspace {
   display: grid;
-  grid-template-rows: 38px minmax(0, 1fr);
+  grid-template-rows: 30px minmax(0, 1fr);
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -890,14 +891,22 @@ textarea {
   z-index: 40;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: start;
+  align-items: end;
   gap: 9px;
-  padding: 4px 12px 0 88px;
+  padding: 0 12px 0 88px;
   border-bottom: 0;
   background: var(--inset);
   box-shadow: none;
   backdrop-filter: none;
   overflow: hidden;
+}
+.topbar-drag-strip {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  right: 0;
+  left: 72px;
+  height: 30px;
 }
 .workbench-bar::after {
   content: none;
@@ -913,6 +922,8 @@ textarea {
 
 .connection-trigger {
   position: relative;
+  z-index: 1;
+  align-self: end;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -946,6 +957,11 @@ textarea {
 }
 .tabs-shell {
   position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-end;
+  align-self: end;
+  gap: 0;
   min-width: 0;
   width: 100%;
   height: 30px;
@@ -953,32 +969,36 @@ textarea {
 
 .tabs {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 4px;
+  flex: 0 1 auto;
   min-width: 0;
-  width: 100%;
+  width: auto;
+  max-width: 100%;
   height: 30px;
-  padding-right: 28px;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
-  scroll-padding: 0 34px;
-  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 34px), transparent);
-  mask-image: linear-gradient(90deg, #000 calc(100% - 34px), transparent);
+  scroll-padding: 0 12px;
 }
 .tabs::-webkit-scrollbar {
   display: none;
 }
 .tab-scrollbar {
   position: absolute;
-  right: 32px;
-  bottom: -4px;
+  right: 0;
+  bottom: 0;
   left: 0;
   height: 3px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.035);
   opacity: 0;
   pointer-events: none;
+}
+.tabs-drag-fill {
+  align-self: stretch;
+  flex: 1 1 auto;
+  min-width: 18px;
 }
 .tab-scrollbar.visible {
   opacity: 1;
@@ -1035,12 +1055,12 @@ textarea {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  flex: 0 0 auto;
-  max-width: 190px;
-  height: 29px;
+  flex: 0 0 var(--tab-width);
+  width: var(--tab-width);
+  height: 30px;
   padding: 0 8px 0 11px;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: 7px 7px 0 0;
   background: transparent;
   color: var(--dim);
   cursor: pointer;
@@ -1080,6 +1100,7 @@ textarea {
   }
 }
 .tab-title {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1131,10 +1152,18 @@ textarea {
   box-shadow: none;
 }
 .bar-right {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
+  align-self: end;
   gap: 9px;
   flex: 0 0 auto;
+}
+.bar-right-drag-fill {
+  align-self: stretch;
+  flex: 1 1 auto;
+  min-width: 18px;
 }
 .notice {
   max-width: 300px;
@@ -1352,6 +1381,28 @@ textarea {
   transform: translate3d(0, 0, 0);
   pointer-events: auto;
 }
+.status-panel-content {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  animation: side-panel-content-in 170ms cubic-bezier(0.2, 0.85, 0.25, 1);
+}
+.status-panel-content.status-view {
+  --panel-content-offset: -8px;
+}
+.status-panel-content.history-view {
+  --panel-content-offset: 8px;
+}
+@keyframes side-panel-content-in {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--panel-content-offset, 8px), 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
 
 .history-panel {
   display: flex;
@@ -1371,13 +1422,7 @@ textarea {
 }
 .history-head > div {
   display: grid;
-  gap: 3px;
   min-width: 0;
-}
-.history-head strong {
-  color: var(--text);
-  font-size: 15px;
-  line-height: 1;
 }
 .history-search {
   display: flex;
@@ -1551,9 +1596,11 @@ textarea {
 @media (prefers-reduced-motion: reduce) {
   .status-divider,
   .status-panel,
+  .status-panel-content,
   .files-region,
   .dock-divider {
     transition: none;
+    animation: none;
   }
 }
 

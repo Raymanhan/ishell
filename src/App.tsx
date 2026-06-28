@@ -1232,6 +1232,8 @@ export default function App() {
       size: null,
       uid: null,
       gid: null,
+      owner: null,
+      group: null,
       permissions: 0o40755,
       modifiedAt: null,
     };
@@ -1341,6 +1343,7 @@ export default function App() {
           onToggleHistory={toggleHistoryPanel}
           notice={notice}
           onActivate={setActiveTabId}
+          onReconnect={reconnectShell}
           onClose={closeShell}
           onCloseTabs={closeShells}
         />
@@ -1437,15 +1440,22 @@ export default function App() {
                 className={`status-panel ${statusOpen || historyOpen ? "open" : ""}`}
                 style={{ "--status-panel-width": `${statusPanelWidth}px` } as CSSProperties}
               >
-                {statusOpen ? (
-                  <StatusDashboard
-                    tab={activeTab}
-                    loading={statusLoading}
-                    onRefresh={() => refreshStatus()}
-                  />
-                ) : historyOpen ? (
-                  <CommandHistoryPanel commands={commandHistory} onPick={pasteHistoryCommand} />
-                ) : null}
+                {(statusOpen || historyOpen) && (
+                  <div
+                    key={statusOpen ? "status" : "history"}
+                    className={`status-panel-content ${statusOpen ? "status-view" : "history-view"}`}
+                  >
+                    {statusOpen ? (
+                      <StatusDashboard
+                        tab={activeTab}
+                        loading={statusLoading}
+                        onRefresh={() => refreshStatus()}
+                      />
+                    ) : (
+                      <CommandHistoryPanel commands={commandHistory} onPick={pasteHistoryCommand} />
+                    )}
+                  </div>
+                )}
               </aside>
             </>
           )}
@@ -1660,6 +1670,8 @@ function entryForPath(path: string): SftpEntry {
     size: null,
     uid: null,
     gid: null,
+    owner: null,
+    group: null,
     permissions: null,
     modifiedAt: null,
   };

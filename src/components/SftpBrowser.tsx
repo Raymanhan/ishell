@@ -791,6 +791,8 @@ function rootEntry(): SftpEntry {
     size: null,
     uid: null,
     gid: null,
+    owner: null,
+    group: null,
     permissions: null,
     modifiedAt: null,
   };
@@ -849,7 +851,7 @@ function formatPermissions(entry: SftpEntry) {
 }
 
 function formatOwnerGroup(entry: SftpEntry) {
-  const owner = entry.uid == null ? "-" : String(entry.uid);
-  const group = entry.gid == null ? "-" : String(entry.gid);
+  const owner = entry.owner || (entry.uid == null ? "-" : String(entry.uid));
+  const group = entry.group || (entry.gid == null ? "-" : String(entry.gid));
   return owner === "-" && group === "-" ? "--" : `${owner}:${group}`;
 }
