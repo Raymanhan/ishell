@@ -1,6 +1,6 @@
 [package]
 name = "ishell"
-version = "0.1.6"
+version = "0.1.7"
 description = "A lightweight SSH and SFTP manager"
 authors = ["iShell"]
 license = "MIT"
