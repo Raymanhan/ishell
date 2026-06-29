@@ -29,7 +29,7 @@ pub struct TerminalRegistry {
     output_offsets: Mutex<HashMap<String, usize>>,
 }
 
-enum TerminalControl {
+pub(crate) enum TerminalControl {
     Input(String),
     Resize { cols: u16, rows: u16 },
     Close,

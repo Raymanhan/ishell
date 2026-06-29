@@ -1,9 +1,13 @@
 use std::{
     fs,
-    io::{self, Read, Write},
-    path::{Path, PathBuf},
-    process::{Command, Stdio},
+    path::Path,
     time::{Duration, Instant},
+};
+#[cfg(not(russh_backend))]
+use std::{
+    io::{self, Read, Write},
+    path::PathBuf,
+    process::{Command, Stdio},
 };
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -210,41 +214,77 @@ pub fn download_file(
     let mut local =
         fs::File::create(&local_path).map_err(|err| format!("无法创建本地文件：{err}"))?;
     let remote_command = format!("cat -- {}", openssh::shell_quote(remote_path));
-    let (mut child, helper_path) = spawn_remote(app, id, &remote_command, false, true, false)?;
-    let mut stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| "无法读取 OpenSSH 下载输出".to_string())?;
-    let progress = ProgressConfig::new(
-        app,
-        total,
-        transfer_id,
-        "sftp-download-progress",
-        "下载已停止",
-        is_canceled,
-    );
-    let copy_result = copy_with_progress(&mut stdout, &mut local, progress);
-    if copy_result.is_err() {
-        let _ = child.kill();
-    }
-    let output = child
-        .wait_with_output()
-        .map_err(|err| format!("等待 OpenSSH 下载结束失败：{err}"));
-    cleanup_askpass_helper(helper_path.as_ref());
-    match copy_result {
-        Ok(()) => {}
-        Err(err) if err.kind() == io::ErrorKind::Interrupted => {
+
+    #[cfg(not(russh_backend))]
+    {
+        let (mut child, helper_path) = spawn_remote(app, id, &remote_command, false, true, false)?;
+        let mut stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| "无法读取 OpenSSH 下载输出".to_string())?;
+        let progress = ProgressConfig::new(
+            app,
+            total,
+            transfer_id,
+            "sftp-download-progress",
+            "下载已停止",
+            is_canceled,
+        );
+        let copy_result = copy_with_progress(&mut stdout, &mut local, progress);
+        if copy_result.is_err() {
+            let _ = child.kill();
+        }
+        let output = child
+            .wait_with_output()
+            .map_err(|err| format!("等待 OpenSSH 下载结束失败：{err}"));
+        cleanup_askpass_helper(helper_path.as_ref());
+        match copy_result {
+            Ok(()) => {}
+            Err(err) if err.kind() == io::ErrorKind::Interrupted => {
+                drop(local);
+                let _ = fs::remove_file(&local_path);
+                return Err("下载已停止".to_string());
+            }
+            Err(err) => return Err(format!("下载失败：{err}")),
+        }
+        let output = output?;
+        if !output.status.success() {
             drop(local);
             let _ = fs::remove_file(&local_path);
-            return Err("下载已停止".to_string());
+            return Err(format_process_error("下载失败", &output.stderr));
         }
-        Err(err) => return Err(format!("下载失败：{err}")),
     }
-    let output = output?;
-    if !output.status.success() {
-        drop(local);
-        let _ = fs::remove_file(&local_path);
-        return Err(format_process_error("下载失败", &output.stderr));
+
+    #[cfg(russh_backend)]
+    {
+        let server = get_server(app, id)?;
+        let secret = read_secret(app, id).ok().filter(|value| !value.is_empty());
+        emit_progress(app, "sftp-download-progress", transfer_id, 0, total, false);
+        let mut last_emit = Instant::now();
+        let mut on_progress = |transferred: u64| {
+            if last_emit.elapsed() >= Duration::from_millis(80) {
+                emit_progress(app, "sftp-download-progress", transfer_id, transferred, total, false);
+                last_emit = Instant::now();
+            }
+        };
+        let result = crate::russh_transport::download(
+            &server,
+            secret.as_deref(),
+            &remote_command,
+            &mut local,
+            is_canceled,
+            &mut on_progress,
+        );
+        if let Err(err) = result {
+            drop(local);
+            let _ = fs::remove_file(&local_path);
+            return match err {
+                crate::russh_transport::TransferError::Canceled => Err("下载已停止".to_string()),
+                crate::russh_transport::TransferError::Failed(msg) => {
+                    Err(format!("下载失败：{msg}"))
+                }
+            };
+        }
     }
 
     emit_progress(
@@ -280,40 +320,75 @@ pub fn upload_file(
     let mut local = fs::File::open(local_path).map_err(|err| format!("无法打开本地文件：{err}"))?;
     let total = local.metadata().map(|meta| meta.len()).unwrap_or(0);
     let remote_command = format!("cat > {}", openssh::shell_quote(&remote_path));
-    let (mut child, helper_path) = spawn_remote(app, id, &remote_command, true, false, false)?;
-    let mut stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| "无法写入 OpenSSH 上传输入".to_string())?;
-    let progress = ProgressConfig::new(
-        app,
-        total,
-        transfer_id,
-        "sftp-upload-progress",
-        "上传已停止",
-        is_canceled,
-    );
-    let copy_result = copy_with_progress(&mut local, &mut stdin, progress);
-    drop(stdin);
-    if copy_result.is_err() {
-        let _ = child.kill();
-    }
-    let output = child
-        .wait_with_output()
-        .map_err(|err| format!("等待 OpenSSH 上传结束失败：{err}"));
-    cleanup_askpass_helper(helper_path.as_ref());
-    match copy_result {
-        Ok(()) => {}
-        Err(err) if err.kind() == io::ErrorKind::Interrupted => {
-            let _ = remove_remote_file(app, id, &remote_path);
-            return Err("上传已停止".to_string());
+
+    #[cfg(not(russh_backend))]
+    {
+        let (mut child, helper_path) = spawn_remote(app, id, &remote_command, true, false, false)?;
+        let mut stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| "无法写入 OpenSSH 上传输入".to_string())?;
+        let progress = ProgressConfig::new(
+            app,
+            total,
+            transfer_id,
+            "sftp-upload-progress",
+            "上传已停止",
+            is_canceled,
+        );
+        let copy_result = copy_with_progress(&mut local, &mut stdin, progress);
+        drop(stdin);
+        if copy_result.is_err() {
+            let _ = child.kill();
         }
-        Err(err) => return Err(format!("上传失败：{err}")),
+        let output = child
+            .wait_with_output()
+            .map_err(|err| format!("等待 OpenSSH 上传结束失败：{err}"));
+        cleanup_askpass_helper(helper_path.as_ref());
+        match copy_result {
+            Ok(()) => {}
+            Err(err) if err.kind() == io::ErrorKind::Interrupted => {
+                let _ = remove_remote_file(app, id, &remote_path);
+                return Err("上传已停止".to_string());
+            }
+            Err(err) => return Err(format!("上传失败：{err}")),
+        }
+        let output = output?;
+        if !output.status.success() {
+            let _ = remove_remote_file(app, id, &remote_path);
+            return Err(format_process_error("上传失败", &output.stderr));
+        }
     }
-    let output = output?;
-    if !output.status.success() {
-        let _ = remove_remote_file(app, id, &remote_path);
-        return Err(format_process_error("上传失败", &output.stderr));
+
+    #[cfg(russh_backend)]
+    {
+        let server = get_server(app, id)?;
+        let secret = read_secret(app, id).ok().filter(|value| !value.is_empty());
+        emit_progress(app, "sftp-upload-progress", transfer_id, 0, total, false);
+        let mut last_emit = Instant::now();
+        let mut on_progress = |transferred: u64| {
+            if last_emit.elapsed() >= Duration::from_millis(80) {
+                emit_progress(app, "sftp-upload-progress", transfer_id, transferred, total, false);
+                last_emit = Instant::now();
+            }
+        };
+        let result = crate::russh_transport::upload(
+            &server,
+            secret.as_deref(),
+            &remote_command,
+            &mut local,
+            is_canceled,
+            &mut on_progress,
+        );
+        if let Err(err) = result {
+            let _ = remove_remote_file(app, id, &remote_path);
+            return match err {
+                crate::russh_transport::TransferError::Canceled => Err("上传已停止".to_string()),
+                crate::russh_transport::TransferError::Failed(msg) => {
+                    Err(format!("上传失败：{msg}"))
+                }
+            };
+        }
     }
 
     emit_progress(app, "sftp-upload-progress", transfer_id, total, total, true);
@@ -323,6 +398,7 @@ pub fn upload_file(
 /// Stream the file in chunks, emitting throttled progress events (at most every
 /// ~80ms) so the UI can render a live progress bar without being flooded by one
 /// event per chunk on large transfers.
+#[cfg(not(russh_backend))]
 struct ProgressConfig<'a> {
     app: &'a AppHandle,
     total: u64,
@@ -332,6 +408,7 @@ struct ProgressConfig<'a> {
     is_canceled: &'a dyn Fn() -> bool,
 }
 
+#[cfg(not(russh_backend))]
 impl<'a> ProgressConfig<'a> {
     fn new(
         app: &'a AppHandle,
@@ -352,6 +429,7 @@ impl<'a> ProgressConfig<'a> {
     }
 }
 
+#[cfg(not(russh_backend))]
 fn copy_with_progress(
     reader: &mut impl Read,
     writer: &mut impl Write,
@@ -505,6 +583,7 @@ fn run_remote_python(
     run_remote_command(app, id, &command, Some(script.as_bytes()))
 }
 
+#[cfg(not(russh_backend))]
 fn run_remote_command(
     app: &AppHandle,
     id: &str,
@@ -533,6 +612,22 @@ fn run_remote_command(
     String::from_utf8(output.stdout).map_err(|err| format!("OpenSSH 输出不是 UTF-8：{err}"))
 }
 
+#[cfg(russh_backend)]
+fn run_remote_command(
+    app: &AppHandle,
+    id: &str,
+    remote_command: &str,
+    stdin: Option<&[u8]>,
+) -> Result<String, String> {
+    let server = get_server(app, id)?;
+    let secret = read_secret(app, id).ok().filter(|value| !value.is_empty());
+    let stdout =
+        crate::russh_transport::run_command(&server, secret.as_deref(), remote_command, stdin)
+            .map_err(|err| format!("SSH 命令失败：{err}"))?;
+    String::from_utf8(stdout).map_err(|err| format!("SSH 输出不是 UTF-8：{err}"))
+}
+
+#[cfg(not(russh_backend))]
 fn spawn_remote(
     app: &AppHandle,
     id: &str,
@@ -592,6 +687,7 @@ fn spawn_remote(
     }
 }
 
+#[cfg(not(russh_backend))]
 fn create_askpass_helper(id: &str) -> Result<PathBuf, String> {
     let path = std::env::temp_dir().join(format!("ishell-ssh-askpass-{id}.sh"));
     fs::write(
@@ -609,12 +705,14 @@ fn create_askpass_helper(id: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+#[cfg(not(russh_backend))]
 fn cleanup_askpass_helper(path: Option<&PathBuf>) {
     if let Some(path) = path {
         let _ = fs::remove_file(path);
     }
 }
 
+#[cfg(not(russh_backend))]
 fn format_process_error(prefix: &str, stderr: &[u8]) -> String {
     let message = String::from_utf8_lossy(stderr).trim().to_string();
     if message.is_empty() {
