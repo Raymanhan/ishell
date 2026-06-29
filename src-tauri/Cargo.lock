@@ -2415,7 +2415,7 @@ dependencies = [
 
 [[package]]
 name = "ishell"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "aes-gcm 0.10.3",
  "getrandom 0.2.17",
