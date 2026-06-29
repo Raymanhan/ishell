@@ -164,6 +164,12 @@ pub struct TerminalDataPayload {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TerminalReadyPayload {
+    pub session_id: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TerminalSnapshotPayload {
     pub data: String,
     pub start_offset: usize,

@@ -511,10 +511,12 @@ export default function App() {
     const tabId = activeTab.id;
     const serverId = activeTab.serverId;
     refreshNetwork(tabId, serverId, true);
+    const warmupTimer = window.setTimeout(() => refreshNetwork(tabId, serverId, true), 650);
     const networkTimer = window.setInterval(() => refreshNetwork(tabId, serverId, true), 1000);
     const metricTimer = window.setInterval(() => refreshStatus(tabId, serverId, true, false), 5000);
     const diskTimer = window.setInterval(() => refreshStatus(tabId, serverId, true, true), 60000);
     return () => {
+      window.clearTimeout(warmupTimer);
       window.clearInterval(networkTimer);
       window.clearInterval(metricTimer);
       window.clearInterval(diskTimer);

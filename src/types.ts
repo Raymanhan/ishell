@@ -141,6 +141,10 @@ export interface TerminalDataPayload {
   data: string;
 }
 
+export interface TerminalReadyPayload {
+  sessionId: string;
+}
+
 export interface TerminalSnapshotPayload {
   data: string;
   startOffset: number;

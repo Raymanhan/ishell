@@ -33,7 +33,25 @@ printf '@@OS@@\\n%s\\n@@UP@@\\n%s\\n@@LOAD@@\\n%s\\n@@MEM@@\\n%s\\n@@CPU@@\\n%s\
 
 const DISK_SCRIPT: &str = "df -Pk 2>/dev/null | tail -n +2";
 
-const NETWORK_SCRIPT: &str = "if [ -r /proc/net/dev ]; then awk -F'[: ]+' 'NR>2 && $2 != \"lo\" {rx += $3; tx += $11} END {printf \"%s %s\\n\", rx+0, tx+0}' /proc/net/dev 2>/dev/null; else netstat -ibn 2>/dev/null | awk 'NR>1 && $1 !~ /^lo/ {rx += $7; tx += $10} END {printf \"%s %s\\n\", rx+0, tx+0}'; fi";
+const NETWORK_SCRIPT: &str = r#"if [ -d /sys/class/net ]; then
+  NET_BYTES="$(
+    for iface in /sys/class/net/*; do
+      name=${iface##*/}
+      [ "$name" = "lo" ] && continue
+      [ -r "$iface/statistics/rx_bytes" ] && [ -r "$iface/statistics/tx_bytes" ] || continue
+      printf '%s %s\n' "$(cat "$iface/statistics/rx_bytes" 2>/dev/null)" "$(cat "$iface/statistics/tx_bytes" 2>/dev/null)"
+    done | awk '{rx += $1; tx += $2; seen = 1} END {if (seen) printf "%s %s\n", rx+0, tx+0}'
+  )"
+  if [ -n "$NET_BYTES" ]; then
+    printf '%s\n' "$NET_BYTES"
+    exit 0
+  fi
+fi
+if [ -r /proc/net/dev ]; then
+  awk 'NR>2 {iface=$1; sub(/:/, "", iface); if (iface != "lo") {rx += $2; tx += $10}} END {printf "%s %s\n", rx+0, tx+0}' /proc/net/dev 2>/dev/null
+else
+  netstat -ibn 2>/dev/null | awk 'NR>1 && $1 !~ /^lo/ {rx += $7; tx += $10} END {printf "%s %s\n", rx+0, tx+0}'
+fi"#;
 
 const MAX_TEXT_EDIT_BYTES: u64 = 1024 * 1024;
 

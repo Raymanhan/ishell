@@ -5,7 +5,12 @@ import { Terminal, type ITheme } from "@xterm/xterm";
 import { RefreshCw } from "lucide-react";
 import { command, isTauri } from "../api/tauri";
 import type { ShellTab } from "../features/shell/types";
-import type { TerminalClosedPayload, TerminalDataPayload, TerminalSnapshotPayload } from "../types";
+import type {
+  TerminalClosedPayload,
+  TerminalDataPayload,
+  TerminalReadyPayload,
+  TerminalSnapshotPayload,
+} from "../types";
 import type { AppTheme } from "./SettingsModal";
 
 const terminalThemes = {
@@ -485,6 +490,7 @@ function TerminalPaneBase({
     // listeners write every byte of output twice.
     let cancelled = false;
     let unlistenData: (() => void) | undefined;
+    let unlistenReady: (() => void) | undefined;
     let unlistenClosed: (() => void) | undefined;
 
     listen<TerminalDataPayload>("terminal:data", (event) => {
@@ -494,6 +500,15 @@ function TerminalPaneBase({
     }).then((unlisten) => {
       if (cancelled) unlisten();
       else unlistenData = unlisten;
+    });
+
+    listen<TerminalReadyPayload>("terminal:ready", (event) => {
+      if (event.payload.sessionId === sessionRef.current) {
+        markReady(event.payload.sessionId);
+      }
+    }).then((unlisten) => {
+      if (cancelled) unlisten();
+      else unlistenReady = unlisten;
     });
 
     listen<TerminalClosedPayload>("terminal:closed", (event) => {
@@ -512,6 +527,7 @@ function TerminalPaneBase({
     return () => {
       cancelled = true;
       unlistenData?.();
+      unlistenReady?.();
       unlistenClosed?.();
     };
   }, [setNotice]);

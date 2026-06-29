@@ -25,7 +25,9 @@ use crate::models::ServerRecord;
 #[cfg(not(russh_backend))]
 use crate::openssh;
 use crate::{
-    models::{TerminalClosedPayload, TerminalDataPayload, TerminalSnapshotPayload},
+    models::{
+        TerminalClosedPayload, TerminalDataPayload, TerminalReadyPayload, TerminalSnapshotPayload,
+    },
     store::{get_server, mark_connected, read_secret},
 };
 
@@ -258,6 +260,15 @@ fn emit_terminal_data(
     );
 }
 
+fn emit_terminal_ready(app: &AppHandle, session_id: &str) {
+    let _ = app.emit(
+        "terminal:ready",
+        TerminalReadyPayload {
+            session_id: session_id.to_string(),
+        },
+    );
+}
+
 #[cfg(not(russh_backend))]
 fn create_askpass_helper(session_id: &str) -> Result<PathBuf, String> {
     let path = std::env::temp_dir().join(format!("ishell-askpass-{session_id}.sh"));
@@ -288,14 +299,32 @@ fn strip_ansi_sequences(value: &str) -> String {
     let mut chars = value.chars().peekable();
 
     while let Some(ch) = chars.next() {
-        if ch == '\x1b' && chars.peek() == Some(&'[') {
-            chars.next();
-            for seq in chars.by_ref() {
-                if ('@'..='~').contains(&seq) {
-                    break;
+        if ch == '\x1b' {
+            match chars.peek() {
+                Some('[') => {
+                    chars.next();
+                    for seq in chars.by_ref() {
+                        if ('@'..='~').contains(&seq) {
+                            break;
+                        }
+                    }
+                    continue;
                 }
+                Some(']') => {
+                    chars.next();
+                    while let Some(seq) = chars.next() {
+                        if seq == '\x07' {
+                            break;
+                        }
+                        if seq == '\x1b' && chars.peek() == Some(&'\\') {
+                            chars.next();
+                            break;
+                        }
+                    }
+                    continue;
+                }
+                _ => {}
             }
-            continue;
         }
         output.push(ch);
     }
@@ -333,6 +362,22 @@ fn looks_like_password_prompt(output_tail: &str) -> bool {
             || line.contains("passphrase")
             || line.contains("密码")
             || line.contains("口令"))
+}
+
+#[cfg(not(russh_backend))]
+fn looks_like_shell_ready(output_tail: &str) -> bool {
+    let plain = strip_ansi_sequences(output_tail).replace('\r', "");
+    let lower = plain.to_lowercase();
+    if lower.contains("last login:") || lower.contains("last failed login:") {
+        return true;
+    }
+
+    let line = plain.rsplit('\n').next().unwrap_or_default().trim_end();
+    if line.is_empty() || looks_like_password_prompt(output_tail) {
+        return false;
+    }
+
+    line.ends_with('$') || line.ends_with('#') || line.ends_with('%') || line.ends_with('>')
 }
 
 #[cfg(not(russh_backend))]
@@ -452,6 +497,17 @@ fn run_terminal_thread(
                         if connection_tail.contains(CONNECTED_MARKER) {
                             connected_seen = true;
                             mark_connected(&read_app, &read_server_id).ok();
+                            emit_terminal_ready(&read_app, &read_session_id);
+                        } else if looks_like_shell_ready(&connection_tail) {
+                            connected_seen = true;
+                            mark_connected(&read_app, &read_server_id).ok();
+                            emit_terminal_ready(&read_app, &read_session_id);
+                            emit_terminal_data(
+                                &read_app,
+                                &read_registry,
+                                &read_session_id,
+                                "\r\n[iShell] connected via OpenSSH\r\n".into(),
+                            );
                         }
                     }
                     if should_autofill_password && !password_prompt_seen {
@@ -570,6 +626,7 @@ fn run_terminal_thread(
     let ready_session_id = session_id.clone();
     let on_ready = move || {
         mark_connected(&ready_app, &ready_server_id).ok();
+        emit_terminal_ready(&ready_app, &ready_session_id);
         emit_terminal_data(
             &ready_app,
             &ready_registry,
