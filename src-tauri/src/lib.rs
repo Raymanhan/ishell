@@ -2,6 +2,7 @@ mod commands;
 mod models;
 mod openssh;
 mod pool;
+#[cfg(russh_backend)]
 mod russh_transport;
 mod ssh;
 mod store;
