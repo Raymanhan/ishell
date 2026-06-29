@@ -2,8 +2,9 @@
 //! `ssh` binary plus a `#!/bin/sh` askpass helper is not viable (Windows). The
 //! remote commands are identical to the Unix path — only the transport differs.
 
+use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use russh::{client, ChannelMsg};
@@ -11,6 +12,8 @@ use tokio::runtime::Runtime;
 
 use crate::models::ServerRecord;
 use crate::terminal::TerminalControl;
+
+type Session = client::Handle<ClientHandler>;
 
 /// Result of a streaming transfer: a clean finish, a user cancellation, or a
 /// hard failure (carrying a message for the UI).
@@ -34,7 +37,6 @@ impl client::Handler for ClientHandler {
 }
 
 fn runtime() -> Result<&'static Runtime, String> {
-    use std::sync::OnceLock;
     static RUNTIME: OnceLock<Runtime> = OnceLock::new();
     if let Some(rt) = RUNTIME.get() {
         return Ok(rt);
@@ -44,6 +46,63 @@ fn runtime() -> Result<&'static Runtime, String> {
         .build()
         .map_err(|err| format!("无法创建异步运行时：{err}"))?;
     Ok(RUNTIME.get_or_init(|| rt))
+}
+
+/// Cache of live sessions keyed by server id. A `russh` handle can open many
+/// channels concurrently (`channel_open_session` takes `&self`), so monitoring,
+/// SFTP and the terminal all share one authenticated connection per host —
+/// mirroring the `ControlPersist` multiplexing used on the Unix path.
+fn pool() -> &'static Mutex<HashMap<String, Arc<Session>>> {
+    static POOL: OnceLock<Mutex<HashMap<String, Arc<Session>>>> = OnceLock::new();
+    POOL.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Drop the cached session for `id` so the next operation reconnects. Called on
+/// channel-open failure (stale session) and from `SshPool::invalidate`.
+pub fn invalidate(id: &str) {
+    if let Ok(mut map) = pool().lock() {
+        map.remove(id);
+    }
+}
+
+async fn get_or_connect(
+    server: &ServerRecord,
+    secret: Option<&str>,
+) -> Result<Arc<Session>, String> {
+    if let Ok(map) = pool().lock() {
+        if let Some(handle) = map.get(&server.id).cloned() {
+            return Ok(handle);
+        }
+    }
+
+    let handle = Arc::new(connect(server, secret).await?);
+    if let Ok(mut map) = pool().lock() {
+        map.insert(server.id.clone(), handle.clone());
+    }
+    Ok(handle)
+}
+
+/// Open a channel on the pooled session, transparently reconnecting once if the
+/// cached session has gone stale. The returned handle must be kept alive for the
+/// channel's lifetime (the pool also holds a clone, but explicit invalidation
+/// elsewhere could otherwise drop the last reference mid-operation).
+async fn session_channel(
+    server: &ServerRecord,
+    secret: Option<&str>,
+) -> Result<(Arc<Session>, russh::Channel<client::Msg>), String> {
+    let handle = get_or_connect(server, secret).await?;
+    if let Ok(channel) = handle.channel_open_session().await {
+        return Ok((handle, channel));
+    }
+
+    // Cached session is stale — drop it and reconnect once.
+    invalidate(&server.id);
+    let handle = get_or_connect(server, secret).await?;
+    let channel = handle
+        .channel_open_session()
+        .await
+        .map_err(|err| format!("无法打开通道：{err}"))?;
+    Ok((handle, channel))
 }
 
 async fn connect(
@@ -100,11 +159,7 @@ pub fn run_command(
     stdin: Option<&[u8]>,
 ) -> Result<Vec<u8>, String> {
     runtime()?.block_on(async {
-        let handle = connect(server, secret).await?;
-        let mut channel = handle
-            .channel_open_session()
-            .await
-            .map_err(|err| format!("无法打开通道：{err}"))?;
+        let (_handle, mut channel) = session_channel(server, secret).await?;
         channel
             .exec(true, remote_command)
             .await
@@ -158,11 +213,9 @@ pub fn download(
 ) -> Result<(), TransferError> {
     let rt = runtime().map_err(TransferError::Failed)?;
     rt.block_on(async {
-        let handle = connect(server, secret).await.map_err(TransferError::Failed)?;
-        let mut channel = handle
-            .channel_open_session()
+        let (_handle, mut channel) = session_channel(server, secret)
             .await
-            .map_err(|err| TransferError::Failed(format!("无法打开通道：{err}")))?;
+            .map_err(TransferError::Failed)?;
         channel
             .exec(true, remote_command)
             .await
@@ -213,11 +266,9 @@ pub fn upload(
 ) -> Result<(), TransferError> {
     let rt = runtime().map_err(TransferError::Failed)?;
     rt.block_on(async {
-        let handle = connect(server, secret).await.map_err(TransferError::Failed)?;
-        let mut channel = handle
-            .channel_open_session()
+        let (_handle, mut channel) = session_channel(server, secret)
             .await
-            .map_err(|err| TransferError::Failed(format!("无法打开通道：{err}")))?;
+            .map_err(TransferError::Failed)?;
         channel
             .exec(true, remote_command)
             .await
@@ -284,11 +335,7 @@ pub fn run_terminal(
 
     let rt = runtime()?;
     rt.block_on(async move {
-        let handle = connect(server, secret).await?;
-        let mut channel = handle
-            .channel_open_session()
-            .await
-            .map_err(|err| format!("无法打开通道：{err}"))?;
+        let (_handle, mut channel) = session_channel(server, secret).await?;
         channel
             .request_pty(
                 false,
