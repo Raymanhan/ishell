@@ -1,17 +1,30 @@
 # iShell
 
-iShell is a lightweight Tauri + React + Rust SSH workbench with a compact
-desktop interface for managing servers, terminals, SFTP files, and live host
-status from one place.
+iShell is a lightweight Tauri + React + Rust SSH workbench for managing remote
+servers from one compact desktop interface. It brings together server profiles,
+interactive terminals, SFTP file operations, quick text editing, command history,
+and live host telemetry.
 
 > Repository: <https://github.com/Raymanhan/ishell>
 
 ## Features
 
-- **SSH manager** — grouped, searchable host list with secrets stored in the OS keychain.
-- **Interactive terminal** — real PTY sessions rendered with xterm, one per tab.
-- **SFTP** — Miller-column file browser with upload, download, mkdir, rename and delete.
-- **Live monitoring** — per-host CPU / memory / disk / load dashboard.
+- **SSH manager** — grouped, searchable host list with color tags, notes, and
+  secrets stored outside exported connection files.
+- **Connection import / export** — export all or selected folders as JSON or ZIP,
+  with optional passphrase protection for saved secrets.
+- **Interactive terminal** — xterm-powered tabs backed by a real PTY, with
+  reconnect support, platform-tuned fonts, command submission tracking, and
+  history suggestions.
+- **OpenSSH and russh transports** — Unix-like platforms use the system OpenSSH
+  client with multiplexing; Windows uses a pure-Rust `russh` backend with pooled
+  sessions.
+- **SFTP browser** — Miller-column navigation with upload, download, mkdir,
+  rename, delete, and remote text editing for small files.
+- **Live monitoring** — per-host CPU, memory, disk, load, process, and network
+  throughput telemetry.
+- **Cross-platform desktop builds** — Windows, macOS Intel, macOS Apple Silicon,
+  and Linux installers are built through GitHub Actions.
 
 ## Downloads
 
@@ -30,6 +43,7 @@ also be run manually from the **Build installers** workflow in GitHub Actions.
 - Node.js 22 or newer
 - Rust stable toolchain
 - Tauri system dependencies for your platform
+- OpenSSH on macOS and Linux
 - Linux runtime secret storage requires a Secret Service provider such as
   GNOME Keyring or KWallet.
 
@@ -55,6 +69,9 @@ src/
 src-tauri/src/
   commands.rs       Tauri command boundary
   models.rs         Serializable DTOs shared by commands
+  openssh.rs        OpenSSH argument construction and multiplexing helpers
+  pool.rs           Transport invalidation / pooled-session boundary
+  russh_transport.rs Pure-Rust SSH transport used by the Windows backend
   ssh.rs            SSH, SFTP and status sampling
   store.rs          Server persistence and OS keychain secret storage
   terminal.rs       Interactive terminal session registry
@@ -67,6 +84,19 @@ src-tauri/src/
 ```bash
 npm install
 npm run tauri -- dev
+```
+
+For frontend-only iteration with mock data:
+
+```bash
+npm run dev
+```
+
+To compile the pure-Rust SSH backend on non-Windows hosts:
+
+```bash
+cd src-tauri
+cargo check --features force-russh
 ```
 
 ## Verification
@@ -98,12 +128,21 @@ npm run tauri -- build --target aarch64-apple-darwin
 ## Release
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
 The release workflow builds Windows, Linux, and macOS packages and attaches the
 installer files to the GitHub release.
+
+## Recent Changes
+
+- `v1.0.0` adds connection import / export, encrypted secret export, and a small
+  remote text editor inside the SFTP browser.
+- `v0.1.10` adds terminal history suggestions.
+- `v0.1.9` tunes platform font rendering for terminal readability.
+- `v0.1.7` / `v0.1.6` add and pool the Windows `russh` terminal backend.
+- `v0.1.4` switches Unix-like remote sessions to the system OpenSSH transport.
 
 ## License
 
