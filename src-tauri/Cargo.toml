@@ -26,3 +26,7 @@ portable-pty = "0.9"
 rusqlite = { version = "0.32", features = ["bundled"] }
 aes-gcm = "0.10"
 getrandom = "0.2"
+
+# TEMP (dev on host): will be moved under [target.'cfg(windows)'.dependencies].
+russh = "0.61"
+tokio = { version = "1", features = ["rt-multi-thread", "io-util", "macros", "sync", "time"] }
