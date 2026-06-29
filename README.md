@@ -1,11 +1,28 @@
 # iShell
 
+[![Build installers](https://github.com/Raymanhan/ishell/actions/workflows/release.yml/badge.svg)](https://github.com/Raymanhan/ishell/actions/workflows/release.yml)
+[![Release](https://img.shields.io/github/v/release/Raymanhan/ishell?label=release)](https://github.com/Raymanhan/ishell/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
 iShell is a lightweight Tauri + React + Rust SSH workbench for managing remote
 servers from one compact desktop interface. It brings together server profiles,
 interactive terminals, SFTP file operations, quick text editing, command history,
 and live host telemetry.
 
 > Repository: <https://github.com/Raymanhan/ishell>
+
+## Download
+
+Get the latest installers from the GitHub Releases page:
+
+**[Download iShell v1.0.0](https://github.com/Raymanhan/ishell/releases/tag/v1.0.0)**
+
+Available packages:
+
+- **Windows x64**: `.exe` and `.msi`
+- **macOS Intel**: `.dmg`
+- **macOS Apple Silicon**: `.dmg`
+- **Linux x64**: `.AppImage`, `.deb`, and `.rpm`
 
 ## Features
 
@@ -25,18 +42,6 @@ and live host telemetry.
   throughput telemetry.
 - **Cross-platform desktop builds** — Windows, macOS Intel, macOS Apple Silicon,
   and Linux installers are built through GitHub Actions.
-
-## Downloads
-
-Installers are published from GitHub Releases:
-
-- **Windows**: NSIS/MSI installer from the `ishell-windows-x64` artifact.
-- **macOS Intel**: DMG from the `ishell-macos-intel` artifact.
-- **macOS Apple Silicon**: DMG from the `ishell-macos-arm` artifact.
-- **Linux**: DEB/RPM/AppImage bundles from the `ishell-linux-x64` artifact.
-
-Release builds are generated automatically when a `v*` tag is pushed. They can
-also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ## Requirements
 
@@ -86,6 +91,14 @@ npm install
 npm run tauri -- dev
 ```
 
+Common commands:
+
+```bash
+npm run dev
+npm run build
+cd src-tauri && cargo check
+```
+
 For frontend-only iteration with mock data:
 
 ```bash
@@ -99,14 +112,7 @@ cd src-tauri
 cargo check --features force-russh
 ```
 
-## Verification
-
-```bash
-npm run build
-cd src-tauri && cargo check
-```
-
-## Build Installers Locally
+## Local Build
 
 ```bash
 npm ci
@@ -115,7 +121,28 @@ npm run tauri -- build
 
 Build outputs are written under `src-tauri/target/*/release/bundle/`.
 
-For macOS Intel and Apple Silicon builds:
+## Verification
+
+```bash
+npm run build
+cd src-tauri && cargo check
+cargo check --features force-russh
+```
+
+## Release
+
+Release builds are generated automatically when a `v*` tag is pushed. They can
+also be run manually from the **Build installers** workflow in GitHub Actions.
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
+packages and attaches the installer files to the GitHub release.
+
+For macOS Intel and Apple Silicon local builds:
 
 ```bash
 rustup target add x86_64-apple-darwin
@@ -124,16 +151,6 @@ npm run tauri -- build --target x86_64-apple-darwin
 rustup target add aarch64-apple-darwin
 npm run tauri -- build --target aarch64-apple-darwin
 ```
-
-## Release
-
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-The release workflow builds Windows, Linux, and macOS packages and attaches the
-installer files to the GitHub release.
 
 ## Recent Changes
 
