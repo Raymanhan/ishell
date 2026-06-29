@@ -7,6 +7,7 @@ import {
   Columns3,
   Download,
   File,
+  FilePenLine,
   Folder,
   FolderOpen,
   FolderPlus,
@@ -46,7 +47,7 @@ type SortKey = "name" | "type" | "size" | "modifiedAt";
 type SortDirection = "asc" | "desc";
 
 interface SortState {
-  key: SortKey;
+  key: SortKey | null;
   direction: SortDirection;
 }
 
@@ -67,6 +68,7 @@ function SftpBrowserBase({
   onRefresh,
   onUpload,
   onDownload,
+  onEdit,
   onMkdir,
   onRename,
   onDelete,
@@ -81,13 +83,14 @@ function SftpBrowserBase({
   onRefresh: () => void;
   onUpload: (targetDir?: string) => void;
   onDownload: (entries: SftpEntry[]) => void;
+  onEdit: (entry: SftpEntry) => void;
   onMkdir: (name: string, targetDir?: string) => void;
   onRename: (entry: SftpEntry, columnIndex: number, nextName: string) => void;
   onDelete: (entries: SftpEntry[], columnIndex: number) => void;
   onClose: () => void;
 }) {
   const columns = tab.files;
-  const [sort, setSort] = useState<SortState>({ key: "name", direction: "asc" });
+  const [sort, setSort] = useState<SortState>({ key: null, direction: "asc" });
   const sortedColumns = useMemo(() => sortFileColumns(columns, sort), [columns, sort]);
   const currentDir = columns.length ? columns[columns.length - 1].path : "/";
   const currentColumnIndex = Math.max(0, columns.length - 1);
@@ -113,6 +116,9 @@ function SftpBrowserBase({
     () => selectedEntries.filter((entry) => !entry.isDir),
     [selectedEntries],
   );
+  const selectedEditableEntry = selectedEntries.length === 1 && isEditableTextEntry(selectedEntries[0])
+    ? selectedEntries[0]
+    : null;
   const selected = useMemo(() => findEntry(tab, tab.selectedPath), [tab]);
   const selectedColumnIndex = useMemo(() => findEntryColumnIndex(tab, tab.selectedPath), [tab]);
   const [viewMode, setViewMode] = useState<SftpViewMode>("tree");
@@ -337,14 +343,15 @@ function SftpBrowserBase({
   }
 
   function setSortKey(key: SortKey) {
-    setSort((current) => ({
-      key,
-      direction: current.key === key && current.direction === "asc" ? "desc" : "asc",
-    }));
+    setSort((current) => {
+      if (current.key !== key) return { key, direction: "asc" };
+      if (current.direction === "asc") return { key, direction: "desc" };
+      return { key: null, direction: "asc" };
+    });
   }
 
   function setSortDirection(direction: SortDirection) {
-    setSort((current) => ({ ...current, direction }));
+    setSort((current) => ({ key: current.key ?? "name", direction }));
   }
 
   function toggleTreeRow(event: React.MouseEvent, path: string) {
@@ -432,6 +439,12 @@ function SftpBrowserBase({
                     {sort.key === option.key && <small>{sort.direction === "asc" ? "升序" : "降序"}</small>}
                   </button>
                 ))}
+                {sort.key === null && (
+                  <div className="sort-none" role="presentation">
+                    <Check size={13} />
+                    <span>未排序</span>
+                  </div>
+                )}
                 <div className="ctx-sep" />
                 <div className="sort-dir" role="group" aria-label="排序方向">
                   <button
@@ -465,6 +478,16 @@ function SftpBrowserBase({
           >
             <Download size={15} />
           </button>
+          {selectedEditableEntry && (
+            <button
+              type="button"
+              className="tool"
+              onClick={() => onEdit(selectedEditableEntry)}
+              title="编辑文本文件"
+            >
+              <FilePenLine size={15} />
+            </button>
+          )}
           <button type="button" className="tool" onClick={() => startCreateDir(currentDir)} title="新建文件夹">
             <FolderPlus size={15} />
           </button>
@@ -851,14 +874,24 @@ function SftpBrowserBase({
                   <FolderOpen size={14} /> 打开
                 </button>
               ) : (
-                <button
-                  type="button"
-                  onClick={() =>
-                    runMenu(() => menu.entry && onDownload(selectedBatchFor(menu.entry).filter((entry) => !entry.isDir)))
-                  }
-                >
-                  <Download size={14} /> 下载{selectedBatchFor(menu.entry).filter((entry) => !entry.isDir).length > 1 ? "所选" : ""}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      runMenu(() => menu.entry && onDownload(selectedBatchFor(menu.entry).filter((entry) => !entry.isDir)))
+                    }
+                  >
+                    <Download size={14} /> 下载{selectedBatchFor(menu.entry).filter((entry) => !entry.isDir).length > 1 ? "所选" : ""}
+                  </button>
+                  {isEditableTextEntry(menu.entry) && (
+                    <button
+                      type="button"
+                      onClick={() => runMenu(() => menu.entry && onEdit(menu.entry))}
+                    >
+                      <FilePenLine size={14} /> 编辑
+                    </button>
+                  )}
+                </>
               )}
               <button type="button" onClick={() => runMenu(() => onUpload(targetDirFor(menu.entry, menu.columnIndex)))}>
                 <Upload size={14} /> 上传到此处
@@ -905,7 +938,18 @@ export const SftpBrowser = memo(SftpBrowserBase, (previous, next) => (
   previous.tab.selectedPath === next.tab.selectedPath &&
   previous.tab.selectedPaths === next.tab.selectedPaths &&
   previous.busy === next.busy &&
-  previous.dragOver === next.dragOver
+  previous.dragOver === next.dragOver &&
+  previous.onOpen === next.onOpen &&
+  previous.onPathSubmit === next.onPathSubmit &&
+  previous.onSelect === next.onSelect &&
+  previous.onRefresh === next.onRefresh &&
+  previous.onUpload === next.onUpload &&
+  previous.onDownload === next.onDownload &&
+  previous.onEdit === next.onEdit &&
+  previous.onMkdir === next.onMkdir &&
+  previous.onRename === next.onRename &&
+  previous.onDelete === next.onDelete &&
+  previous.onClose === next.onClose
 ));
 
 interface DirectoryTreeRow {
@@ -958,6 +1002,7 @@ function appendDirectoryRows(
 }
 
 function sortFileColumns(columns: ShellTab["files"], sort: SortState): ShellTab["files"] {
+  if (!sort.key) return columns;
   return columns.map((column) => ({
     ...column,
     entries: sortEntriesForView(column.entries, sort),
@@ -965,10 +1010,12 @@ function sortFileColumns(columns: ShellTab["files"], sort: SortState): ShellTab[
 }
 
 function sortEntriesForView(entries: SftpEntry[], sort: SortState) {
+  if (!sort.key) return entries;
   return [...entries].sort((a, b) => compareEntries(a, b, sort));
 }
 
 function compareEntries(a: SftpEntry, b: SftpEntry, sort: SortState) {
+  if (!sort.key) return 0;
   if (sort.key !== "type" && a.isDir !== b.isDir) return a.isDir ? -1 : 1;
 
   const direction = sort.direction === "asc" ? 1 : -1;
@@ -998,6 +1045,7 @@ function compareNames(a: string, b: string) {
 }
 
 function sortLabel(sort: SortState) {
+  if (!sort.key) return "未排序";
   const option = SORT_OPTIONS.find((item) => item.key === sort.key);
   return `${option?.label ?? "名称"}${sort.direction === "asc" ? "升序" : "降序"}`;
 }
@@ -1023,6 +1071,14 @@ function rootEntry(): SftpEntry {
 
 function isHiddenEntry(entry: SftpEntry) {
   return entry.name.startsWith(".") && entry.name !== "." && entry.name !== "..";
+}
+
+const MAX_EDITABLE_TEXT_BYTES = 1024 * 1024;
+
+function isEditableTextEntry(entry: SftpEntry | null | undefined) {
+  if (!entry || entry.isDir) return false;
+  if ((entry.size ?? 0) > MAX_EDITABLE_TEXT_BYTES) return false;
+  return true;
 }
 
 function findEntry(tab: ShellTab, path: string | null): SftpEntry | null {

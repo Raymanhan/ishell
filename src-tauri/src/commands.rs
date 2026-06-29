@@ -1,29 +1,43 @@
 use std::{
     collections::HashSet,
+    fs,
+    io::{Cursor, Read, Write},
     sync::{Arc, Mutex},
     time::SystemTime,
 };
+use aes_gcm::{
+    aead::{Aead, KeyInit},
+    Aes256Gcm, Key, Nonce,
+};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+use pbkdf2::pbkdf2_hmac;
+use sha2::Sha256;
 use tauri::{AppHandle, State};
 use uuid::Uuid;
 
 use crate::{
     models::{
-        ConnectionTest, NetworkSample, ServerInput, ServerRecord, ServerStatus, SftpEntry,
-        TerminalSnapshotPayload,
+        ConnectionExport, ConnectionExportServer, ConnectionImport, ConnectionImportServer,
+        ConnectionTest, EncryptedExportSecret, NetworkSample, ServerInput, ServerRecord,
+        ServerStatus, SftpEntry, TerminalSnapshotPayload,
     },
     pool::SshPool,
     ssh::{
         connect_server, download_file, fetch_network_sample as fetch_network, fetch_status,
-        list_sftp, make_directory, remove_entry, rename_entry, upload_file,
+        list_sftp, make_directory, read_text_file, remove_entry, rename_entry, upload_file,
+        write_text_file,
     },
     store::{
         append_command_history, delete_server as remove_server, get_server,
         list_command_history as load_command_history, list_servers as load_servers, mark_connected,
-        normalize_tags, upsert_server, validate_server,
+        normalize_tags, read_secret, upsert_server, validate_server,
     },
     terminal::{self, TerminalRegistry},
     time::now,
 };
+
+const CONNECTION_EXPORT_VERSION: u32 = 1;
+const EXPORT_SECRET_ITERATIONS: u32 = 210_000;
 
 #[derive(Default)]
 pub struct UploadCancelRegistry {
@@ -85,6 +99,130 @@ async fn run_blocking<T: Send + 'static>(
         .map_err(|err| format!("后台任务失败：{err}"))?
 }
 
+fn is_zip_bytes(bytes: &[u8]) -> bool {
+    bytes.starts_with(b"PK\x03\x04") || bytes.starts_with(b"PK\x05\x06") || bytes.starts_with(b"PK\x07\x08")
+}
+
+fn read_connection_export_from_zip(bytes: &[u8]) -> Result<ConnectionExport, String> {
+    let cursor = Cursor::new(bytes);
+    let mut archive = zip::ZipArchive::new(cursor).map_err(|err| format!("无法读取 ZIP：{err}"))?;
+    for index in 0..archive.len() {
+        let mut file = archive
+            .by_index(index)
+            .map_err(|err| format!("无法读取 ZIP 条目：{err}"))?;
+        if !file.name().ends_with(".json") {
+            continue;
+        }
+        let mut json = Vec::new();
+        file.read_to_end(&mut json)
+            .map_err(|err| format!("无法读取 ZIP 中的 JSON：{err}"))?;
+        return parse_connection_export(&json);
+    }
+    Err("ZIP 中没有找到连接 JSON 文件".to_string())
+}
+
+fn parse_connection_export(bytes: &[u8]) -> Result<ConnectionExport, String> {
+    if let Ok(export) = serde_json::from_slice::<ConnectionExport>(bytes) {
+        return Ok(export);
+    }
+    if let Ok(servers) = serde_json::from_slice::<Vec<ServerRecord>>(bytes) {
+        return Ok(ConnectionExport {
+            version: CONNECTION_EXPORT_VERSION,
+            exported_at: now(),
+            folders: servers.iter().map(|server| server.group.clone()).collect(),
+            servers: servers
+                .into_iter()
+                .map(|server| ConnectionExportServer {
+                    server,
+                    encrypted_secret: None,
+                })
+                .collect(),
+        });
+    }
+    if let Ok(server) = serde_json::from_slice::<ServerRecord>(bytes) {
+        return Ok(ConnectionExport {
+            version: CONNECTION_EXPORT_VERSION,
+            exported_at: now(),
+            folders: vec![server.group.clone()],
+            servers: vec![ConnectionExportServer {
+                server,
+                encrypted_secret: None,
+            }],
+        });
+    }
+    Err("导入文件格式不正确".to_string())
+}
+
+fn server_record_to_input(server: ServerRecord) -> ServerInput {
+    ServerInput {
+        id: Some(server.id),
+        name: server.name,
+        host: server.host,
+        port: server.port,
+        username: server.username,
+        group: server.group,
+        tags: server.tags,
+        auth_type: server.auth_type,
+        key_path: server.key_path,
+        color: server.color,
+        notes: server.notes,
+    }
+}
+
+fn encrypt_export_secret(passphrase: &str, plaintext: &str) -> Result<EncryptedExportSecret, String> {
+    let mut salt = [0u8; 16];
+    let mut nonce_bytes = [0u8; 12];
+    getrandom::getrandom(&mut salt).map_err(|err| format!("无法生成导出 salt：{err}"))?;
+    getrandom::getrandom(&mut nonce_bytes).map_err(|err| format!("无法生成导出 nonce：{err}"))?;
+    let key = derive_export_key(passphrase, &salt);
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key));
+    let ciphertext = cipher
+        .encrypt(Nonce::from_slice(&nonce_bytes), plaintext.as_bytes())
+        .map_err(|_| "密码导出加密失败".to_string())?;
+    Ok(EncryptedExportSecret {
+        salt: BASE64.encode(salt),
+        nonce: BASE64.encode(nonce_bytes),
+        ciphertext: BASE64.encode(ciphertext),
+        kdf: "PBKDF2-HMAC-SHA256".to_string(),
+        iterations: EXPORT_SECRET_ITERATIONS,
+    })
+}
+
+fn decrypt_export_secret(passphrase: &str, encrypted: &EncryptedExportSecret) -> Result<String, String> {
+    if encrypted.kdf != "PBKDF2-HMAC-SHA256" || encrypted.iterations != EXPORT_SECRET_ITERATIONS {
+        return Err("不支持的导出密码加密格式".to_string());
+    }
+    let salt = BASE64
+        .decode(&encrypted.salt)
+        .map_err(|_| "导入文件 salt 无效".to_string())?;
+    let nonce = BASE64
+        .decode(&encrypted.nonce)
+        .map_err(|_| "导入文件 nonce 无效".to_string())?;
+    if nonce.len() != 12 {
+        return Err("导入文件 nonce 长度无效".to_string());
+    }
+    let ciphertext = BASE64
+        .decode(&encrypted.ciphertext)
+        .map_err(|_| "导入文件密文无效".to_string())?;
+    let key = derive_export_key(passphrase, &salt);
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key));
+    let plaintext = cipher
+        .decrypt(Nonce::from_slice(&nonce), ciphertext.as_ref())
+        .map_err(|_| "导入密钥不正确，无法解密密码".to_string())?;
+    String::from_utf8(plaintext).map_err(|_| "导入密码内容不是有效文本".to_string())
+}
+
+fn derive_export_key(passphrase: &str, salt: &[u8]) -> [u8; 32] {
+    let mut key = [0u8; 32];
+    pbkdf2_hmac::<Sha256>(
+        passphrase.as_bytes(),
+        salt,
+        EXPORT_SECRET_ITERATIONS,
+        &mut key,
+    );
+    key
+}
+
 #[tauri::command]
 pub fn list_servers(app: AppHandle) -> Result<Vec<ServerRecord>, String> {
     load_servers(&app)
@@ -130,6 +268,96 @@ pub fn save_server(
     upsert_server(&app, &record, secret)?;
 
     Ok(record)
+}
+
+#[tauri::command]
+pub fn export_connections(
+    app: AppHandle,
+    path: String,
+    payload: ConnectionExport,
+    as_zip: bool,
+    passphrase: Option<String>,
+) -> Result<(), String> {
+    let passphrase = passphrase.filter(|value| !value.is_empty());
+    let export = ConnectionExport {
+        version: CONNECTION_EXPORT_VERSION,
+        exported_at: now(),
+        folders: payload
+            .folders
+            .into_iter()
+            .map(|folder| folder.trim().to_string())
+            .filter(|folder| !folder.is_empty())
+            .collect(),
+        servers: payload
+            .servers
+            .into_iter()
+            .map(|mut item| {
+                if let Some(passphrase) = passphrase.as_deref() {
+                    if let Ok(secret) = read_secret(&app, &item.server.id) {
+                        if !secret.is_empty() {
+                            item.encrypted_secret = Some(encrypt_export_secret(passphrase, &secret)?);
+                        }
+                    }
+                }
+                Ok(item)
+            })
+            .collect::<Result<Vec<_>, String>>()?,
+    };
+    let json = serde_json::to_vec_pretty(&export).map_err(|err| format!("无法序列化连接：{err}"))?;
+    if !as_zip {
+        fs::write(&path, json).map_err(|err| format!("无法写入导出文件：{err}"))?;
+        return Ok(());
+    }
+
+    let cursor = Cursor::new(Vec::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+    writer
+        .start_file("connections.json", options)
+        .map_err(|err| format!("无法创建 ZIP 条目：{err}"))?;
+    writer
+        .write_all(&json)
+        .map_err(|err| format!("无法写入 ZIP：{err}"))?;
+    let cursor = writer
+        .finish()
+        .map_err(|err| format!("无法完成 ZIP：{err}"))?;
+    fs::write(&path, cursor.into_inner()).map_err(|err| format!("无法写入导出文件：{err}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn import_connections(path: String, passphrase: Option<String>) -> Result<ConnectionImport, String> {
+    let bytes = fs::read(&path).map_err(|err| format!("无法读取导入文件：{err}"))?;
+    let export = if is_zip_bytes(&bytes) {
+        read_connection_export_from_zip(&bytes)?
+    } else {
+        parse_connection_export(&bytes)?
+    };
+
+    Ok(ConnectionImport {
+        folders: export.folders,
+        servers: export
+            .servers
+            .into_iter()
+            .map(|item| {
+                let password = match item.encrypted_secret {
+                    Some(secret) => {
+                        let passphrase = passphrase
+                            .as_deref()
+                            .filter(|value| !value.is_empty())
+                            .ok_or_else(|| "导入文件包含加密密码，请输入导入密钥".to_string())?;
+                        Some(decrypt_export_secret(passphrase, &secret)?)
+                    }
+                    None => None,
+                };
+                Ok(ConnectionImportServer {
+                    input: server_record_to_input(item.server),
+                    password,
+                })
+            })
+            .collect::<Result<Vec<_>, String>>()?,
+    })
 }
 
 #[tauri::command]
@@ -300,6 +528,29 @@ pub async fn sftp_rename(
 ) -> Result<(), String> {
     let pool = pool.inner().clone();
     run_blocking(move || rename_entry(&pool, &app, &id, &from, &to)).await
+}
+
+#[tauri::command]
+pub async fn sftp_read_text_file(
+    app: AppHandle,
+    pool: State<'_, Arc<SshPool>>,
+    id: String,
+    path: String,
+) -> Result<String, String> {
+    let pool = pool.inner().clone();
+    run_blocking(move || read_text_file(&pool, &app, &id, &path)).await
+}
+
+#[tauri::command]
+pub async fn sftp_write_text_file(
+    app: AppHandle,
+    pool: State<'_, Arc<SshPool>>,
+    id: String,
+    path: String,
+    content: String,
+) -> Result<(), String> {
+    let pool = pool.inner().clone();
+    run_blocking(move || write_text_file(&pool, &app, &id, &path, &content)).await
 }
 
 #[tauri::command]

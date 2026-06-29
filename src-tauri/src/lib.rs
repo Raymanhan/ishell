@@ -24,6 +24,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::list_servers,
             commands::save_server,
+            commands::export_connections,
+            commands::import_connections,
             commands::delete_server,
             commands::list_command_history,
             commands::save_command_history,
@@ -39,6 +41,8 @@ pub fn run() {
             commands::sftp_mkdir,
             commands::sftp_remove,
             commands::sftp_rename,
+            commands::sftp_read_text_file,
+            commands::sftp_write_text_file,
             commands::open_terminal,
             commands::terminal_input,
             commands::terminal_resize,

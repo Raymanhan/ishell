@@ -26,6 +26,10 @@ portable-pty = "0.9"
 rusqlite = { version = "0.32", features = ["bundled"] }
 aes-gcm = "0.10"
 getrandom = "0.2"
+zip = "2"
+pbkdf2 = "0.12"
+sha2 = "0.10"
+base64 = "0.22"
 
 # Pure-Rust SSH transport. Pulled in unconditionally on Windows (see the
 # [target.'cfg(windows)'.dependencies] section below); optional elsewhere so the

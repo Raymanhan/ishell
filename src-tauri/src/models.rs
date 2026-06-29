@@ -35,6 +35,52 @@ pub struct ServerInput {
     pub notes: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionExport {
+    #[serde(default)]
+    pub version: u32,
+    #[serde(default)]
+    pub exported_at: u64,
+    pub folders: Vec<String>,
+    pub servers: Vec<ConnectionExportServer>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionExportServer {
+    #[serde(flatten)]
+    pub server: ServerRecord,
+    #[serde(default)]
+    pub encrypted_secret: Option<EncryptedExportSecret>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EncryptedExportSecret {
+    pub salt: String,
+    pub nonce: String,
+    pub ciphertext: String,
+    pub kdf: String,
+    pub iterations: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionImport {
+    pub folders: Vec<String>,
+    pub servers: Vec<ConnectionImportServer>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionImportServer {
+    #[serde(flatten)]
+    pub input: ServerInput,
+    #[serde(default)]
+    pub password: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionTest {

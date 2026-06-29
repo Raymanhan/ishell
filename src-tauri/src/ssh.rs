@@ -35,6 +35,8 @@ const DISK_SCRIPT: &str = "df -Pk 2>/dev/null | tail -n +2";
 
 const NETWORK_SCRIPT: &str = "if [ -r /proc/net/dev ]; then awk -F'[: ]+' 'NR>2 && $2 != \"lo\" {rx += $3; tx += $11} END {printf \"%s %s\\n\", rx+0, tx+0}' /proc/net/dev 2>/dev/null; else netstat -ibn 2>/dev/null | awk 'NR>1 && $1 !~ /^lo/ {rx += $7; tx += $10} END {printf \"%s %s\\n\", rx+0, tx+0}'; fi";
 
+const MAX_TEXT_EDIT_BYTES: u64 = 1024 * 1024;
+
 const LIST_SCRIPT: &str = r#"import grp
 import json
 import os
@@ -555,6 +557,60 @@ pub fn rename_entry(
     .map_err(|err| format!("无法重命名：{err}"))
 }
 
+pub fn read_text_file(
+    _pool: &SshPool,
+    app: &AppHandle,
+    id: &str,
+    path: &str,
+) -> Result<String, String> {
+    let size = remote_file_size(app, id, path)?;
+    if size > MAX_TEXT_EDIT_BYTES {
+        return Err(format!(
+            "文件超过可编辑大小限制（最大 {}）",
+            format_bytes(MAX_TEXT_EDIT_BYTES)
+        ));
+    }
+
+    let raw = read_remote_file_bytes(app, id, path)?;
+    if raw.len() as u64 > MAX_TEXT_EDIT_BYTES {
+        return Err(format!(
+            "文件超过可编辑大小限制（最大 {}）",
+            format_bytes(MAX_TEXT_EDIT_BYTES)
+        ));
+    }
+    text_from_bytes(raw)
+}
+
+pub fn write_text_file(
+    _pool: &SshPool,
+    app: &AppHandle,
+    id: &str,
+    path: &str,
+    content: &str,
+) -> Result<(), String> {
+    if content.as_bytes().len() as u64 > MAX_TEXT_EDIT_BYTES {
+        return Err(format!(
+            "内容超过可编辑大小限制（最大 {}）",
+            format_bytes(MAX_TEXT_EDIT_BYTES)
+        ));
+    }
+    if content.as_bytes().contains(&0) {
+        return Err("仅支持保存文本内容".to_string());
+    }
+    let size = remote_file_size(app, id, path).map_err(|err| format!("无法确认远程文件：{err}"))?;
+    if size > MAX_TEXT_EDIT_BYTES {
+        return Err(format!(
+            "文件超过可编辑大小限制（最大 {}）",
+            format_bytes(MAX_TEXT_EDIT_BYTES)
+        ));
+    }
+    text_from_bytes(read_remote_file_bytes(app, id, path)?)?;
+    let remote_command = format!("cat > {}", openssh::shell_quote(path));
+    run_remote_command(app, id, &remote_command, Some(content.as_bytes()))
+        .map(|_| ())
+        .map_err(|err| format!("保存文件失败：{err}"))
+}
+
 fn run_remote_shell(app: &AppHandle, id: &str, script: &str) -> Result<String, String> {
     run_remote_command(
         app,
@@ -735,8 +791,51 @@ fn remote_file_size(app: &AppHandle, id: &str, remote_path: &str) -> Result<u64,
         .ok_or_else(|| "无法读取远程文件大小".to_string())
 }
 
+fn read_remote_file_bytes(app: &AppHandle, id: &str, remote_path: &str) -> Result<Vec<u8>, String> {
+    let command = format!("cat -- {}", openssh::shell_quote(remote_path));
+
+    #[cfg(not(russh_backend))]
+    {
+        let (child, helper_path) = spawn_remote(app, id, &command, false, true, true)?;
+        let output = child
+            .wait_with_output()
+            .map_err(|err| format!("等待 OpenSSH 命令结束失败：{err}"));
+        cleanup_askpass_helper(helper_path.as_ref());
+        let output = output?;
+        if !output.status.success() {
+            return Err(format_process_error("读取远程文件失败", &output.stderr));
+        }
+        Ok(output.stdout)
+    }
+
+    #[cfg(russh_backend)]
+    {
+        let server = get_server(app, id)?;
+        let secret = read_secret(app, id).ok().filter(|value| !value.is_empty());
+        crate::russh_transport::run_command(&server, secret.as_deref(), &command, None)
+            .map_err(|err| format!("读取远程文件失败：{err}"))
+    }
+}
+
 fn remove_remote_file(app: &AppHandle, id: &str, path: &str) -> Result<(), String> {
     run_remote_shell(app, id, &format!("rm -f -- {}", openssh::shell_quote(path))).map(|_| ())
+}
+
+fn text_from_bytes(raw: Vec<u8>) -> Result<String, String> {
+    if raw.contains(&0) {
+        return Err("仅支持编辑文本文件，当前文件像是二进制文件".to_string());
+    }
+    String::from_utf8(raw).map_err(|_| "仅支持编辑 UTF-8 文本文件".to_string())
+}
+
+fn format_bytes(bytes: u64) -> String {
+    if bytes >= 1024 * 1024 {
+        format!("{} MB", bytes / 1024 / 1024)
+    } else if bytes >= 1024 {
+        format!("{} KB", bytes / 1024)
+    } else {
+        format!("{bytes} B")
+    }
 }
 
 /// Split the combined status output into a map keyed by the `@@KEY@@` markers.

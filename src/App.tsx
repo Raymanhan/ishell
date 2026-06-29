@@ -1,5 +1,16 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+import { open, save } from "@tauri-apps/plugin-dialog";
+import { Save, X } from "lucide-react";
 import { command, isTauri } from "./api/tauri";
 import { ConnectionManager } from "./components/ConnectionManager";
 import { CommandHistoryPanel } from "./components/CommandHistoryPanel";
@@ -26,6 +37,7 @@ import type {
   UploadItem,
   UploadProgressPayload,
 } from "./types";
+import { formatBytes } from "./utils/format";
 import { filterServers, groupServers } from "./utils/servers";
 
 const TerminalPane = lazy(() =>
@@ -56,6 +68,8 @@ const SFTP_COLUMN_MIN_MS = 420;
 const NOTICE_DURATION_MS = 4200;
 const COMMAND_HISTORY_LIMIT = 10_000;
 const DEMO_COMMAND_HISTORY_KEY = "ishell.commandHistory";
+const CONNECTION_FOLDERS_KEY = "ishell.connectionFolders";
+const MAX_EDITABLE_TEXT_BYTES = 1024 * 1024;
 
 interface DeleteConfirmState {
   entries: SftpEntry[];
@@ -66,11 +80,35 @@ interface DeleteConfirmState {
   error?: string;
 }
 
+interface FileEditorState {
+  entry: SftpEntry;
+  tabId: string;
+  serverId: string;
+  content: string;
+  originalContent: string;
+  loading: boolean;
+  saving: boolean;
+  error?: string;
+}
+
+interface ConnectionImportPayload {
+  folders: string[];
+  servers: Array<ServerInput & { password?: string | null }>;
+}
+
 export default function App() {
   const [servers, setServers] = useState<ServerRecord[]>([]);
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [activeGroup, setActiveGroup] = useState("全部");
+  const [connectionFolders, setConnectionFolders] = useState<string[]>(() => {
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(CONNECTION_FOLDERS_KEY) || "[]");
+      return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+    } catch {
+      return [];
+    }
+  });
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [theme, setTheme] = useState<AppTheme>(
@@ -98,9 +136,11 @@ export default function App() {
   const [downloads, setDownloads] = useState<DownloadItem[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null);
+  const [fileEditor, setFileEditor] = useState<FileEditorState | null>(null);
   const terminalDockRef = useRef<HTMLDivElement>(null);
   const workbenchMainRef = useRef<HTMLDivElement>(null);
   const filesRegionRef = useRef<HTMLDivElement>(null);
+  const fileEditorHighlightRef = useRef<HTMLPreElement>(null);
   const dockDragCleanupRef = useRef<(() => void) | null>(null);
   const statusDragCleanupRef = useRef<(() => void) | null>(null);
   // Latest values for the once-registered native drag-drop listener.
@@ -131,8 +171,16 @@ export default function App() {
     () => filterServers(servers, activeGroup, query),
     [activeGroup, query, servers],
   );
-  const groups = useMemo(() => ["全部", ...Object.keys(groupServers(servers)).sort()], [servers]);
-  const grouped = useMemo(() => groupServers(filteredServers), [filteredServers]);
+  const connectionFolderNames = useMemo(() => {
+    const names = new Set<string>(connectionFolders);
+    for (const group of Object.keys(groupServers(servers))) names.add(group);
+    return [...names].filter(Boolean).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }, [connectionFolders, servers]);
+  const groups = useMemo(() => ["全部", ...connectionFolderNames], [connectionFolderNames]);
+  const grouped = useMemo(
+    () => groupServersForTree(filteredServers, connectionFolderNames, activeGroup, query),
+    [activeGroup, connectionFolderNames, filteredServers, query],
+  );
 
   // Keep the native drag-drop listener (registered once) reading fresh state.
   dropEnabledRef.current = filesOpen && Boolean(activeTab);
@@ -169,6 +217,10 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem("ishell.terminalFontSize", String(terminalFontSize));
   }, [terminalFontSize]);
+
+  useEffect(() => {
+    window.localStorage.setItem(CONNECTION_FOLDERS_KEY, JSON.stringify(connectionFolders));
+  }, [connectionFolders]);
 
   useEffect(() => {
     return () => {
@@ -511,9 +563,9 @@ export default function App() {
     }, remaining);
   }
 
-  function editServer(server?: ServerRecord | null) {
+  function editServer(server?: ServerRecord | null, targetGroup = "Default") {
     if (!server) {
-      setForm(defaultForm);
+      setForm({ ...defaultForm, group: targetGroup || "Default" });
       setEditing(true);
       return;
     }
@@ -533,6 +585,133 @@ export default function App() {
       password: "",
     });
     setEditing(true);
+  }
+
+  function createConnectionFolder(raw: string) {
+    const name = raw.trim();
+    if (!name) return;
+    if (name === "全部") {
+      showNotice("文件夹不能命名为“全部”");
+      return;
+    }
+    setConnectionFolders((current) => {
+      const existingFolders = new Set(connectionFolderNames.map((folder) => folder.toLowerCase()));
+      if (existingFolders.has(name.toLowerCase())) return current;
+      return ensureFolder(current, name);
+    });
+    setActiveGroup("全部");
+  }
+
+  async function exportConnections(target: { serverIds: string[]; folders: string[] }) {
+    if (!isTauri) {
+      showNotice("演示模式不支持导出连接");
+      return;
+    }
+    const selectedFolders = target.folders;
+    const selectedServerIds = new Set(target.serverIds);
+    const selectedFolderSet = new Set(selectedFolders);
+    const exportingAll = selectedFolders.length === 0 && selectedServerIds.size === 0;
+    const exportFolders = exportingAll ? connectionFolderNames : selectedFolders;
+    const exportServers = servers.filter((server) =>
+      exportingAll || selectedServerIds.has(server.id) || selectedFolderSet.has(server.group || "Default"),
+    );
+    if (exportServers.length === 0 && exportFolders.length === 0) {
+      showNotice("没有可导出的连接");
+      return;
+    }
+    const passphrase = window.prompt("设置导出密钥，用于加密已保存的密码。留空将只导出连接配置。")?.trim() || null;
+
+    const asZip = exportFolders.length > 0 || exportServers.length > 1;
+    const picked = await save({
+      title: "导出连接",
+      defaultPath: `ishell-connections-${new Date().toISOString().slice(0, 10)}.${asZip ? "zip" : "json"}`,
+      filters: [{ name: asZip ? "ZIP 压缩包" : "JSON 文件", extensions: [asZip ? "zip" : "json"] }],
+    });
+    if (!picked) return;
+
+    try {
+      await command("export_connections", {
+        path: picked,
+        payload: {
+          folders: exportFolders,
+          servers: exportServers,
+        },
+        asZip,
+        passphrase,
+      });
+      showNotice(`已导出 ${exportServers.length} 台主机`);
+    } catch (error) {
+      showNotice(String(error));
+    }
+  }
+
+  async function importConnections() {
+    if (!isTauri) {
+      showNotice("演示模式不支持导入连接");
+      return;
+    }
+    const picked = await open({
+      multiple: false,
+      directory: false,
+      title: "导入连接",
+      filters: [{ name: "连接导入文件", extensions: ["json", "zip"] }],
+    });
+    const path = typeof picked === "string" ? picked : Array.isArray(picked) ? picked[0] : null;
+    if (!path) return;
+
+    try {
+      let imported: ConnectionImportPayload;
+      try {
+        imported = await command<ConnectionImportPayload>("import_connections", { path, passphrase: null });
+      } catch (error) {
+        const message = String(error);
+        if (!message.includes("加密密码") && !message.includes("导入密钥")) throw error;
+        const passphrase = window.prompt("导入文件包含加密密码，请输入导入密钥")?.trim();
+        if (!passphrase) return;
+        imported = await command<ConnectionImportPayload>("import_connections", { path, passphrase });
+      }
+      for (const input of imported.servers) {
+        const { password, ...serverInput } = input;
+        await command("save_server", { input: serverInput, password: password || null });
+      }
+      setConnectionFolders((current) =>
+        imported.folders.reduce((next, folder) => ensureFolder(next, folder), current),
+      );
+      await refreshServers();
+      showNotice(`已导入 ${imported.servers.length} 台主机`);
+    } catch (error) {
+      showNotice(String(error));
+    }
+  }
+
+  async function deleteConnections(target: { serverIds: string[]; folders: string[] }) {
+    const folderSet = new Set(target.folders);
+    const idSet = new Set(target.serverIds);
+    const targets = servers.filter((server) => idSet.has(server.id) || folderSet.has(server.group || "Default"));
+    if (targets.length === 0 && target.folders.length === 0) return;
+
+    const message = target.folders.length > 0
+      ? `确定删除 ${target.folders.length} 个文件夹及其中 ${targets.length} 台服务器吗？`
+      : targets.length > 1
+        ? `确定删除所选 ${targets.length} 台服务器吗？`
+        : `确定删除「${targets[0]?.name ?? "该服务器"}」吗？`;
+    if (!window.confirm(message)) return;
+
+    try {
+      if (isTauri) {
+        for (const server of targets) {
+          await command("delete_server", { id: server.id });
+        }
+      }
+      const deleteIds = new Set(targets.map((server) => server.id));
+      setServers((current) => current.filter((server) => !deleteIds.has(server.id)));
+      setTabs((current) => current.filter((tab) => !deleteIds.has(tab.serverId)));
+      setConnectionFolders((current) => current.filter((folder) => !folderSet.has(folder)));
+      setSelectedServerId((current) => (current && deleteIds.has(current) ? null : current));
+      showNotice(target.folders.length > 0 ? "已删除文件夹" : "已删除");
+    } catch (error) {
+      showNotice(String(error));
+    }
   }
 
   async function saveServer() {
@@ -574,6 +753,7 @@ export default function App() {
         await refreshServers();
         setSelectedServerId(saved.id);
       }
+      setConnectionFolders((current) => ensureFolder(current, input.group || "Default"));
       setEditing(false);
       showNotice("已保存");
     } catch (error) {
@@ -1232,6 +1412,84 @@ export default function App() {
     );
   }
 
+  async function openFileEditor(entry: SftpEntry) {
+    if (!activeTab || entry.isDir) return;
+    if ((entry.size ?? 0) > MAX_EDITABLE_TEXT_BYTES) {
+      showNotice("仅支持编辑 1 MB 以内的文本文件");
+      return;
+    }
+    const tabId = activeTab.id;
+    const serverId = activeTab.serverId;
+    setFileEditor({
+      entry,
+      tabId,
+      serverId,
+      content: "",
+      originalContent: "",
+      loading: true,
+      saving: false,
+    });
+    beginSftpBusy();
+    try {
+      const content = isTauri
+        ? await command<string>("sftp_read_text_file", { id: serverId, path: entry.path })
+        : `# 演示模式\n正在编辑 ${entry.path}\n`;
+      setFileEditor((current) =>
+        current?.entry.path === entry.path && current.tabId === tabId
+          ? { ...current, content, originalContent: content, loading: false, error: undefined }
+          : current,
+      );
+    } catch (error) {
+      const message = String(error);
+      setFileEditor((current) =>
+        current?.entry.path === entry.path && current.tabId === tabId
+          ? { ...current, loading: false, error: message }
+          : current,
+      );
+      showNotice(message);
+    } finally {
+      endSftpBusy();
+    }
+  }
+
+  async function saveFileEditor() {
+    if (!fileEditor || fileEditor.loading || fileEditor.saving) return;
+    const size = new TextEncoder().encode(fileEditor.content).length;
+    if (size > MAX_EDITABLE_TEXT_BYTES) {
+      setFileEditor((current) => current ? { ...current, error: "内容超过 1 MB，无法保存" } : current);
+      return;
+    }
+    setFileEditor((current) => current ? { ...current, saving: true, error: undefined } : current);
+    beginSftpBusy();
+    try {
+      if (isTauri) {
+        await command("sftp_write_text_file", {
+          id: fileEditor.serverId,
+          path: fileEditor.entry.path,
+          content: fileEditor.content,
+        });
+      }
+      setFileEditor(null);
+      showNotice(`已保存 ${fileEditor.entry.name}`);
+      const parent = parentPath(fileEditor.entry.path);
+      refreshVisibleFiles(fileEditor.tabId, fileEditor.serverId, parent);
+    } catch (error) {
+      const message = String(error);
+      setFileEditor((current) => current ? { ...current, saving: false, error: message } : current);
+      showNotice(message);
+    } finally {
+      endSftpBusy();
+    }
+  }
+
+  function closeFileEditor() {
+    if (!fileEditor || fileEditor.saving) return;
+    if (fileEditor.content !== fileEditor.originalContent && !window.confirm("文件尚未保存，确定关闭编辑器吗？")) {
+      return;
+    }
+    setFileEditor(null);
+  }
+
   async function makeDir(rawName: string, targetDir = currentDir()) {
     if (!activeTab) return;
     const name = rawName.trim();
@@ -1357,7 +1615,7 @@ export default function App() {
           statusOpen={statusOpen}
           historyOpen={historyOpen}
           serverCount={servers.length}
-          onOpenConnections={() => setConnectionsOpen(true)}
+          onOpenConnections={() => setConnectionsOpen((open) => !open)}
           onOpenSettings={() => setSettingsOpen(true)}
           onToggleFiles={() => setFilesOpen((open) => !open)}
           onToggleStatus={toggleStatusPanel}
@@ -1369,7 +1627,36 @@ export default function App() {
           onCloseTabs={closeShells}
         />
 
-        <div className={`workbench-body ${statusOpen && activeTab ? "has-status-panel" : ""}`}>
+        <div
+          className={`workbench-body ${connectionsOpen ? "connections-open" : ""} ${
+            statusOpen && activeTab ? "has-status-panel" : ""
+          }`}
+          style={{
+            "--connection-panel-width": "320px",
+            "--connection-panel-bottom": activeTab && filesOpen ? `calc(${filesRatio * 100}% + 7px)` : "0px",
+          } as CSSProperties}
+        >
+          <ConnectionManager
+            open={connectionsOpen}
+            grouped={grouped}
+            query={query}
+            setQuery={setQuery}
+            groups={groups}
+            activeGroup={activeGroup}
+            setActiveGroup={setActiveGroup}
+            selectedServerId={selectedServerId}
+            onSelect={(server) => setSelectedServerId(server.id)}
+            onConnect={openShell}
+            onEdit={editServer}
+            onNew={(group) => editServer(null, group || "Default")}
+            onCreateFolder={createConnectionFolder}
+            onExport={exportConnections}
+            onImport={importConnections}
+            onDelete={deleteConnections}
+            onClose={() => setConnectionsOpen(false)}
+            count={servers.length}
+          />
+
           <div className="workbench-main" ref={workbenchMainRef}>
             {/* Terminal + docked file panel. Kept mounted so xterm survives tab switches. */}
             {tabs.length > 0 && (
@@ -1383,7 +1670,7 @@ export default function App() {
                         visible={tab.id === activeTabId}
                         theme={theme}
                         fontSize={terminalFontSize}
-                        layoutSignal={`${filesOpen}:${filesRatio}:${filesDragging}:${statusOpen}:${statusPanelWidth}`}
+                        layoutSignal={`${filesOpen}:${filesRatio}:${filesDragging}:${connectionsOpen}:${statusOpen}:${statusPanelWidth}`}
                         setNotice={showNotice}
                         onReady={() => handleTerminalReady(tab.id, tab.serverId, tab.title)}
                         onCommandSubmitted={handleCommandSubmitted}
@@ -1426,6 +1713,7 @@ export default function App() {
                           onRefresh={refreshFiles}
                           onUpload={uploadFile}
                           onDownload={downloadFiles}
+                          onEdit={openFileEditor}
                           onMkdir={makeDir}
                           onRename={renameEntry}
                           onDelete={deleteEntries}
@@ -1499,24 +1787,6 @@ export default function App() {
         </div>
       </main>
 
-      {connectionsOpen && (
-        <ConnectionManager
-          grouped={grouped}
-          query={query}
-          setQuery={setQuery}
-          groups={groups}
-          activeGroup={activeGroup}
-          setActiveGroup={setActiveGroup}
-          selectedServerId={selectedServerId}
-          onSelect={(server) => setSelectedServerId(server.id)}
-          onConnect={openShell}
-          onEdit={editServer}
-          onNew={() => editServer()}
-          onClose={() => setConnectionsOpen(false)}
-          count={servers.length}
-        />
-      )}
-
       {settingsOpen && (
         <SettingsModal
           theme={theme}
@@ -1569,6 +1839,70 @@ export default function App() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {fileEditor && (
+        <div className="file-editor-backdrop" role="presentation">
+          <section className="file-editor" role="dialog" aria-modal="true" aria-labelledby="file-editor-title">
+            <header className="file-editor-head">
+              <div>
+                <span>Text Editor</span>
+                <h2 id="file-editor-title">{fileEditor.entry.name}</h2>
+                <p title={fileEditor.entry.path}>{fileEditor.entry.path}</p>
+              </div>
+              <button type="button" className="icon-button" onClick={closeFileEditor} title="关闭">
+                <X size={16} />
+              </button>
+            </header>
+            {fileEditor.error && <div className="file-editor-error">{fileEditor.error}</div>}
+            <div className="file-editor-code">
+              <pre ref={fileEditorHighlightRef} className="file-editor-highlight" aria-hidden="true">
+                {renderHighlightedCode(fileEditor.entry.name, fileEditor.content)}
+              </pre>
+              <textarea
+                className="file-editor-textarea"
+                value={fileEditor.content}
+                disabled={fileEditor.loading || fileEditor.saving}
+                spellCheck={false}
+                wrap="off"
+                onScroll={(event) => {
+                  const highlight = fileEditorHighlightRef.current;
+                  if (!highlight) return;
+                  highlight.scrollTop = event.currentTarget.scrollTop;
+                  highlight.scrollLeft = event.currentTarget.scrollLeft;
+                }}
+                onChange={(event) =>
+                  setFileEditor((current) =>
+                    current ? { ...current, content: event.target.value, error: undefined } : current,
+                  )
+                }
+                onKeyDown={(event) => {
+                  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+                    event.preventDefault();
+                    saveFileEditor();
+                  }
+                }}
+              />
+            </div>
+            <footer className="file-editor-actions">
+              <span>{fileEditor.loading ? "读取中…" : `${formatBytes(new TextEncoder().encode(fileEditor.content).length)} / 1 MB`}</span>
+              <div>
+                <button type="button" className="btn-ghost" disabled={fileEditor.saving} onClick={closeFileEditor}>
+                  取消
+                </button>
+                <button
+                  type="button"
+                  className="solid-button"
+                  disabled={fileEditor.loading || fileEditor.saving || fileEditor.content === fileEditor.originalContent}
+                  onClick={saveFileEditor}
+                >
+                  <Save size={15} />
+                  {fileEditor.saving ? "保存中…" : "保存"}
+                </button>
+              </div>
+            </footer>
+          </section>
         </div>
       )}
 
@@ -1651,6 +1985,186 @@ function waitForNextPaint() {
 
 function basename(path: string) {
   return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+}
+
+function ensureFolder(current: string[], folder: string) {
+  const name = folder.trim() || "Default";
+  if (current.some((item) => item.toLowerCase() === name.toLowerCase())) return current;
+  return [...current, name].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
+function groupServersForTree(
+  servers: ServerRecord[],
+  folders: string[],
+  activeGroup: string,
+  query: string,
+) {
+  const groupedServers = groupServers(servers);
+  const needle = query.trim().toLowerCase();
+  const folderNames = new Set(folders);
+  for (const group of Object.keys(groupedServers)) folderNames.add(group);
+
+  return [...folderNames]
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    .reduce<Record<string, ServerRecord[]>>((acc, folder) => {
+      const list = groupedServers[folder] ?? [];
+      const inActiveGroup = activeGroup === "全部" || activeGroup === folder;
+      const folderMatchesQuery = !needle || folder.toLowerCase().includes(needle);
+      if (list.length > 0 || (inActiveGroup && folderMatchesQuery)) {
+        acc[folder] = list;
+      }
+      return acc;
+    }, {});
+}
+
+function parentPath(path: string) {
+  const normalized = path.replace(/\/+/g, "/");
+  const index = normalized.lastIndexOf("/");
+  if (index <= 0) return "/";
+  return normalized.slice(0, index);
+}
+
+interface HighlightToken {
+  text: string;
+  kind?: string;
+}
+
+const HIGHLIGHT_MAX_BYTES = 220_000;
+const CODE_KEYWORDS = new Set([
+  "abstract", "and", "as", "async", "await", "break", "case", "catch", "class", "const", "continue",
+  "def", "default", "defer", "delete", "do", "else", "enum", "export", "extends", "false", "final",
+  "finally", "for", "from", "func", "function", "go", "if", "implements", "import", "in", "interface",
+  "let", "match", "mod", "new", "nil", "null", "or", "package", "private", "protected", "public",
+  "return", "self", "static", "struct", "super", "switch", "this", "throw", "throws", "trait", "true",
+  "try", "type", "undefined", "use", "var", "void", "while", "yield",
+]);
+const SQL_KEYWORDS = new Set([
+  "alter", "and", "as", "between", "by", "case", "create", "delete", "desc", "distinct", "drop",
+  "else", "end", "exists", "from", "group", "having", "in", "inner", "insert", "into", "is", "join",
+  "left", "like", "limit", "not", "null", "on", "or", "order", "outer", "right", "select", "set",
+  "table", "then", "union", "update", "values", "when", "where",
+]);
+
+function renderHighlightedCode(fileName: string, content: string): ReactNode {
+  if (!content) return " ";
+  if (new TextEncoder().encode(content).length > HIGHLIGHT_MAX_BYTES) return content;
+  const language = languageForFile(fileName);
+  const tokens = tokenizeForLanguage(content, language);
+  return tokens.map((token, index) =>
+    token.kind
+      ? <span key={index} className={`syntax-${token.kind}`}>{token.text}</span>
+      : token.text,
+  );
+}
+
+function languageForFile(fileName: string) {
+  const name = fileName.toLowerCase();
+  const extension = name.includes(".") ? name.slice(name.lastIndexOf(".") + 1) : name;
+  if (["json"].includes(extension)) return "json";
+  if (["ts", "tsx", "js", "jsx", "mjs", "java", "c", "h", "cpp", "hpp", "cs", "go", "rs", "kt", "php", "rb", "py", "lua"].includes(extension)) return "code";
+  if (["css", "scss", "less"].includes(extension)) return "css";
+  if (["html", "htm", "xml", "svg"].includes(extension)) return "markup";
+  if (["md", "markdown"].includes(extension) || name === "readme") return "markdown";
+  if (["sh", "bash", "zsh"].includes(extension) || name.startsWith(".bash") || name.startsWith(".zsh")) return "shell";
+  if (["sql"].includes(extension)) return "sql";
+  if (["yaml", "yml", "toml", "ini", "env", "properties"].includes(extension) || name === ".env") return "config";
+  return "plain";
+}
+
+function tokenizeForLanguage(content: string, language: string) {
+  switch (language) {
+    case "json":
+      return tokenizeByPattern(content, /"(?:\\.|[^"\\])*"(?=\s*:)|"(?:\\.|[^"\\])*"|-?\b\d+(?:\.\d+)?(?:e[+-]?\d+)?\b|\b(?:true|false|null)\b|[{}\[\]:,]/gi, classifyJsonToken);
+    case "css":
+      return tokenizeByPattern(content, /\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|#[0-9a-fA-F]{3,8}\b|--?[A-Za-z_][\w-]*(?=\s*:)|@[A-Za-z-]+|\b(?:from|to|important)\b|[{}():;,]/g, classifyCssToken);
+    case "markup":
+      return tokenizeByPattern(content, /<!--[\s\S]*?-->|<\/?[A-Za-z][^>\s/]*|\/?>|[A-Za-z_:][-A-Za-z0-9_:.]*(?==)|"(?:&quot;|[^"])*"|'[^']*'|&[A-Za-z0-9#]+;/g, classifyMarkupToken);
+    case "markdown":
+      return tokenizeByPattern(content, /```[\s\S]*?```|`[^`\n]+`|\*\*[^*\n]+\*\*|\[[^\]\n]+\]\([^)]+\)|^#{1,6} [^\n]*(?:\n|$)/gm, classifyMarkdownToken);
+    case "shell":
+    case "code":
+      return tokenizeByPattern(content, /\/\*[\s\S]*?\*\/|\/\/[^\n\r]*|#[^\n\r]*|`(?:\\[\s\S]|[^`\\])*`|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b[A-Za-z_][A-Za-z0-9_]*\b|\b\d+(?:\.\d+)?\b|[{}()[\];,.]/g, classifyCodeToken);
+    case "sql":
+      return tokenizeByPattern(content, /--[^\n\r]*|\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:''|[^'])*'|\b[A-Za-z_][A-Za-z0-9_]*\b|\b\d+(?:\.\d+)?\b|[(),.;=*<>+-]/g, classifySqlToken);
+    case "config":
+      return tokenizeByPattern(content, /#[^\n\r]*|;[^\n\r]*|"(?:\\.|[^"\\])*"|'(?:''|[^'])*'|^[ \t-]*[A-Za-z0-9_.-]+(?=\s*[:=])|\b(?:true|false|null|yes|no|on|off)\b|-?\b\d+(?:\.\d+)?\b|[:=[\]{},-]/gim, classifyConfigToken);
+    default:
+      return [{ text: content }];
+  }
+}
+
+function tokenizeByPattern(content: string, pattern: RegExp, classify: (token: string) => string | undefined) {
+  const tokens: HighlightToken[] = [];
+  let cursor = 0;
+  for (const match of content.matchAll(pattern)) {
+    const text = match[0];
+    const index = match.index ?? 0;
+    if (index > cursor) tokens.push({ text: content.slice(cursor, index) });
+    tokens.push({ text, kind: classify(text) });
+    cursor = index + text.length;
+  }
+  if (cursor < content.length) tokens.push({ text: content.slice(cursor) });
+  return tokens;
+}
+
+function classifyJsonToken(token: string) {
+  if (token.startsWith("\"")) return token.match(/"\s*$/) ? "string" : "key";
+  if (/^-?\d/.test(token)) return "number";
+  if (/^(true|false|null)$/i.test(token)) return "literal";
+  return "punct";
+}
+
+function classifyCodeToken(token: string) {
+  if (token.startsWith("//") || token.startsWith("/*") || token.startsWith("#")) return "comment";
+  if (/^["'`]/.test(token)) return "string";
+  if (/^\d/.test(token)) return "number";
+  if (CODE_KEYWORDS.has(token)) return token === "true" || token === "false" || token === "null" || token === "undefined" || token === "nil" ? "literal" : "keyword";
+  if (/^[A-Z][A-Za-z0-9_]*$/.test(token)) return "type";
+  if (/^[{}()[\];,.]$/.test(token)) return "punct";
+  return undefined;
+}
+
+function classifyCssToken(token: string) {
+  if (token.startsWith("/*")) return "comment";
+  if (/^["']/.test(token)) return "string";
+  if (token.startsWith("#")) return "number";
+  if (token.startsWith("@") || token === "important") return "keyword";
+  if (/^-?-?[A-Za-z_]/.test(token)) return "key";
+  return "punct";
+}
+
+function classifyMarkupToken(token: string) {
+  if (token.startsWith("<!--")) return "comment";
+  if (token.startsWith("<")) return "keyword";
+  if (/^["']/.test(token)) return "string";
+  if (token.startsWith("&")) return "literal";
+  if (token === ">" || token === "/>") return "punct";
+  return "key";
+}
+
+function classifyMarkdownToken(token: string) {
+  if (token.startsWith("#")) return "keyword";
+  if (token.startsWith("```") || token.startsWith("`")) return "string";
+  if (token.startsWith("[")) return "literal";
+  return "type";
+}
+
+function classifySqlToken(token: string) {
+  if (token.startsWith("--") || token.startsWith("/*")) return "comment";
+  if (/^["']/.test(token)) return "string";
+  if (/^\d/.test(token)) return "number";
+  if (SQL_KEYWORDS.has(token.toLowerCase())) return "keyword";
+  return /^[(),.;=*<>+-]$/.test(token) ? "punct" : undefined;
+}
+
+function classifyConfigToken(token: string) {
+  if (token.startsWith("#") || token.startsWith(";")) return "comment";
+  if (/^["']/.test(token)) return "string";
+  if (/^\d|^-?\d/.test(token)) return "number";
+  if (/^(true|false|null|yes|no|on|off)$/i.test(token)) return "literal";
+  if (/^[ \t-]*[A-Za-z0-9_.-]+$/.test(token)) return "key";
+  return "punct";
 }
 
 function buildPathChain(path: string) {
