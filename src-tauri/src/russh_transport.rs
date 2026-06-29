@@ -277,6 +277,7 @@ pub fn run_terminal(
     cols: u16,
     rows: u16,
     control: std::sync::mpsc::Receiver<TerminalControl>,
+    on_ready: impl FnOnce(),
     mut on_data: impl FnMut(&[u8]),
 ) -> Result<(), String> {
     use std::sync::mpsc::TryRecvError;
@@ -304,6 +305,8 @@ pub fn run_terminal(
             .request_shell(true)
             .await
             .map_err(|err| format!("无法启动远程 shell：{err}"))?;
+
+        on_ready();
 
         loop {
             // Drain any pending control messages without blocking.
@@ -335,11 +338,12 @@ pub fn run_terminal(
             match tokio::time::timeout(Duration::from_millis(20), channel.wait()).await {
                 Ok(Some(ChannelMsg::Data { ref data })) => on_data(data),
                 Ok(Some(ChannelMsg::ExtendedData { ref data, .. })) => on_data(data),
-                Ok(Some(ChannelMsg::Eof)) | Ok(None) => break,
+                Ok(Some(ChannelMsg::Eof)) | Ok(None) => {
+                    return Err("远程终端已关闭".to_string());
+                }
                 Ok(Some(_)) => {}
                 Err(_timeout) => {}
             }
         }
-        Ok(())
     })
 }

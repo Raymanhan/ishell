@@ -1,7 +1,10 @@
+#[cfg(not(russh_backend))]
 use std::path::{Path, PathBuf};
 
+#[cfg(not(russh_backend))]
 use crate::models::ServerRecord;
 
+#[cfg(not(russh_backend))]
 pub fn ssh_binary() -> String {
     if Path::new("/usr/bin/ssh").exists() {
         "/usr/bin/ssh".to_string()
@@ -10,6 +13,7 @@ pub fn ssh_binary() -> String {
     }
 }
 
+#[cfg(not(russh_backend))]
 pub fn control_path(server_id: &str) -> PathBuf {
     let slug: String = server_id
         .chars()
@@ -20,6 +24,7 @@ pub fn control_path(server_id: &str) -> PathBuf {
     PathBuf::from(format!("/tmp/ishell-{slug}.sock"))
 }
 
+#[cfg(not(russh_backend))]
 pub fn common_ssh_args(server: &ServerRecord) -> Vec<String> {
     let control_path = control_path(&server.id);
     vec![
@@ -46,6 +51,7 @@ pub fn common_ssh_args(server: &ServerRecord) -> Vec<String> {
     ]
 }
 
+#[cfg(not(russh_backend))]
 pub fn auth_ssh_args(server: &ServerRecord, has_saved_secret: bool) -> Vec<String> {
     let mut args = Vec::new();
     if server.auth_type == "password" && has_saved_secret {

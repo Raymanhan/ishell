@@ -1,23 +1,31 @@
 use std::{
     collections::HashMap,
+    sync::{mpsc, Arc, Mutex},
+    thread,
+};
+
+#[cfg(not(russh_backend))]
+use std::{
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
-    sync::{mpsc, Arc, Mutex},
-    thread,
     time::Duration,
 };
 
-#[cfg(unix)]
+#[cfg(all(unix, not(russh_backend)))]
 use std::os::unix::fs::PermissionsExt;
 
+#[cfg(not(russh_backend))]
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use tauri::{AppHandle, Emitter, State};
 use uuid::Uuid;
 
+#[cfg(not(russh_backend))]
+use crate::models::ServerRecord;
+#[cfg(not(russh_backend))]
+use crate::openssh;
 use crate::{
-    models::{ServerRecord, TerminalClosedPayload, TerminalDataPayload, TerminalSnapshotPayload},
-    openssh,
+    models::{TerminalClosedPayload, TerminalDataPayload, TerminalSnapshotPayload},
     store::{get_server, mark_connected, read_secret},
 };
 
@@ -35,6 +43,7 @@ pub(crate) enum TerminalControl {
     Close,
 }
 
+#[cfg(not(russh_backend))]
 const CONNECTED_MARKER: &str = "[iShell] connected";
 
 impl TerminalRegistry {
@@ -249,6 +258,7 @@ fn emit_terminal_data(
     );
 }
 
+#[cfg(not(russh_backend))]
 fn create_askpass_helper(session_id: &str) -> Result<PathBuf, String> {
     let path = std::env::temp_dir().join(format!("ishell-askpass-{session_id}.sh"));
     fs::write(
@@ -265,12 +275,14 @@ fn create_askpass_helper(session_id: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+#[cfg(not(russh_backend))]
 fn cleanup_askpass_helper(path: Option<&PathBuf>) {
     if let Some(path) = path {
         let _ = fs::remove_file(path);
     }
 }
 
+#[cfg(not(russh_backend))]
 fn strip_ansi_sequences(value: &str) -> String {
     let mut output = String::with_capacity(value.len());
     let mut chars = value.chars().peekable();
@@ -291,6 +303,7 @@ fn strip_ansi_sequences(value: &str) -> String {
     output
 }
 
+#[cfg(not(russh_backend))]
 fn keep_recent_tail(value: &mut String, max_bytes: usize) {
     if value.len() <= max_bytes {
         return;
@@ -305,6 +318,7 @@ fn keep_recent_tail(value: &mut String, max_bytes: usize) {
     value.drain(..drain_to);
 }
 
+#[cfg(not(russh_backend))]
 fn looks_like_password_prompt(output_tail: &str) -> bool {
     let plain = strip_ansi_sequences(output_tail).replace('\r', "");
     let line = plain
@@ -321,6 +335,7 @@ fn looks_like_password_prompt(output_tail: &str) -> bool {
             || line.contains("口令"))
 }
 
+#[cfg(not(russh_backend))]
 fn build_ssh_command(
     server: &ServerRecord,
     saved_password: Option<&str>,
@@ -360,6 +375,7 @@ fn build_ssh_command(
     command
 }
 
+#[cfg(not(russh_backend))]
 fn run_terminal_thread(
     app: AppHandle,
     registry: Arc<TerminalRegistry>,
@@ -519,4 +535,64 @@ fn run_terminal_thread(
             }
         }
     }
+}
+
+/// Windows / russh terminal: drive an interactive shell over a pure-Rust SSH
+/// PTY channel. Authentication (password or key) happens inside the transport,
+/// so there is no local PTY, askpass helper, or password-prompt autofill.
+#[cfg(russh_backend)]
+fn run_terminal_thread(
+    app: AppHandle,
+    registry: Arc<TerminalRegistry>,
+    session_id: String,
+    server_id: String,
+    receiver: mpsc::Receiver<TerminalControl>,
+) -> Result<(), String> {
+    let server = get_server(&app, &server_id)?;
+    let secret = if server.auth_type == "password" {
+        read_secret(&app, &server_id)
+            .ok()
+            .filter(|password| !password.is_empty())
+    } else {
+        None
+    };
+
+    emit_terminal_data(
+        &app,
+        &registry,
+        &session_id,
+        "\r\n[iShell] 正在通过 russh 连接...\r\n".into(),
+    );
+
+    let ready_app = app.clone();
+    let ready_server_id = server_id.clone();
+    let ready_registry = registry.clone();
+    let ready_session_id = session_id.clone();
+    let on_ready = move || {
+        mark_connected(&ready_app, &ready_server_id).ok();
+        emit_terminal_data(
+            &ready_app,
+            &ready_registry,
+            &ready_session_id,
+            "\r\n[iShell] connected via russh\r\n".into(),
+        );
+    };
+
+    let data_app = app.clone();
+    let data_registry = registry.clone();
+    let data_session_id = session_id.clone();
+    let on_data = move |data: &[u8]| {
+        let text = String::from_utf8_lossy(data).to_string();
+        emit_terminal_data(&data_app, &data_registry, &data_session_id, text);
+    };
+
+    crate::russh_transport::run_terminal(
+        &server,
+        secret.as_deref(),
+        120,
+        32,
+        receiver,
+        on_ready,
+        on_data,
+    )
 }
