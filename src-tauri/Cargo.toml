@@ -27,6 +27,17 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 aes-gcm = "0.10"
 getrandom = "0.2"
 
-# TEMP (dev on host): will be moved under [target.'cfg(windows)'.dependencies].
+# Pure-Rust SSH transport. Pulled in unconditionally on Windows (see the
+# [target.'cfg(windows)'.dependencies] section below); optional elsewhere so the
+# Windows code path can be compile-tested on any host via `--features force-russh`.
+russh = { version = "0.61", optional = true }
+tokio = { version = "1", features = ["rt-multi-thread", "io-util", "macros", "sync", "time"], optional = true }
+
+[features]
+# Force the russh transport on a non-Windows host (for development/testing).
+force-russh = ["dep:russh", "dep:tokio"]
+
+# On Windows the russh transport is the only option, so it is always compiled in.
+[target.'cfg(windows)'.dependencies]
 russh = "0.61"
 tokio = { version = "1", features = ["rt-multi-thread", "io-util", "macros", "sync", "time"] }
