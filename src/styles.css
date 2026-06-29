@@ -31,14 +31,49 @@
   --r-sm: 7px;
   --tab-width: 150px;
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI",
+    "Microsoft YaHei UI", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", "Cascadia Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas,
+    "Microsoft YaHei Mono", "Microsoft YaHei", monospace;
 
-  font-family: -apple-system, "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-sans);
   font-size: 13px;
   background: var(--bg);
   color: var(--text);
-  -webkit-font-smoothing: subpixel-antialiased;
+  -webkit-font-smoothing: auto;
   -moz-osx-font-smoothing: auto;
-  text-rendering: geometricPrecision;
+  font-optical-sizing: auto;
+  text-rendering: auto;
+}
+
+:root[data-platform="windows"] {
+  --font-sans: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", Arial, sans-serif;
+  --font-mono: "Cascadia Mono", "Cascadia Code", Consolas, "Microsoft YaHei Mono", "Microsoft YaHei", monospace;
+
+  font-synthesis-weight: none;
+  text-rendering: optimizeSpeed;
+}
+
+:root[data-platform="windows"] .detail-header,
+:root[data-platform="windows"] .network-head > span,
+:root[data-platform="windows"] .metric-section-head,
+:root[data-platform="windows"] .metric-label {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+:root[data-platform="windows"] .speed-pill,
+:root[data-platform="windows"] .metric-detail,
+:root[data-platform="windows"] .metric-row strong,
+:root[data-platform="windows"] .mount-id strong,
+:root[data-platform="windows"] .mount-size,
+:root[data-platform="windows"] .entry small {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+:root[data-platform="macos"] {
+  -webkit-font-smoothing: subpixel-antialiased;
 }
 
 :root[data-theme="light"] {
@@ -94,7 +129,7 @@ textarea {
 }
 
 .mono {
-  font-family: "SF Mono", "JetBrains Mono", "Cascadia Mono", Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 0.92em;
 }
 
@@ -525,7 +560,7 @@ textarea {
   display: block;
   margin-top: 1px;
   color: var(--faint);
-  font-family: "SF Mono", Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -823,7 +858,7 @@ textarea {
 .connection-meta small {
   margin-top: 1px;
   color: var(--faint);
-  font-family: "SF Mono", Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 10.5px;
 }
 .connection-actions {
@@ -1484,7 +1519,7 @@ textarea {
   min-width: 0;
   overflow: hidden;
   color: inherit;
-  font-family: "SF Mono", Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -1629,8 +1664,12 @@ textarea {
 .terminal-frame .xterm {
   height: 100%;
   background: transparent !important;
-  -webkit-font-smoothing: subpixel-antialiased;
-  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: inherit;
+  text-rendering: auto;
+}
+:root[data-platform="windows"] .terminal-frame .xterm {
+  font-synthesis-weight: none;
+  text-rendering: optimizeSpeed;
 }
 .terminal-frame .xterm-viewport,
 .terminal-frame .xterm-screen,
@@ -1761,7 +1800,7 @@ textarea {
 .recent-main small {
   margin-top: 3px;
   color: var(--faint);
-  font-family: "SF Mono", Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 11.5px;
 }
 .recent-meta,
@@ -1953,7 +1992,7 @@ textarea {
   background: transparent;
   color: var(--text);
   font-size: 12.5px;
-  font-family: "SF Mono", Menlo, monospace;
+  font-family: var(--font-mono);
   outline: 0;
 }
 .pathbar input::selection {
@@ -2489,7 +2528,7 @@ button.detail-row:hover {
 .entry small {
   color: var(--faint);
   font-size: 10.5px;
-  font-family: "SF Mono", Menlo, monospace;
+  font-family: var(--font-mono);
 }
 
 .sftp-drop {
@@ -2523,7 +2562,7 @@ button.detail-row:hover {
   color: var(--dim);
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: "SF Mono", Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
 }
 
@@ -2693,7 +2732,7 @@ button.detail-row:hover {
 .uq-meta {
   flex: 0 0 auto;
   color: var(--faint);
-  font-family: "SF Mono", Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
 }
 .uq-track {
@@ -2788,7 +2827,7 @@ button.detail-row:hover {
 .dash-head p {
   margin: 0;
   color: var(--dim);
-  font-family: "SF Mono", Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
 }
 
@@ -2824,7 +2863,7 @@ button.detail-row:hover {
   align-items: center;
   gap: 4px;
   color: var(--dim);
-  font-family: "SF Mono", Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 10.5px;
   font-weight: 620;
   white-space: nowrap;
@@ -2927,7 +2966,7 @@ button.detail-row:hover {
   min-width: 0;
   overflow: hidden;
   color: var(--faint);
-  font-family: "SF Mono", Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 10.5px;
   font-weight: 560;
   line-height: 1.1;
@@ -2937,7 +2976,7 @@ button.detail-row:hover {
 .metric-row strong {
   flex: 0 0 auto;
   color: var(--text);
-  font-family: "SF Mono", Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 650;
   text-align: right;
@@ -3008,13 +3047,13 @@ button.detail-row:hover {
 }
 .mount-id strong {
   color: var(--text);
-  font-family: "SF Mono", Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 10.5px;
   font-weight: 650;
 }
 .mount-size {
   color: var(--dim);
-  font-family: "SF Mono", Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 10.5px;
   font-weight: 650;
   text-align: right;
@@ -3118,7 +3157,7 @@ button.detail-row:hover {
   border-radius: var(--r-sm);
   background: rgba(255, 255, 255, 0.04);
   color: var(--dim);
-  font-family: "SF Mono", Menlo, monospace;
+  font-family: var(--font-mono);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3524,7 +3563,7 @@ button.detail-row:hover {
 }
 .settings-range strong {
   color: var(--text);
-  font-family: "SF Mono", Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   text-align: right;
 }

@@ -40,6 +40,10 @@ const terminalThemes = {
 } satisfies Record<AppTheme, ITheme>;
 
 const passwordPromptPattern = /(?:password|passphrase|密码|口令)[^:\n\r]*[:：]\s*$/i;
+const platformSource = `${navigator.userAgent} ${navigator.platform}`.toLowerCase();
+const terminalFontFamily = platformSource.includes("win")
+  ? '"Cascadia Mono", "Cascadia Code", Consolas, "Microsoft YaHei Mono", "Microsoft YaHei", monospace'
+  : '"SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace';
 
 function TerminalPaneBase({
   tab,
@@ -206,7 +210,7 @@ function TerminalPaneBase({
     const fit = new FitAddon();
     const terminal = new Terminal({
       cursorBlink: true,
-      fontFamily: '"SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, monospace',
+      fontFamily: terminalFontFamily,
       fontSize,
       lineHeight: 1.35,
       scrollback: 8000,
