@@ -1388,6 +1388,7 @@ export default function App() {
                         onReady={() => handleTerminalReady(tab.id, tab.serverId, tab.title)}
                         onCommandSubmitted={handleCommandSubmitted}
                         pasteRequest={pasteRequest?.tabId === tab.id ? pasteRequest : null}
+                        commandHistory={commandHistory}
                         onClosed={() => {
                           terminalReadyTabs.current.delete(tab.id);
                           patchTab(tab.id, { state: "closed" });

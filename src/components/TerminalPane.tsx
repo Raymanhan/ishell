@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal, type ITheme } from "@xterm/xterm";
@@ -44,6 +44,25 @@ const platformSource = `${navigator.userAgent} ${navigator.platform}`.toLowerCas
 const terminalFontFamily = platformSource.includes("win")
   ? '"Cascadia Mono", "Cascadia Code", Consolas, "Microsoft YaHei Mono", "Microsoft YaHei", monospace'
   : '"SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace';
+const HISTORY_SUGGESTION_LIMIT = 8;
+
+interface HistorySuggestState {
+  active: boolean;
+  query: string;
+  selectedIndex: number;
+  x: number;
+  y: number;
+  maxHeight: number;
+}
+
+const closedHistorySuggest: HistorySuggestState = {
+  active: false,
+  query: "",
+  selectedIndex: 0,
+  x: 0,
+  y: 0,
+  maxHeight: 248,
+};
 
 function TerminalPaneBase({
   tab,
@@ -57,6 +76,7 @@ function TerminalPaneBase({
   onReconnect,
   onCommandSubmitted,
   pasteRequest,
+  commandHistory,
 }: {
   tab: ShellTab;
   visible: boolean;
@@ -69,6 +89,7 @@ function TerminalPaneBase({
   onReconnect?: () => void;
   onCommandSubmitted?: (command: string) => void;
   pasteRequest?: { id: number; command: string } | null;
+  commandHistory: string[];
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -86,11 +107,22 @@ function TerminalPaneBase({
   const onCommandSubmittedRef = useRef(onCommandSubmitted);
   const commandDraftRef = useRef("");
   const sensitiveInputRef = useRef(false);
+  const commandHistoryRef = useRef(commandHistory);
+  const historySuggestRef = useRef<HistorySuggestState>(closedHistorySuggest);
+  const selectedSuggestionRef = useRef<HTMLButtonElement | null>(null);
+  const [historySuggest, setHistorySuggest] = useState<HistorySuggestState>(closedHistorySuggest);
+  commandHistoryRef.current = commandHistory;
+
+  const suggestedCommands = useMemo(
+    () => getHistoryMatches(historySuggest.query),
+    [commandHistory, historySuggest.query],
+  );
 
   useEffect(() => {
     sessionRef.current = tab.sessionId;
     commandDraftRef.current = "";
     sensitiveInputRef.current = false;
+    closeHistorySuggest();
     lastSizeRef.current = "";
     if (tab.sessionId && closedSessionRef.current !== tab.sessionId) {
       if (terminalRef.current) terminalRef.current.options.disableStdin = false;
@@ -175,7 +207,161 @@ function TerminalPaneBase({
     return promptIndex >= 0 ? line.slice(promptIndex + 2).trim() : "";
   }
 
+  function isAtShellPromptCommandStart() {
+    const terminal = terminalRef.current;
+    if (!terminal) return false;
+    const buffer = terminal.buffer.active;
+    const line = buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(false) ?? "";
+    const cursorX = buffer.cursorX;
+    const promptEnds = ["$ ", "# ", "> "]
+      .map((prompt) => {
+        const index = line.lastIndexOf(prompt, cursorX);
+        return index >= 0 ? index + prompt.length : -1;
+      })
+      .filter((index) => index >= 0);
+    if (promptEnds.length === 0) return false;
+    return Math.max(...promptEnds) === cursorX;
+  }
+
+  function getHistoryMatches(query: string) {
+    const normalized = query.trim().toLowerCase();
+    const seen = new Set<string>();
+    const matches: string[] = [];
+    for (const historyCommand of commandHistoryRef.current) {
+      const commandText = historyCommand.trim();
+      if (!commandText || seen.has(commandText)) continue;
+      if (normalized && !commandText.toLowerCase().includes(normalized)) continue;
+      seen.add(commandText);
+      matches.push(commandText);
+      if (matches.length >= HISTORY_SUGGESTION_LIMIT) break;
+    }
+    return matches;
+  }
+
+  function updateHistorySuggest(next: HistorySuggestState) {
+    historySuggestRef.current = next;
+    setHistorySuggest(next);
+  }
+
+  function closeHistorySuggest() {
+    updateHistorySuggest(closedHistorySuggest);
+  }
+
+  function positionHistorySuggest() {
+    const terminal = terminalRef.current;
+    const container = containerRef.current;
+    const frame = container?.parentElement;
+    if (!terminal || !container || !frame) return { x: 16, y: 16, maxHeight: 248 };
+
+    const frameRect = frame.getBoundingClientRect();
+    const clampPosition = (x: number, y: number) => {
+      const popupWidth = Math.min(420, Math.max(220, frameRect.width - 24));
+      const maxHeight = Math.min(248, Math.max(104, frameRect.height - 16));
+      return {
+        x: Math.min(Math.max(8, x), Math.max(8, frameRect.width - popupWidth - 8)),
+        y: Math.min(Math.max(8, y), Math.max(8, frameRect.height - maxHeight - 8)),
+        maxHeight,
+      };
+    };
+    const helper = container.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea");
+    const helperRect = helper?.getBoundingClientRect();
+    if (helperRect && helperRect.width > 0 && helperRect.height > 0) {
+      return clampPosition(helperRect.left - frameRect.left, helperRect.bottom - frameRect.top + 6);
+    }
+
+    const containerRect = container.getBoundingClientRect();
+    const cellWidth = terminal.cols > 0 ? containerRect.width / terminal.cols : fontSize * 0.62;
+    const cellHeight = terminal.rows > 0 ? containerRect.height / terminal.rows : fontSize * 1.35;
+    const buffer = terminal.buffer.active;
+    return clampPosition(
+      containerRect.left - frameRect.left + buffer.cursorX * cellWidth,
+      containerRect.top - frameRect.top + (buffer.cursorY + 1) * cellHeight + 6,
+    );
+  }
+
+  function openHistorySuggest() {
+    updateHistorySuggest({
+      active: true,
+      query: "",
+      selectedIndex: 0,
+      ...positionHistorySuggest(),
+    });
+  }
+
+  function setHistorySuggestQuery(query: string, selectedIndex = 0) {
+    updateHistorySuggest({
+      active: true,
+      query,
+      selectedIndex,
+      ...positionHistorySuggest(),
+    });
+  }
+
+  function pickHistorySuggestion(commandText: string) {
+    closeHistorySuggest();
+    terminalRef.current?.focus();
+    rawSendTerminalInput(commandText);
+  }
+
+  function handleHistorySuggestInput(data: string) {
+    const current = historySuggestRef.current;
+    if (!current.active) return false;
+
+    if (data === "\x1b") {
+      closeHistorySuggest();
+      return true;
+    }
+    if (data === "\x03") {
+      closeHistorySuggest();
+      return true;
+    }
+    if (data === "\r" || data === "\t") {
+      const matches = getHistoryMatches(current.query);
+      const commandText = matches[Math.min(current.selectedIndex, matches.length - 1)];
+      if (commandText) pickHistorySuggestion(commandText);
+      return true;
+    }
+    if (data === "\x7f" || data === "\b") {
+      if (!current.query) {
+        closeHistorySuggest();
+        return true;
+      }
+      setHistorySuggestQuery(Array.from(current.query).slice(0, -1).join(""));
+      return true;
+    }
+    if (data === "\x1b[A" || data === "\x1b[B") {
+      const matches = getHistoryMatches(current.query);
+      if (matches.length === 0) return true;
+      const direction = data === "\x1b[A" ? -1 : 1;
+      const selectedIndex = (current.selectedIndex + direction + matches.length) % matches.length;
+      updateHistorySuggest({ ...current, selectedIndex, ...positionHistorySuggest() });
+      return true;
+    }
+
+    const text = data.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "");
+    const printable = Array.from(text).filter((character) => character >= " " && character !== "\x7f").join("");
+    if (printable) {
+      setHistorySuggestQuery(current.query + printable);
+      return true;
+    }
+    return true;
+  }
+
   function sendTerminalInput(data: string) {
+    if (handleHistorySuggestInput(data)) return;
+    if (
+      !sensitiveInputRef.current &&
+      commandDraftRef.current.length === 0 &&
+      data === "@" &&
+      isAtShellPromptCommandStart()
+    ) {
+      openHistorySuggest();
+      return;
+    }
+    rawSendTerminalInput(data);
+  }
+
+  function rawSendTerminalInput(data: string) {
     const currentSession = sessionRef.current;
     if (currentSession && closedSessionRef.current === currentSession) return;
     updateCommandDraft(data);
@@ -203,6 +389,10 @@ function TerminalPaneBase({
   useEffect(() => {
     onCommandSubmittedRef.current = onCommandSubmitted;
   }, [onCommandSubmitted]);
+
+  useEffect(() => {
+    commandHistoryRef.current = commandHistory;
+  }, [commandHistory]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -269,7 +459,8 @@ function TerminalPaneBase({
   useEffect(() => {
     if (!visible || !pasteRequest) return;
     terminalRef.current?.focus();
-    sendTerminalInput(pasteRequest.command);
+    closeHistorySuggest();
+    rawSendTerminalInput(pasteRequest.command);
   }, [pasteRequest?.id, visible]);
 
   useEffect(() => {
@@ -385,10 +576,58 @@ function TerminalPaneBase({
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [layoutSignal, visible]);
 
+  useEffect(() => {
+    if (!visible) closeHistorySuggest();
+  }, [visible]);
+
+  useEffect(() => {
+    if (!historySuggest.active) return;
+    selectedSuggestionRef.current?.scrollIntoView({ block: "nearest" });
+  }, [historySuggest.active, historySuggest.selectedIndex, suggestedCommands.length]);
+
   return (
     <section className={`terminal-panel ${visible ? "active" : ""}`} aria-hidden={!visible}>
       <div className="terminal-frame">
         <div className="terminal-host" ref={containerRef} />
+        {historySuggest.active && (
+          <div
+            className="terminal-history-suggest"
+            style={{ left: historySuggest.x, top: historySuggest.y, maxHeight: historySuggest.maxHeight }}
+            role="listbox"
+            aria-label="历史命令候选"
+          >
+            <div className="terminal-history-suggest-head">
+              <span>@{historySuggest.query}</span>
+              <kbd>Enter</kbd>
+            </div>
+            <div
+              className="terminal-history-suggest-list"
+              style={{ maxHeight: Math.max(52, historySuggest.maxHeight - 30) }}
+            >
+              {suggestedCommands.length > 0 ? (
+                suggestedCommands.map((commandText, index) => (
+                  <button
+                    key={`${index}-${commandText}`}
+                    ref={index === historySuggest.selectedIndex ? selectedSuggestionRef : undefined}
+                    type="button"
+                    className={`terminal-history-suggest-row ${
+                      index === historySuggest.selectedIndex ? "selected" : ""
+                    }`}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => pickHistorySuggestion(commandText)}
+                    title={commandText}
+                    role="option"
+                    aria-selected={index === historySuggest.selectedIndex}
+                  >
+                    <code>{commandText}</code>
+                  </button>
+                ))
+              ) : (
+                <div className="terminal-history-suggest-empty">没有匹配命令</div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
       {tab.state === "closed" && (
         <button type="button" className="terminal-reconnect" onClick={onReconnect}>
@@ -412,6 +651,7 @@ export const TerminalPane = memo(TerminalPaneBase, (previous, next) => {
     previous.theme === next.theme &&
     previous.fontSize === next.fontSize &&
     previous.layoutSignal === next.layoutSignal &&
-    previous.pasteRequest?.id === next.pasteRequest?.id
+    previous.pasteRequest?.id === next.pasteRequest?.id &&
+    previous.commandHistory === next.commandHistory
   );
 });
