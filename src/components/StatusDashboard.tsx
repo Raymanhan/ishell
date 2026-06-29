@@ -259,14 +259,23 @@ function formatCapacityMb(value: number) {
   return `${Math.round(value)} MB`;
 }
 
+function formatCapacityGb(value: number, compact = false) {
+  if (value < 1) return `${Math.round(value * 1024)} ${compact ? "M" : "MB"}`;
+  return `${value.toFixed(compact ? 0 : 1)} ${compact ? "G" : "GB"}`;
+}
+
 function MountBar({ mount }: { mount: DiskMount }) {
   const value = Math.round(mount.usedPercent);
   const clamped = Math.max(0, Math.min(value, 100));
+  const usedText = formatCapacityGb(mount.usedGb);
+  const totalText = formatCapacityGb(mount.totalGb);
+  const compactUsedText = formatCapacityGb(mount.usedGb, true);
+  const compactTotalText = formatCapacityGb(mount.totalGb, true);
 
   return (
     <div
       className="mount-row tone-info"
-      title={`${mount.mountPoint} · ${mount.filesystem} · ${mount.usedGb.toFixed(1)} / ${mount.totalGb.toFixed(1)} GB`}
+      title={`${mount.mountPoint} · ${mount.filesystem} · ${usedText} / ${totalText}`}
     >
       <div className="mount-id">
         <strong>{mount.mountPoint}</strong>
@@ -275,7 +284,7 @@ function MountBar({ mount }: { mount: DiskMount }) {
         <span className="metric-fill" style={{ width: `${clamped}%` }} />
       </div>
       <span className="mount-size">
-        {mount.usedGb.toFixed(0)}/{mount.totalGb.toFixed(0)}G
+        {compactUsedText}/{compactTotalText}
       </span>
     </div>
   );

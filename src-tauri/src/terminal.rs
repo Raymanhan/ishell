@@ -17,6 +17,7 @@ use uuid::Uuid;
 
 use crate::{
     models::{ServerRecord, TerminalClosedPayload, TerminalDataPayload, TerminalSnapshotPayload},
+    openssh,
     store::{get_server, mark_connected, read_secret},
 };
 
@@ -33,6 +34,8 @@ enum TerminalControl {
     Resize { cols: u16, rows: u16 },
     Close,
 }
+
+const CONNECTED_MARKER: &str = "[iShell] connected";
 
 impl TerminalRegistry {
     fn remove_session(&self, session_id: &str) {
@@ -246,14 +249,6 @@ fn emit_terminal_data(
     );
 }
 
-fn ssh_binary() -> String {
-    if Path::new("/usr/bin/ssh").exists() {
-        "/usr/bin/ssh".to_string()
-    } else {
-        "ssh".to_string()
-    }
-}
-
 fn create_askpass_helper(session_id: &str) -> Result<PathBuf, String> {
     let path = std::env::temp_dir().join(format!("ishell-askpass-{session_id}.sh"));
     fs::write(
@@ -276,28 +271,71 @@ fn cleanup_askpass_helper(path: Option<&PathBuf>) {
     }
 }
 
+fn strip_ansi_sequences(value: &str) -> String {
+    let mut output = String::with_capacity(value.len());
+    let mut chars = value.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch == '\x1b' && chars.peek() == Some(&'[') {
+            chars.next();
+            for seq in chars.by_ref() {
+                if ('@'..='~').contains(&seq) {
+                    break;
+                }
+            }
+            continue;
+        }
+        output.push(ch);
+    }
+
+    output
+}
+
+fn keep_recent_tail(value: &mut String, max_bytes: usize) {
+    if value.len() <= max_bytes {
+        return;
+    }
+
+    let keep_from = value.len() - max_bytes;
+    let drain_to = value
+        .char_indices()
+        .find(|(index, _)| *index >= keep_from)
+        .map(|(index, _)| index)
+        .unwrap_or(keep_from);
+    value.drain(..drain_to);
+}
+
+fn looks_like_password_prompt(output_tail: &str) -> bool {
+    let plain = strip_ansi_sequences(output_tail).replace('\r', "");
+    let line = plain
+        .rsplit('\n')
+        .next()
+        .unwrap_or_default()
+        .trim_end()
+        .to_lowercase();
+
+    (line.ends_with(':') || line.ends_with('：'))
+        && (line.contains("password")
+            || line.contains("passphrase")
+            || line.contains("密码")
+            || line.contains("口令"))
+}
+
 fn build_ssh_command(
     server: &ServerRecord,
     saved_password: Option<&str>,
     askpass_path: Option<&Path>,
 ) -> CommandBuilder {
-    let mut command = CommandBuilder::new(ssh_binary());
+    let mut command = CommandBuilder::new(openssh::ssh_binary());
     command.env("TERM", "xterm-256color");
     command.arg("-tt");
+    for arg in openssh::common_ssh_args(server) {
+        command.arg(arg);
+    }
     command.arg("-o");
-    command.arg("ServerAliveInterval=30");
+    command.arg("PermitLocalCommand=yes");
     command.arg("-o");
-    command.arg("ServerAliveCountMax=3");
-    command.arg("-o");
-    command.arg("TCPKeepAlive=yes");
-    command.arg("-o");
-    command.arg("StrictHostKeyChecking=accept-new");
-    command.arg("-o");
-    command.arg("NumberOfPasswordPrompts=1");
-    command.arg("-p");
-    command.arg(server.port.to_string());
-    command.arg("-l");
-    command.arg(&server.username);
+    command.arg("LocalCommand=printf '\\r\\n[iShell] connected via OpenSSH\\r\\n'");
 
     if let (Some(password), Some(path)) = (saved_password, askpass_path) {
         command.env("SSH_ASKPASS", path);
@@ -312,10 +350,9 @@ fn build_ssh_command(
         command.arg("PasswordAuthentication=yes");
         command.arg("-o");
         command.arg("KbdInteractiveAuthentication=yes");
-    } else if server.auth_type == "key" {
-        if let Some(key_path) = server.key_path.as_deref().filter(|path| !path.is_empty()) {
-            command.arg("-i");
-            command.arg(key_path);
+    } else {
+        for arg in openssh::auth_ssh_args(server, false) {
+            command.arg(arg);
         }
     }
 
@@ -372,20 +409,19 @@ fn run_terminal_thread(
         .take_writer()
         .map_err(|err| format!("无法写入本地 PTY：{err}"))?;
 
-    mark_connected(&app, &server_id).ok();
-    emit_terminal_data(
-        &app,
-        &registry,
-        &session_id,
-        "\r\n[iShell] connected via OpenSSH\r\n".into(),
-    );
-
     let (read_done_sender, read_done_receiver) = mpsc::channel::<String>();
+    let (password_prompt_sender, password_prompt_receiver) = mpsc::channel::<()>();
     let read_app = app.clone();
     let read_registry = registry.clone();
     let read_session_id = session_id.clone();
+    let read_server_id = server_id.clone();
+    let should_autofill_password = saved_password.is_some();
     thread::spawn(move || {
         let mut buffer = [0_u8; 8192];
+        let mut output_tail = String::new();
+        let mut connection_tail = String::new();
+        let mut password_prompt_seen = false;
+        let mut connected_seen = false;
         loop {
             match reader.read(&mut buffer) {
                 Ok(0) => {
@@ -394,6 +430,22 @@ fn run_terminal_thread(
                 }
                 Ok(size) => {
                     let data = String::from_utf8_lossy(&buffer[..size]).to_string();
+                    if !connected_seen {
+                        connection_tail.push_str(&data);
+                        keep_recent_tail(&mut connection_tail, 1024);
+                        if connection_tail.contains(CONNECTED_MARKER) {
+                            connected_seen = true;
+                            mark_connected(&read_app, &read_server_id).ok();
+                        }
+                    }
+                    if should_autofill_password && !password_prompt_seen {
+                        output_tail.push_str(&data);
+                        keep_recent_tail(&mut output_tail, 1024);
+                        if looks_like_password_prompt(&output_tail) {
+                            password_prompt_seen = true;
+                            let _ = password_prompt_sender.send(());
+                        }
+                    }
                     emit_terminal_data(&read_app, &read_registry, &read_session_id, data);
                 }
                 Err(err) if err.kind() == std::io::ErrorKind::Interrupted => {}
@@ -405,7 +457,28 @@ fn run_terminal_thread(
         }
     });
 
+    emit_terminal_data(
+        &app,
+        &registry,
+        &session_id,
+        "\r\n[iShell] OpenSSH started\r\n".into(),
+    );
+
     loop {
+        if password_prompt_receiver.try_recv().is_ok() {
+            if let Some(password) = saved_password.as_deref() {
+                if let Err(err) = writer.write_all(password.as_bytes()) {
+                    cleanup_askpass_helper(askpass_path.as_ref());
+                    return Err(format!("终端写入失败：{err}"));
+                }
+                if let Err(err) = writer.write_all(b"\n") {
+                    cleanup_askpass_helper(askpass_path.as_ref());
+                    return Err(format!("终端写入失败：{err}"));
+                }
+                writer.flush().ok();
+            }
+        }
+
         if let Ok(reason) = read_done_receiver.try_recv() {
             let _ = child.wait();
             cleanup_askpass_helper(askpass_path.as_ref());

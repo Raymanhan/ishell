@@ -84,7 +84,7 @@ pub struct DiskMount {
     pub total_gb: f64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SftpEntry {
     pub name: String,

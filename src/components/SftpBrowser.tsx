@@ -1,6 +1,8 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
+  ArrowDownUp,
+  Check,
   ChevronRight,
   Columns3,
   Download,
@@ -40,6 +42,20 @@ interface CreateDirState {
 }
 
 type SftpViewMode = "tree" | "columns";
+type SortKey = "name" | "type" | "size" | "modifiedAt";
+type SortDirection = "asc" | "desc";
+
+interface SortState {
+  key: SortKey;
+  direction: SortDirection;
+}
+
+const SORT_OPTIONS: Array<{ key: SortKey; label: string }> = [
+  { key: "name", label: "名称" },
+  { key: "type", label: "类型" },
+  { key: "size", label: "大小" },
+  { key: "modifiedAt", label: "修改时间" },
+];
 
 function SftpBrowserBase({
   tab,
@@ -71,10 +87,13 @@ function SftpBrowserBase({
   onClose: () => void;
 }) {
   const columns = tab.files;
+  const [sort, setSort] = useState<SortState>({ key: "name", direction: "asc" });
+  const sortedColumns = useMemo(() => sortFileColumns(columns, sort), [columns, sort]);
   const currentDir = columns.length ? columns[columns.length - 1].path : "/";
   const currentColumnIndex = Math.max(0, columns.length - 1);
-  const currentColumn = columns[currentColumnIndex] ?? null;
-  const treeRows = useMemo(() => buildDirectoryTreeRows(columns), [columns]);
+  const currentColumn = sortedColumns[currentColumnIndex] ?? null;
+  const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(() => new Set());
+  const treeRows = useMemo(() => buildDirectoryTreeRows(sortedColumns, collapsedPaths), [sortedColumns, collapsedPaths]);
   const selectedPaths = useMemo(
     () => (
       tab.selectedPaths?.length
@@ -99,9 +118,11 @@ function SftpBrowserBase({
   const [viewMode, setViewMode] = useState<SftpViewMode>("tree");
   const [pathValue, setPathValue] = useState(currentDir);
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState<RenameState | null>(null);
   const [creatingDir, setCreatingDir] = useState<CreateDirState | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const createInputRef = useRef<HTMLInputElement>(null);
   const renameStartedForRef = useRef<string | null>(null);
@@ -118,6 +139,37 @@ function SftpBrowserBase({
   useEffect(() => {
     setPathValue(currentDir);
   }, [currentDir]);
+
+  useEffect(() => {
+    setCollapsedPaths((current) => {
+      const knownPaths = new Set<string>(["/"]);
+      for (const column of columns) {
+        knownPaths.add(column.path);
+        for (const entry of column.entries) {
+          if (entry.isDir) knownPaths.add(entry.path);
+        }
+      }
+      const next = new Set([...current].filter((path) => knownPaths.has(path)));
+      return next.size === current.size ? current : next;
+    });
+  }, [columns]);
+
+  useEffect(() => {
+    if (!sortMenuOpen) return;
+    const close = (event: PointerEvent) => {
+      if (sortMenuRef.current?.contains(event.target as Node)) return;
+      setSortMenuOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSortMenuOpen(false);
+    };
+    window.addEventListener("pointerdown", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [sortMenuOpen]);
 
   useEffect(() => {
     if (!renaming) {
@@ -269,7 +321,7 @@ function SftpBrowserBase({
 
   function selectEntry(entry: SftpEntry, columnIndex: number, event: React.MouseEvent) {
     if (event.shiftKey) {
-      const column = columns[columnIndex];
+      const column = sortedColumns[columnIndex];
       const anchorPath = tab.selectedPath;
       const anchorIndex = column?.entries.findIndex((item) => item.path === anchorPath) ?? -1;
       const entryIndex = column?.entries.findIndex((item) => item.path === entry.path) ?? -1;
@@ -282,6 +334,27 @@ function SftpBrowserBase({
       }
     }
     onSelect(entry.path, [entry.path]);
+  }
+
+  function setSortKey(key: SortKey) {
+    setSort((current) => ({
+      key,
+      direction: current.key === key && current.direction === "asc" ? "desc" : "asc",
+    }));
+  }
+
+  function setSortDirection(direction: SortDirection) {
+    setSort((current) => ({ ...current, direction }));
+  }
+
+  function toggleTreeRow(event: React.MouseEvent, path: string) {
+    event.stopPropagation();
+    setCollapsedPaths((current) => {
+      const next = new Set(current);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
   }
 
   function selectedBatchFor(entry: SftpEntry) {
@@ -332,6 +405,53 @@ function SftpBrowserBase({
           >
             <Columns3 size={15} />
           </button>
+          <span className="tool-sep" />
+          <div className="sort-control" ref={sortMenuRef}>
+            <button
+              type="button"
+              className={`tool ${sortMenuOpen ? "on" : ""}`}
+              onClick={() => setSortMenuOpen((open) => !open)}
+              title={`排序：${sortLabel(sort)}`}
+              aria-haspopup="menu"
+              aria-expanded={sortMenuOpen}
+            >
+              <ArrowDownUp size={15} />
+            </button>
+            {sortMenuOpen && (
+              <div className="sort-menu" role="menu">
+                {SORT_OPTIONS.map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    className={sort.key === option.key ? "on" : ""}
+                    onClick={() => setSortKey(option.key)}
+                    role="menuitem"
+                  >
+                    <Check size={13} />
+                    <span>{option.label}</span>
+                    {sort.key === option.key && <small>{sort.direction === "asc" ? "升序" : "降序"}</small>}
+                  </button>
+                ))}
+                <div className="ctx-sep" />
+                <div className="sort-dir" role="group" aria-label="排序方向">
+                  <button
+                    type="button"
+                    className={sort.direction === "asc" ? "on" : ""}
+                    onClick={() => setSortDirection("asc")}
+                  >
+                    升序
+                  </button>
+                  <button
+                    type="button"
+                    className={sort.direction === "desc" ? "on" : ""}
+                    onClick={() => setSortDirection("desc")}
+                  >
+                    降序
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           <span className="tool-sep" />
           <button type="button" className="tool" onClick={() => onUpload(currentDir)} title="上传到当前目录">
             <Upload size={15} />
@@ -387,12 +507,17 @@ function SftpBrowserBase({
                   const isRoot = row.entry.path === "/";
                   const isCurrent = currentDir === row.entry.path;
                   const isActive = selectedPathSet.has(row.entry.path);
+                  const isHidden = !isRoot && isHiddenEntry(row.entry);
+                  const targetColumnIndex = isRoot ? 0 : row.columnIndex + 1;
+                  const isCollapsed = collapsedPaths.has(row.entry.path);
                   const rowClassName = [
                     "tree-row",
                     isCurrent ? "current" : "",
                     isActive ? "on" : "",
                     row.inTrail ? "trail" : "",
+                    isCollapsed ? "collapsed" : "",
                     row.loading ? "busy" : "",
+                    isHidden ? "hidden-file" : "",
                   ]
                     .filter(Boolean)
                     .join(" ");
@@ -404,13 +529,24 @@ function SftpBrowserBase({
                       style={{ paddingLeft: `${8 + row.level * 14}px` }}
                       onClick={() => {
                         onSelect(row.entry.path);
-                        onOpen(row.entry, isRoot ? 0 : row.columnIndex + 1);
+                        if (isCollapsed) {
+                          setCollapsedPaths((current) => {
+                            const next = new Set(current);
+                            next.delete(row.entry.path);
+                            return next;
+                          });
+                        }
+                        onOpen(row.entry, targetColumnIndex);
                       }}
                       onContextMenu={(event) =>
                         isRoot ? openMenu(event, null, 0) : openMenu(event, row.entry, row.columnIndex)
                       }
                     >
-                      <ChevronRight size={12} className="tree-caret" />
+                      <ChevronRight
+                        size={12}
+                        className="tree-caret"
+                        onClick={(event) => toggleTreeRow(event, row.entry.path)}
+                      />
                       <Folder size={14} className="ic-dir" />
                       <span>{isRoot ? "/" : row.entry.name}</span>
                     </button>
@@ -423,9 +559,19 @@ function SftpBrowserBase({
           <section className="sftp-detail">
             <div className="detail-table">
               <div className="detail-row detail-header">
-                <span>文件名</span>
-                <span>大小</span>
-                <span>修改时间</span>
+                <button type="button" className={sort.key === "name" ? "on" : ""} onClick={() => setSortKey("name")}>
+                  文件名{sort.key === "name" ? sortArrow(sort.direction) : ""}
+                </button>
+                <button type="button" className={sort.key === "size" ? "on" : ""} onClick={() => setSortKey("size")}>
+                  大小{sort.key === "size" ? sortArrow(sort.direction) : ""}
+                </button>
+                <button
+                  type="button"
+                  className={sort.key === "modifiedAt" ? "on" : ""}
+                  onClick={() => setSortKey("modifiedAt")}
+                >
+                  修改时间{sort.key === "modifiedAt" ? sortArrow(sort.direction) : ""}
+                </button>
                 <span>权限</span>
                 <span>用户/组</span>
               </div>
@@ -483,12 +629,14 @@ function SftpBrowserBase({
                         const inPath = columns[currentColumnIndex + 1]?.path === entry.path;
                         const isOpening = entry.isDir && inPath && columns[currentColumnIndex + 1]?.loading;
                         const isRenaming = renaming?.entry.path === entry.path;
+                        const isHidden = isHiddenEntry(entry);
                         const rowClassName = [
                           "detail-row",
                           isActive ? "on" : "",
                           inPath ? "trail" : "",
                           isOpening ? "busy" : "",
                           isRenaming ? "renaming" : "",
+                          isHidden ? "hidden-file" : "",
                         ]
                           .filter(Boolean)
                           .join(" ");
@@ -556,6 +704,7 @@ function SftpBrowserBase({
             </div>
           ) : (
             columns.map((column, index) => {
+              const sortedColumn = sortedColumns[index] ?? column;
               const className = [
                 "column",
                 column.loading ? "loading" : "",
@@ -599,20 +748,22 @@ function SftpBrowserBase({
                           <span key={skeleton} className="skeleton-row" />
                         ))}
                       </div>
-                    ) : column.entries.length === 0 ? (
+                    ) : sortedColumn.entries.length === 0 ? (
                       <div className="column-state">空目录</div>
                     ) : (
-                      column.entries.map((entry) => {
+                      sortedColumn.entries.map((entry) => {
                         const isActive = selectedPathSet.has(entry.path);
                         const inPath = columns[index + 1]?.path === entry.path;
                         const isOpening = entry.isDir && inPath && columns[index + 1]?.loading;
                         const isRenaming = renaming?.entry.path === entry.path;
+                        const isHidden = isHiddenEntry(entry);
                         const entryClassName = [
                           "entry",
                           isActive ? "on" : "",
                           inPath ? "trail" : "",
                           isOpening ? "busy" : "",
                           isRenaming ? "renaming" : "",
+                          isHidden ? "hidden-file" : "",
                         ]
                           .filter(Boolean)
                           .join(" ");
@@ -765,7 +916,7 @@ interface DirectoryTreeRow {
   loading: boolean;
 }
 
-function buildDirectoryTreeRows(columns: ShellTab["files"]): DirectoryTreeRow[] {
+function buildDirectoryTreeRows(columns: ShellTab["files"], collapsedPaths: Set<string>): DirectoryTreeRow[] {
   const rows: DirectoryTreeRow[] = [
     {
       entry: rootEntry(),
@@ -776,13 +927,14 @@ function buildDirectoryTreeRows(columns: ShellTab["files"]): DirectoryTreeRow[] 
     },
   ];
 
-  appendDirectoryRows(rows, columns, 0, 1);
+  if (!collapsedPaths.has("/")) appendDirectoryRows(rows, columns, collapsedPaths, 0, 1);
   return rows;
 }
 
 function appendDirectoryRows(
   rows: DirectoryTreeRow[],
   columns: ShellTab["files"],
+  collapsedPaths: Set<string>,
   columnIndex: number,
   level: number,
 ) {
@@ -799,8 +951,59 @@ function appendDirectoryRows(
       inTrail,
       loading: inTrail && Boolean(nextColumn?.loading),
     });
-    if (inTrail) appendDirectoryRows(rows, columns, columnIndex + 1, level + 1);
+    if (inTrail && !collapsedPaths.has(entry.path)) {
+      appendDirectoryRows(rows, columns, collapsedPaths, columnIndex + 1, level + 1);
+    }
   }
+}
+
+function sortFileColumns(columns: ShellTab["files"], sort: SortState): ShellTab["files"] {
+  return columns.map((column) => ({
+    ...column,
+    entries: sortEntriesForView(column.entries, sort),
+  }));
+}
+
+function sortEntriesForView(entries: SftpEntry[], sort: SortState) {
+  return [...entries].sort((a, b) => compareEntries(a, b, sort));
+}
+
+function compareEntries(a: SftpEntry, b: SftpEntry, sort: SortState) {
+  if (sort.key !== "type" && a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+
+  const direction = sort.direction === "asc" ? 1 : -1;
+  let result = 0;
+  switch (sort.key) {
+    case "type":
+      result = Number(b.isDir) - Number(a.isDir);
+      break;
+    case "size":
+      result = (a.size ?? -1) - (b.size ?? -1);
+      break;
+    case "modifiedAt":
+      result = (a.modifiedAt ?? 0) - (b.modifiedAt ?? 0);
+      break;
+    case "name":
+    default:
+      result = compareNames(a.name, b.name);
+      break;
+  }
+
+  if (result === 0) result = compareNames(a.name, b.name);
+  return result * direction;
+}
+
+function compareNames(a: string, b: string) {
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+}
+
+function sortLabel(sort: SortState) {
+  const option = SORT_OPTIONS.find((item) => item.key === sort.key);
+  return `${option?.label ?? "名称"}${sort.direction === "asc" ? "升序" : "降序"}`;
+}
+
+function sortArrow(direction: SortDirection) {
+  return direction === "asc" ? " ↑" : " ↓";
 }
 
 function rootEntry(): SftpEntry {
@@ -816,6 +1019,10 @@ function rootEntry(): SftpEntry {
     permissions: null,
     modifiedAt: null,
   };
+}
+
+function isHiddenEntry(entry: SftpEntry) {
+  return entry.name.startsWith(".") && entry.name !== "." && entry.name !== "..";
 }
 
 function findEntry(tab: ShellTab, path: string | null): SftpEntry | null {

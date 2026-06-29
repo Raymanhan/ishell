@@ -2006,6 +2006,74 @@ textarea {
   margin: 0 4px;
   background: var(--hairline-2);
 }
+.sort-control {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.sort-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  min-width: 168px;
+  padding: 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 96%, #000);
+  box-shadow: var(--shadow);
+}
+.sort-menu > button {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+.sort-menu > button svg {
+  color: transparent;
+}
+.sort-menu > button.on svg {
+  color: var(--accent);
+}
+.sort-menu > button:hover,
+.sort-menu > button.on {
+  background: rgba(255, 255, 255, 0.06);
+}
+.sort-menu small {
+  color: var(--faint);
+  font-size: 11px;
+}
+.sort-dir {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  padding-top: 2px;
+}
+.sort-dir button {
+  height: 28px;
+  border: 1px solid var(--hairline-2);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dim);
+  font-size: 12px;
+  cursor: pointer;
+}
+.sort-dir button:hover,
+.sort-dir button.on {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--hairline-2));
+  background: var(--accent-soft);
+  color: var(--text);
+}
 
 .columns {
   display: flex;
@@ -2109,9 +2177,48 @@ textarea {
 .entry.renaming {
   background: var(--accent-soft);
 }
+.entry.hidden-file,
+.tree-row.hidden-file,
+.detail-row.hidden-file {
+  color: color-mix(in srgb, var(--text) 58%, var(--faint));
+}
+.entry.hidden-file .ic-dir,
+.entry.hidden-file .ic-file,
+.tree-row.hidden-file .ic-dir,
+.detail-row.hidden-file .ic-dir,
+.detail-row.hidden-file .ic-file {
+  color: color-mix(in srgb, var(--faint) 72%, var(--accent));
+  opacity: 0.78;
+}
+.entry.hidden-file small,
+.detail-row.hidden-file .mono {
+  color: color-mix(in srgb, var(--faint) 82%, var(--text));
+}
+.entry.hidden-file.on,
+.entry.hidden-file.trail,
+.tree-row.hidden-file.on,
+.tree-row.hidden-file.current,
+.tree-row.hidden-file.trail,
+.detail-row.hidden-file.on,
+.detail-row.hidden-file.trail {
+  color: color-mix(in srgb, var(--text) 78%, var(--faint));
+}
 :root[data-theme="light"] .entry:hover,
 :root[data-theme="light"] .entry.trail {
   background: #f6f9ff;
+}
+:root[data-theme="light"] .entry.hidden-file,
+:root[data-theme="light"] .tree-row.hidden-file,
+:root[data-theme="light"] .detail-row.hidden-file {
+  color: #697486;
+}
+:root[data-theme="light"] .entry.hidden-file .ic-dir,
+:root[data-theme="light"] .entry.hidden-file .ic-file,
+:root[data-theme="light"] .tree-row.hidden-file .ic-dir,
+:root[data-theme="light"] .detail-row.hidden-file .ic-dir,
+:root[data-theme="light"] .detail-row.hidden-file .ic-file {
+  color: #8b96a8;
+  opacity: 0.86;
 }
 .sftp-split {
   display: grid;
@@ -2176,9 +2283,15 @@ textarea {
   opacity: 0.72;
   transform: rotate(0deg);
 }
+.tree-caret:hover {
+  color: var(--text);
+}
 .tree-row.trail .tree-caret,
 .tree-row.current .tree-caret {
   transform: rotate(90deg);
+}
+.tree-row.collapsed .tree-caret {
+  transform: rotate(0deg);
 }
 .sftp-detail {
   display: grid;
@@ -2239,6 +2352,24 @@ button.detail-row:hover {
   font-size: 11px;
   font-weight: 650;
 }
+.detail-header button {
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.detail-header button:hover,
+.detail-header button.on {
+  color: var(--text);
+}
 .detail-body {
   min-width: 0;
   min-height: 0;
@@ -2274,6 +2405,13 @@ button.detail-row:hover {
 :root[data-theme="light"] .tool.on {
   background: rgba(47, 125, 246, 0.09);
   color: #155fe3;
+}
+:root[data-theme="light"] .sort-menu {
+  background: #ffffff;
+}
+:root[data-theme="light"] .sort-menu > button:hover,
+:root[data-theme="light"] .sort-menu > button.on {
+  background: #f6f9ff;
 }
 :root[data-theme="light"] .sftp-split,
 :root[data-theme="light"] .sftp-detail {

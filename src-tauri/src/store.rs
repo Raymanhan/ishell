@@ -4,7 +4,6 @@ use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm, Key, Nonce,
 };
-use keyring::{Entry, Error as KeyringError};
 use rusqlite::{params, Connection, OptionalExtension};
 use tauri::{AppHandle, Manager};
 
@@ -14,10 +13,9 @@ use crate::{
 };
 
 const DB_FILE: &str = "ishell.db";
-const LEGACY_KEY_FILE: &str = "secret.key";
+const KEY_FILE: &str = "secret.key";
 const LEGACY_JSON: &str = "servers.json";
 const COMMAND_HISTORY_LIMIT: i64 = 10_000;
-const KEYCHAIN_SERVICE: &str = "com.ishell.desktop";
 
 const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS servers (
     id TEXT PRIMARY KEY,
@@ -69,7 +67,8 @@ pub fn get_server(app: &AppHandle, id: &str) -> Result<ServerRecord, String> {
 }
 
 /// Insert or update a server. When `secret` is `Some`, the password/passphrase
-/// is written to the OS keychain; when `None`, the stored secret is preserved.
+/// is encrypted (AES-256-GCM) and stored in the local SQLite database; when
+/// `None`, the existing stored secret is preserved.
 pub fn upsert_server(
     app: &AppHandle,
     record: &ServerRecord,
@@ -110,10 +109,10 @@ pub fn upsert_server(
     .map_err(db_err)?;
 
     if let Some(plaintext) = secret {
-        write_keychain_secret(&record.id, plaintext)?;
+        let blob = encrypt_secret(app, plaintext)?;
         conn.execute(
-            "UPDATE servers SET secret = NULL WHERE id = ?1",
-            params![record.id],
+            "UPDATE servers SET secret = ?1 WHERE id = ?2",
+            params![blob, record.id],
         )
         .map_err(db_err)?;
     }
@@ -123,7 +122,6 @@ pub fn upsert_server(
 
 pub fn delete_server(app: &AppHandle, id: &str) -> Result<(), String> {
     let conn = open_db(app)?;
-    delete_keychain_secret(id)?;
     conn.execute("DELETE FROM servers WHERE id = ?1", [id])
         .map_err(db_err)?;
     Ok(())
@@ -141,12 +139,6 @@ pub fn mark_connected(app: &AppHandle, id: &str) -> Result<(), String> {
 }
 
 pub fn read_secret(app: &AppHandle, id: &str) -> Result<String, String> {
-    match read_keychain_secret(id) {
-        Ok(secret) => return Ok(secret),
-        Err(KeyringError::NoEntry) => {}
-        Err(err) => return Err(format!("无法读取系统钥匙串：{err}")),
-    }
-
     let conn = open_db(app)?;
     let blob: Option<Vec<u8>> = conn
         .query_row("SELECT secret FROM servers WHERE id = ?1", [id], |row| {
@@ -157,14 +149,7 @@ pub fn read_secret(app: &AppHandle, id: &str) -> Result<String, String> {
         .flatten();
 
     match blob {
-        Some(bytes) => {
-            let secret = decrypt_legacy_secret(app, &bytes)?;
-            write_keychain_secret(id, &secret)?;
-            conn.execute("UPDATE servers SET secret = NULL WHERE id = ?1", [id])
-                .map_err(db_err)?;
-            remove_legacy_key_file(app);
-            Ok(secret)
-        }
+        Some(bytes) => decrypt_secret(app, &bytes),
         None => Err("尚未保存该主机的密码，请编辑主机并填写密码后重试".into()),
     }
 }
@@ -327,56 +312,57 @@ fn migrate_legacy_json(app: &AppHandle, conn: &Connection) -> Result<(), String>
     Ok(())
 }
 
-fn keychain_entry(id: &str) -> Result<Entry, String> {
-    Entry::new(KEYCHAIN_SERVICE, &format!("server:{id}"))
-        .map_err(|err| format!("无法打开系统钥匙串项：{err}"))
+/// Encrypt a secret with AES-256-GCM. The output is `nonce (12 bytes) ||
+/// ciphertext` and is stored verbatim in the `secret` BLOB column.
+fn encrypt_secret(app: &AppHandle, plaintext: &str) -> Result<Vec<u8>, String> {
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&master_key(app)?));
+    let mut nonce_bytes = [0u8; 12];
+    getrandom::getrandom(&mut nonce_bytes).map_err(|err| format!("无法生成随机数：{err}"))?;
+    let nonce = Nonce::from_slice(&nonce_bytes);
+    let ciphertext = cipher
+        .encrypt(nonce, plaintext.as_bytes())
+        .map_err(|_| "密码加密失败".to_string())?;
+
+    let mut blob = Vec::with_capacity(nonce_bytes.len() + ciphertext.len());
+    blob.extend_from_slice(&nonce_bytes);
+    blob.extend_from_slice(&ciphertext);
+    Ok(blob)
 }
 
-fn write_keychain_secret(id: &str, secret: &str) -> Result<(), String> {
-    keychain_entry(id)?
-        .set_password(secret)
-        .map_err(|err| format!("无法写入系统钥匙串：{err}"))
-}
-
-fn read_keychain_secret(id: &str) -> keyring::Result<String> {
-    Entry::new(KEYCHAIN_SERVICE, &format!("server:{id}"))?.get_password()
-}
-
-fn delete_keychain_secret(id: &str) -> Result<(), String> {
-    match keychain_entry(id)?.delete_credential() {
-        Ok(()) | Err(KeyringError::NoEntry) => Ok(()),
-        Err(err) => Err(format!("无法删除系统钥匙串项：{err}")),
-    }
-}
-
-fn decrypt_legacy_secret(app: &AppHandle, blob: &[u8]) -> Result<String, String> {
+fn decrypt_secret(app: &AppHandle, blob: &[u8]) -> Result<String, String> {
     if blob.len() < 12 {
         return Err("密码数据已损坏".into());
     }
-    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&legacy_master_key(app)?));
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&master_key(app)?));
     let nonce = Nonce::from_slice(&blob[..12]);
     let plaintext = cipher
         .decrypt(nonce, &blob[12..])
-        .map_err(|_| "密码解密失败".to_string())?;
+        .map_err(|_| "密码解密失败，请重新编辑主机并保存密码".to_string())?;
     String::from_utf8(plaintext).map_err(|_| "密码解码失败".to_string())
 }
 
-fn legacy_master_key(app: &AppHandle) -> Result<[u8; 32], String> {
-    let path = app_data_dir(app)?.join(LEGACY_KEY_FILE);
-    let bytes = fs::read(&path).map_err(|_| "找不到旧版本地主密钥，无法迁移密码".to_string())?;
-    if bytes.len() != 32 {
-        return Err("旧版本地主密钥已损坏，无法迁移密码".into());
+/// Load the local AES master key, generating and persisting a fresh random key
+/// on first use. The key lives in the app data directory with 0600 permissions.
+fn master_key(app: &AppHandle) -> Result<[u8; 32], String> {
+    let path = app_data_dir(app)?.join(KEY_FILE);
+    if let Ok(bytes) = fs::read(&path) {
+        if bytes.len() == 32 {
+            let mut key = [0u8; 32];
+            key.copy_from_slice(&bytes);
+            return Ok(key);
+        }
     }
 
     let mut key = [0u8; 32];
-    key.copy_from_slice(&bytes);
-    Ok(key)
-}
-
-fn remove_legacy_key_file(app: &AppHandle) {
-    if let Ok(path) = app_data_dir(app).map(|dir| dir.join(LEGACY_KEY_FILE)) {
-        let _ = fs::remove_file(path);
+    getrandom::getrandom(&mut key).map_err(|err| format!("无法生成本地主密钥：{err}"))?;
+    fs::write(&path, &key).map_err(|err| format!("无法写入本地主密钥：{err}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let permissions = fs::Permissions::from_mode(0o600);
+        let _ = fs::set_permissions(&path, permissions);
     }
+    Ok(key)
 }
 
 fn app_data_dir(app: &AppHandle) -> Result<PathBuf, String> {

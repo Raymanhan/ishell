@@ -191,6 +191,11 @@ pub async fn fetch_network_sample(
 }
 
 #[tauri::command]
+pub fn invalidate_connection(pool: State<'_, Arc<SshPool>>, id: String) {
+    pool.invalidate(&id);
+}
+
+#[tauri::command]
 pub async fn sftp_list(
     app: AppHandle,
     pool: State<'_, Arc<SshPool>>,

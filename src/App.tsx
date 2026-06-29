@@ -670,6 +670,9 @@ export default function App() {
       if (isTauri && tab.sessionId) {
         await command("close_terminal", { sessionId: tab.sessionId }).catch(() => undefined);
       }
+      if (isTauri) {
+        await command("invalidate_connection", { id: tab.serverId }).catch(() => undefined);
+      }
       if (!isTauri) {
         await new Promise((resolve) => setTimeout(resolve, 320));
         patchTab(tabId, { sessionId: `demo-${tabId}-${Date.now()}`, state: "connected" });
@@ -690,7 +693,7 @@ export default function App() {
     patchTab(tabId, { state: "connected" });
     showNotice(`${title} 已连接`);
     refreshServers();
-    warmConnection(tabId, serverId);
+    refreshSftpAfterTerminalReady(tabId, serverId);
   }
 
   // After connecting, warm the pooled SFTP session in the background so the
@@ -713,6 +716,18 @@ export default function App() {
     } catch {
       // Warming is best-effort; ignore failures.
     }
+  }
+
+  async function refreshSftpAfterTerminalReady(tabId: string, serverId: string) {
+    const tab = tabs.find((item) => item.id === tabId);
+    const files = tab?.files ?? [];
+    if (!files.length) {
+      warmConnection(tabId, serverId);
+      return;
+    }
+
+    const columnIndex = files.length - 1;
+    await loadFilesFor(tabId, serverId, files[columnIndex].path, columnIndex, true);
   }
 
   async function closeShell(tabId: string) {

@@ -1,5 +1,6 @@
 mod commands;
 mod models;
+mod openssh;
 mod pool;
 mod ssh;
 mod store;
@@ -27,6 +28,7 @@ pub fn run() {
             commands::test_connection,
             commands::fetch_server_status,
             commands::fetch_network_sample,
+            commands::invalidate_connection,
             commands::sftp_list,
             commands::sftp_download,
             commands::sftp_upload,
