@@ -1,9 +1,10 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
-import { Terminal, type ITheme } from "@xterm/xterm";
+import { Terminal } from "@xterm/xterm";
 import { RefreshCw } from "lucide-react";
 import { command, isTauri } from "../api/tauri";
+import { getTerminalTheme, type AppTheme } from "../constants/theme";
 import type { ShellTab } from "../features/shell/types";
 import type {
   TerminalClosedPayload,
@@ -11,38 +12,6 @@ import type {
   TerminalReadyPayload,
   TerminalSnapshotPayload,
 } from "../types";
-import type { AppTheme } from "./SettingsModal";
-
-const terminalThemes = {
-  dark: {
-    background: "#0a0b0d",
-    foreground: "#d9dde3",
-    cursor: "#5b9dff",
-    selectionBackground: "#27406b",
-    black: "#0a0b0d",
-    red: "#f56b6b",
-    green: "#43c98b",
-    yellow: "#f2b45a",
-    blue: "#5b9dff",
-    magenta: "#b18cff",
-    cyan: "#46c7c7",
-    white: "#e6e8ec",
-  },
-  light: {
-    background: "#fbfcfe",
-    foreground: "#1d2430",
-    cursor: "#2f7df6",
-    selectionBackground: "#cfe0ff",
-    black: "#1d2430",
-    red: "#d94848",
-    green: "#1f9d67",
-    yellow: "#a86a12",
-    blue: "#2f7df6",
-    magenta: "#7d5ae8",
-    cyan: "#168a8a",
-    white: "#f8fafc",
-  },
-} satisfies Record<AppTheme, ITheme>;
 
 const passwordPromptPattern = /(?:password|passphrase|密码|口令)[^:\n\r]*[:：]\s*$/i;
 const platformSource = `${navigator.userAgent} ${navigator.platform}`.toLowerCase();
@@ -409,7 +378,11 @@ function TerminalPaneBase({
       fontSize,
       lineHeight: 1.35,
       scrollback: 8000,
-      theme: terminalThemes[theme],
+      // Required for the glass theme: without this xterm paints an opaque
+      // background (ignoring the #00000000 theme color) and covers the macOS
+      // vibrancy across the whole terminal region.
+      allowTransparency: true,
+      theme: getTerminalTheme(theme),
     });
 
     terminal.loadAddon(fit);
@@ -470,7 +443,7 @@ function TerminalPaneBase({
 
   useEffect(() => {
     if (!terminalRef.current) return;
-    terminalRef.current.options.theme = terminalThemes[theme];
+    terminalRef.current.options.theme = getTerminalTheme(theme);
   }, [theme]);
 
   useEffect(() => {

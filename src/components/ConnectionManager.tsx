@@ -1,27 +1,21 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { createPortal } from "react-dom";
 import {
   ChevronRight,
   Folder,
   FolderOpen,
   Pencil,
   PlugZap,
-  Plus,
   Search,
   Server,
   Signal,
   Trash2,
-  X,
 } from "lucide-react";
 import type { ServerRecord } from "../types";
 
 export function ConnectionManager({
   open,
   grouped,
-  query,
-  setQuery,
-  groups,
-  activeGroup,
-  setActiveGroup,
   selectedServerId,
   onSelect,
   onConnect,
@@ -32,15 +26,9 @@ export function ConnectionManager({
   onImport,
   onDelete,
   onClose,
-  count,
 }: {
   open: boolean;
   grouped: Record<string, ServerRecord[]>;
-  query: string;
-  setQuery: (value: string) => void;
-  groups: string[];
-  activeGroup: string;
-  setActiveGroup: (value: string) => void;
   selectedServerId: string | null;
   onSelect: (server: ServerRecord) => void;
   onConnect: (server: ServerRecord) => void;
@@ -51,10 +39,30 @@ export function ConnectionManager({
   onImport: () => void;
   onDelete: (target: { serverIds: string[]; folders: string[] }) => void;
   onClose: () => void;
-  count: number;
 }) {
-  const entries = Object.entries(grouped);
+  const entries = useMemo(() => Object.entries(grouped), [grouped]);
+  const [query, setQuery] = useState("");
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredEntries = useMemo(() => {
+    if (!normalizedQuery) return entries;
+    return entries
+      .map(([group, list]) => {
+        const groupMatches = group.toLowerCase().includes(normalizedQuery);
+        const filteredList = groupMatches
+          ? list
+          : list.filter((server) => serverMatchesQuery(server, normalizedQuery));
+        return [group, filteredList] as const;
+      })
+      .filter(([group, list]) => group.toLowerCase().includes(normalizedQuery) || list.length > 0);
+  }, [entries, normalizedQuery]);
   const treeItems = useMemo(
+    () => filteredEntries.flatMap(([group, list]) => [
+      { key: folderKey(group), type: "folder" as const, group },
+      ...list.map((server) => ({ key: serverKey(server.id), type: "server" as const, group, server })),
+    ]),
+    [filteredEntries],
+  );
+  const allTreeItems = useMemo(
     () => entries.flatMap(([group, list]) => [
       { key: folderKey(group), type: "folder" as const, group },
       ...list.map((server) => ({ key: serverKey(server.id), type: "server" as const, group, server })),
@@ -101,12 +109,12 @@ export function ConnectionManager({
   }, [creatingFolderName]);
 
   useEffect(() => {
-    const known = new Set(treeItems.map((item) => item.key));
+    const known = new Set(allTreeItems.map((item) => item.key));
     setSelectedKeys((current) => {
       const next = new Set([...current].filter((key) => known.has(key)));
       return next.size === current.size ? current : next;
     });
-  }, [treeItems]);
+  }, [allTreeItems]);
 
   useEffect(() => {
     if (!menu) return;
@@ -137,7 +145,7 @@ export function ConnectionManager({
     setMenu({
       type: "server",
       server,
-      ...menuPosition(event, 164, 116),
+      ...menuPosition(event, 148, 178),
     });
   }
 
@@ -152,7 +160,7 @@ export function ConnectionManager({
     setMenu({
       type: "folder",
       group,
-      ...menuPosition(event, 180, 116),
+      ...menuPosition(event, 148, 178),
     });
   }
 
@@ -160,14 +168,13 @@ export function ConnectionManager({
     event.preventDefault();
     setMenu({
       type: "blank",
-      ...menuPosition(event, 180, 116),
+      ...menuPosition(event, 148, 140),
     });
   }
 
   function connect(server: ServerRecord) {
     onSelect(server);
     onConnect(server);
-    onClose();
   }
 
   function edit(server: ServerRecord) {
@@ -285,49 +292,26 @@ export function ConnectionManager({
     <aside
       className={`connection-manager ${open ? "open" : ""}`}
       aria-hidden={!open}
-      aria-labelledby="connection-manager-title"
+      aria-label="连接管理"
     >
       {open && (
         <div className="connection-panel-content">
-        <div className="connection-head">
-          <div className="connection-title">
-            <span className="brand-mark subtle">
-              <img src="/favicon.svg" alt="" aria-hidden="true" />
-            </span>
-            <div>
-              <span className="eyebrow">Connections</span>
-              <h2 id="connection-manager-title">连接管理</h2>
-            </div>
-          </div>
-          <div className="connection-head-actions">
-            <span className="connection-count">
-              <Server size={13} />
-              {count} 台主机
-            </span>
-            <button type="button" className="btn-primary" onClick={() => onNew()}>
-              <Plus size={15} />
-              新建
-            </button>
-            <button type="button" className="icon-button" onClick={onClose} aria-label="关闭连接管理">
-              <X size={17} />
-            </button>
-          </div>
-        </div>
-
-        <div className="connection-toolbar">
-          <label className="search connection-search">
-            <Search size={14} />
+          <label className="history-search connection-search">
+            <Search size={13} />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="搜索主机、文件夹、标签"
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && query) {
+                  event.stopPropagation();
+                  setQuery("");
+                }
+              }}
+              placeholder="搜索主机"
               spellCheck={false}
-              autoFocus
             />
           </label>
-        </div>
-
-        <div className="connection-list" onContextMenu={handleBlankContextMenu}>
+          <div className="connection-list" onContextMenu={handleBlankContextMenu}>
           {creatingFolderName !== null && (
             <div className="connection-folder-row creating-folder" onContextMenu={(event) => event.stopPropagation()}>
               <span />
@@ -343,16 +327,15 @@ export function ConnectionManager({
                   if (event.key === "Escape") setCreatingFolderName(null);
                 }}
               />
-              <em />
             </div>
           )}
-          {entries.length === 0 ? (
+          {filteredEntries.length === 0 ? (
             <div className="connection-empty">
               <Signal size={24} />
-              <p>没有匹配的主机</p>
+              <p>{entries.length === 0 ? "暂无主机" : "没有匹配的主机"}</p>
             </div>
           ) : (
-            entries.map(([group, list]) => (
+            filteredEntries.map(([group, list]) => (
               <section key={group} className="connection-folder">
                 <button
                   type="button"
@@ -370,7 +353,6 @@ export function ConnectionManager({
                   <ChevronRight size={13} className="folder-caret" />
                   {collapsedFolders.has(group) ? <Folder size={14} /> : <FolderOpen size={14} />}
                   <span>{group}</span>
-                  <em>{list.length}</em>
                 </button>
                 {!collapsedFolders.has(group) && (
                   <div className="connection-tree-children">
@@ -387,26 +369,15 @@ export function ConnectionManager({
                           onClick={(event) => selectTreeItem(event, serverKey(server.id), server)}
                           onDoubleClick={() => connect(server)}
                           onContextMenu={(event) => handleContextMenu(event, server)}
-                          title="右键菜单，双击连接"
+                          title={`${server.username}@${server.host}:${server.port} · 双击连接`}
                         >
                           <span className="tree-branch" aria-hidden />
                           <span className="dot" style={{ backgroundColor: server.color }} />
                           <span className="connection-meta">
                             <strong>{server.name}</strong>
-                            <small>
-                              {server.username}@{server.host}:{server.port}
-                            </small>
                           </span>
                           <span className={`pulse ${server.lastConnectedAt ? "live" : ""}`} />
                         </button>
-                        <div className="connection-node-actions">
-                          <button type="button" onClick={() => connect(server)} title="连接">
-                            <PlugZap size={13} />
-                          </button>
-                          <button type="button" onClick={() => edit(server)} title="编辑">
-                            <Pencil size={13} />
-                          </button>
-                        </div>
                       </div>
                     ))}
                   </div>
@@ -414,11 +385,11 @@ export function ConnectionManager({
               </section>
             ))
           )}
-        </div>
+          </div>
         </div>
       )}
 
-      {menu && (
+      {menu && createPortal(
         <div
           ref={menuRef}
           className="server-context-menu"
@@ -482,7 +453,8 @@ export function ConnectionManager({
               )}
             </>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </aside>
   );
@@ -494,6 +466,17 @@ function serverKey(id: string) {
 
 function folderKey(group: string) {
   return `folder:${group}`;
+}
+
+function serverMatchesQuery(server: ServerRecord, query: string) {
+  return [
+    server.name,
+    server.host,
+    server.username,
+    server.group,
+    String(server.port),
+    ...server.tags,
+  ].some((value) => value.toLowerCase().includes(query));
 }
 
 function menuPosition(event: MouseEvent, width: number, height: number) {

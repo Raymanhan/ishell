@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type UIEvent } from "react";
-import { Clock3, Search, TerminalSquare } from "lucide-react";
+import { Search, TerminalSquare } from "lucide-react";
 
 const HISTORY_PAGE_SIZE = 120;
 
@@ -33,13 +33,6 @@ export function CommandHistoryPanel({
 
   return (
     <section className="history-panel" aria-label="历史命令">
-      <div className="history-head">
-        <div>
-          <span className="eyebrow">历史命令</span>
-        </div>
-        <Clock3 size={16} />
-      </div>
-
       <label className="history-search">
         <Search size={13} />
         <input

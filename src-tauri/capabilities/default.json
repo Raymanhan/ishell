@@ -6,6 +6,9 @@
   "permissions": [
     "core:default",
     "core:event:default",
+    "core:webview:allow-set-webview-background-color",
+    "core:window:allow-set-background-color",
+    "core:window:allow-set-effects",
     "core:window:allow-start-dragging",
     "dialog:default"
   ]

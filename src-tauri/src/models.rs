@@ -14,6 +14,8 @@ pub struct ServerRecord {
     pub key_path: Option<String>,
     pub color: String,
     pub notes: String,
+    #[serde(default)]
+    pub sort_order: u64,
     pub created_at: u64,
     pub updated_at: u64,
     pub last_connected_at: Option<u64>,
@@ -33,6 +35,16 @@ pub struct ServerInput {
     pub key_path: Option<String>,
     pub color: String,
     pub notes: String,
+    #[serde(default)]
+    pub sort_order: Option<u64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerOrderInput {
+    pub id: String,
+    pub group: String,
+    pub sort_order: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

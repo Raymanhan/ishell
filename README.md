@@ -5,17 +5,17 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 iShell is a lightweight Tauri + React + Rust SSH workbench for managing remote
-servers from one compact desktop interface. It brings together server profiles,
-interactive terminals, SFTP file operations, quick text editing, command history,
-and live host telemetry.
+servers from one compact desktop interface. It combines server profiles,
+interactive terminals, SFTP file operations, small-file text editing, command
+history, live telemetry, and a translucent desktop UI.
 
-> Repository: <https://github.com/Raymanhan/ishell>
+**Languages**: English | [简体中文](README.zh-CN.md)
 
 ## Download
 
-Get the latest installers from the GitHub Releases page:
+Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.0.0](https://github.com/Raymanhan/ishell/releases/tag/v1.0.0)**
+**[Download iShell v1.0.1](https://github.com/Raymanhan/ishell/releases/tag/v1.0.1)**
 
 Available packages:
 
@@ -24,24 +24,109 @@ Available packages:
 - **macOS Apple Silicon**: `.dmg`
 - **Linux x64**: `.AppImage`, `.deb`, and `.rpm`
 
-## Features
+## Highlights
 
-- **SSH manager** — grouped, searchable host list with color tags, notes, and
-  secrets stored outside exported connection files.
-- **Connection import / export** — export all or selected folders as JSON or ZIP,
-  with optional passphrase protection for saved secrets.
-- **Interactive terminal** — xterm-powered tabs backed by a real PTY, with
-  reconnect support, platform-tuned fonts, command submission tracking, and
-  history suggestions.
-- **OpenSSH and russh transports** — Unix-like platforms use the system OpenSSH
-  client with multiplexing; Windows uses a pure-Rust `russh` backend with pooled
-  sessions.
-- **SFTP browser** — Miller-column navigation with upload, download, mkdir,
-  rename, delete, and remote text editing for small files.
-- **Live monitoring** — per-host CPU, memory, disk, load, process, and network
-  throughput telemetry.
-- **Cross-platform desktop builds** — Windows, macOS Intel, macOS Apple Silicon,
-  and Linux installers are built through GitHub Actions.
+- **SSH manager**: grouped and searchable connection tree with tags, notes, and
+  per-host colors.
+- **Persistent ordering**: connection order and folder placement are stored in
+  the local database.
+- **Secure secrets**: passwords are stored through the OS keychain/secret store,
+  not as plain text in exported connection files.
+- **Import and export**: export selected hosts or folders as JSON/ZIP, with
+  optional passphrase-protected secrets.
+- **Interactive terminals**: xterm-powered tabs backed by real PTY sessions,
+  reconnect support, tab cloning, tab reordering, and command history.
+- **OpenSSH and russh transports**: macOS/Linux use the system OpenSSH client;
+  Windows uses a pure-Rust `russh` backend with pooled sessions.
+- **SFTP browser**: column or tree browsing, upload, download, rename, delete,
+  mkdir, context menus, and remote text editing for small files.
+- **Live monitoring**: CPU, memory, swap, disk, load, processes, and network
+  throughput per connected host.
+- **Glass desktop UI**: transparent native window, glass gray theme, xterm
+  transparency, and platform-tuned font rendering.
+
+## Quick Start
+
+1. Download the installer for your platform from
+   [Releases](https://github.com/Raymanhan/ishell/releases/latest).
+2. Install and open iShell.
+3. Open the connection manager from the top bar.
+4. Create a folder if needed, then add a server profile.
+5. Choose password or SSH key authentication and save the profile.
+6. Double-click a server, or use the context menu, to open a terminal tab.
+7. Use the top bar to open SFTP, live status, command history, settings, or
+   connection management.
+
+## User Guide
+
+### Connections
+
+- Use the connection manager to search, select, group, edit, import, export, and
+  delete server profiles.
+- Right-click a server to connect, edit, export, or delete it.
+- Right-click a folder or empty area to create folders, add servers, import, or
+  export.
+- Multi-select supported items before running bulk export or delete actions.
+- New and edited servers keep a `sortOrder`, so the connection tree remains
+  stable after restart.
+
+### Server Profiles
+
+Each profile includes:
+
+- Name, host, port, username, group, tags, color, and notes
+- Authentication type: password or private key
+- Optional private key path
+
+Secrets are stored separately from profile metadata. When exporting
+connections, secret export is optional and can be passphrase-protected.
+
+### Terminal Tabs
+
+- Each connected host opens as a tab.
+- Tabs can be activated, closed, cloned, reconnected, and reordered.
+- Right-click a tab for tab-level actions.
+- The terminal font size is configurable in Settings.
+- Command history can be searched and pasted back into the active terminal.
+
+### SFTP
+
+Open the file panel for the active terminal tab to browse the remote filesystem.
+
+Supported operations:
+
+- Switch between tree/detail and multi-column browsing.
+- Upload files to the current directory.
+- Download selected files.
+- Create folders, rename entries, and delete one or more entries.
+- Open small text files in the built-in editor and save changes back to the
+  remote host.
+- Use the path bar to jump directly to a directory.
+
+Text editing is intentionally limited to small files so the UI remains
+responsive and safe for remote sessions.
+
+### Live Status
+
+The status panel samples remote host information through SSH:
+
+- CPU usage
+- Memory and swap
+- Disk mounts
+- Load average
+- Process count
+- Network upload/download throughput
+
+### Settings
+
+Settings currently include:
+
+- Glass gray desktop theme
+- Terminal font size
+
+The glass theme uses Tauri native window effects where available, with a
+transparent xterm background so the terminal and panels share one desktop
+surface.
 
 ## Requirements
 
@@ -49,39 +134,14 @@ Available packages:
 - Rust stable toolchain
 - Tauri system dependencies for your platform
 - OpenSSH on macOS and Linux
-- Linux runtime secret storage requires a Secret Service provider such as
-  GNOME Keyring or KWallet.
+- Linux runtime secret storage requires a Secret Service provider such as GNOME
+  Keyring or KWallet.
 
 On Linux, install the WebKitGTK and bundling dependencies required by Tauri:
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev
-```
-
-## Structure
-
-```text
-src/
-  api/              Tauri IPC wrappers and runtime detection
-  components/       Pure React UI components
-  constants/        Shared UI constants
-  features/         Feature-owned types and helpers
-  mocks/            Browser-preview demo data
-  utils/            Pure formatting/filtering helpers
-  App.tsx           Application orchestration only
-
-src-tauri/src/
-  commands.rs       Tauri command boundary
-  models.rs         Serializable DTOs shared by commands
-  openssh.rs        OpenSSH argument construction and multiplexing helpers
-  pool.rs           Transport invalidation / pooled-session boundary
-  russh_transport.rs Pure-Rust SSH transport used by the Windows backend
-  ssh.rs            SSH, SFTP and status sampling
-  store.rs          Server persistence and OS keychain secret storage
-  terminal.rs       Interactive terminal session registry
-  time.rs           Small time helper
-  lib.rs            Tauri application assembly
 ```
 
 ## Development
@@ -91,28 +151,22 @@ npm install
 npm run tauri -- dev
 ```
 
-Common commands:
+Frontend-only preview:
 
 ```bash
 npm run dev
+```
+
+Build and verify:
+
+```bash
 npm run build
-cd src-tauri && cargo check
-```
-
-For frontend-only iteration with mock data:
-
-```bash
-npm run dev
-```
-
-To compile the pure-Rust SSH backend on non-Windows hosts:
-
-```bash
 cd src-tauri
+cargo check
 cargo check --features force-russh
 ```
 
-## Local Build
+## Local Installer Build
 
 ```bash
 npm ci
@@ -120,27 +174,6 @@ npm run tauri -- build
 ```
 
 Build outputs are written under `src-tauri/target/*/release/bundle/`.
-
-## Verification
-
-```bash
-npm run build
-cd src-tauri && cargo check
-cargo check --features force-russh
-```
-
-## Release
-
-Release builds are generated automatically when a `v*` tag is pushed. They can
-also be run manually from the **Build installers** workflow in GitHub Actions.
-
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
-packages and attaches the installer files to the GitHub release.
 
 For macOS Intel and Apple Silicon local builds:
 
@@ -152,9 +185,49 @@ rustup target add aarch64-apple-darwin
 npm run tauri -- build --target aarch64-apple-darwin
 ```
 
+## Release
+
+Release builds are generated automatically when a `v*` tag is pushed. They can
+also be run manually from the **Build installers** workflow in GitHub Actions.
+
+```bash
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
+packages and attaches the installer files to the GitHub release.
+
+## Project Structure
+
+```text
+src/
+  api/              Tauri IPC wrappers and runtime detection
+  components/       React UI components
+  constants/        Theme tokens and shared constants
+  features/         Feature-owned types and helpers
+  mocks/            Browser-preview demo data
+  utils/            Formatting and filtering helpers
+  App.tsx           Application orchestration
+
+src-tauri/src/
+  commands.rs       Tauri command boundary
+  models.rs         Serializable DTOs shared by commands
+  openssh.rs        OpenSSH argument construction and multiplexing helpers
+  pool.rs           Transport invalidation / pooled-session boundary
+  russh_transport.rs Pure-Rust SSH transport used by the Windows backend
+  ssh.rs            SSH, SFTP, file editing, and status sampling
+  store.rs          Server persistence and OS keychain secret storage
+  terminal.rs       Interactive terminal session registry
+  time.rs           Small time helper
+  lib.rs            Tauri application assembly
+```
+
 ## Recent Changes
 
-- `v1.0.0` adds connection import / export, encrypted secret export, and a small
+- `v1.0.1` refreshes the glass UI, adds persistent connection ordering, improves
+  terminal/SFTP layout ergonomics, and expands the documentation.
+- `v1.0.0` adds connection import/export, encrypted secret export, and a small
   remote text editor inside the SFTP browser.
 - `v0.1.10` adds terminal history suggestions.
 - `v0.1.9` tunes platform font rendering for terminal readability.

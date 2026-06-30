@@ -1,8 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  ArrowDownUp,
-  Check,
   ChevronRight,
   Columns3,
   Download,
@@ -51,13 +49,6 @@ interface SortState {
   direction: SortDirection;
 }
 
-const SORT_OPTIONS: Array<{ key: SortKey; label: string }> = [
-  { key: "name", label: "名称" },
-  { key: "type", label: "类型" },
-  { key: "size", label: "大小" },
-  { key: "modifiedAt", label: "修改时间" },
-];
-
 function SftpBrowserBase({
   tab,
   busy,
@@ -91,12 +82,15 @@ function SftpBrowserBase({
 }) {
   const columns = tab.files;
   const [sort, setSort] = useState<SortState>({ key: null, direction: "asc" });
-  const sortedColumns = useMemo(() => sortFileColumns(columns, sort), [columns, sort]);
   const currentDir = columns.length ? columns[columns.length - 1].path : "/";
   const currentColumnIndex = Math.max(0, columns.length - 1);
-  const currentColumn = sortedColumns[currentColumnIndex] ?? null;
+  const currentColumn = columns[currentColumnIndex] ?? null;
+  const currentEntries = useMemo(
+    () => sortEntriesForView(currentColumn?.entries ?? [], sort),
+    [currentColumn?.entries, sort],
+  );
   const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(() => new Set());
-  const treeRows = useMemo(() => buildDirectoryTreeRows(sortedColumns, collapsedPaths), [sortedColumns, collapsedPaths]);
+  const treeRows = useMemo(() => buildDirectoryTreeRows(columns, collapsedPaths), [columns, collapsedPaths]);
   const selectedPaths = useMemo(
     () => (
       tab.selectedPaths?.length
@@ -119,16 +113,12 @@ function SftpBrowserBase({
   const selectedEditableEntry = selectedEntries.length === 1 && isEditableTextEntry(selectedEntries[0])
     ? selectedEntries[0]
     : null;
-  const selected = useMemo(() => findEntry(tab, tab.selectedPath), [tab]);
-  const selectedColumnIndex = useMemo(() => findEntryColumnIndex(tab, tab.selectedPath), [tab]);
   const [viewMode, setViewMode] = useState<SftpViewMode>("tree");
   const [pathValue, setPathValue] = useState(currentDir);
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
-  const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState<RenameState | null>(null);
   const [creatingDir, setCreatingDir] = useState<CreateDirState | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const sortMenuRef = useRef<HTMLDivElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const createInputRef = useRef<HTMLInputElement>(null);
   const renameStartedForRef = useRef<string | null>(null);
@@ -159,23 +149,6 @@ function SftpBrowserBase({
       return next.size === current.size ? current : next;
     });
   }, [columns]);
-
-  useEffect(() => {
-    if (!sortMenuOpen) return;
-    const close = (event: PointerEvent) => {
-      if (sortMenuRef.current?.contains(event.target as Node)) return;
-      setSortMenuOpen(false);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setSortMenuOpen(false);
-    };
-    window.addEventListener("pointerdown", close);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("pointerdown", close);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [sortMenuOpen]);
 
   useEffect(() => {
     if (!renaming) {
@@ -327,14 +300,14 @@ function SftpBrowserBase({
 
   function selectEntry(entry: SftpEntry, columnIndex: number, event: React.MouseEvent) {
     if (event.shiftKey) {
-      const column = sortedColumns[columnIndex];
+      const entries = columnIndex === currentColumnIndex ? currentEntries : (columns[columnIndex]?.entries ?? []);
       const anchorPath = tab.selectedPath;
-      const anchorIndex = column?.entries.findIndex((item) => item.path === anchorPath) ?? -1;
-      const entryIndex = column?.entries.findIndex((item) => item.path === entry.path) ?? -1;
-      if (column && anchorIndex >= 0 && entryIndex >= 0) {
+      const anchorIndex = entries.findIndex((item) => item.path === anchorPath);
+      const entryIndex = entries.findIndex((item) => item.path === entry.path);
+      if (anchorIndex >= 0 && entryIndex >= 0) {
         const start = Math.min(anchorIndex, entryIndex);
         const end = Math.max(anchorIndex, entryIndex);
-        const paths = column.entries.slice(start, end + 1).map((item) => item.path);
+        const paths = entries.slice(start, end + 1).map((item) => item.path);
         onSelect(entry.path, paths);
         return;
       }
@@ -348,10 +321,6 @@ function SftpBrowserBase({
       if (current.direction === "asc") return { key, direction: "desc" };
       return { key: null, direction: "asc" };
     });
-  }
-
-  function setSortDirection(direction: SortDirection) {
-    setSort((current) => ({ key: current.key ?? "name", direction }));
   }
 
   function toggleTreeRow(event: React.MouseEvent, path: string) {
@@ -368,160 +337,91 @@ function SftpBrowserBase({
     return selectedPathSet.has(entry.path) ? selectedEntries : [entry];
   }
 
+  const pathBar = (
+    <label className="pathbar" title="输入远程路径后按 Enter 跳转">
+      <HardDrive size={14} />
+      <input
+        value={pathValue}
+        aria-label="远程路径"
+        spellCheck={false}
+        onChange={(event) => setPathValue(event.target.value)}
+        onContextMenu={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            submitPath();
+            event.currentTarget.blur();
+          }
+          if (event.key === "Escape") {
+            setPathValue(currentDir);
+            event.currentTarget.blur();
+          }
+        }}
+      />
+    </label>
+  );
+
+  const toolRail = (
+    <div className="sftp-tools sftp-tools-rail">
+      <button type="button" className="tool" onClick={onClose} title="关闭文件面板">
+        <X size={15} />
+      </button>
+      <span className="tool-sep" />
+      <button
+        type="button"
+        className={`tool ${viewMode === "tree" ? "on" : ""}`}
+        onClick={() => setViewMode("tree")}
+        title="目录树明细视图"
+        aria-pressed={viewMode === "tree"}
+      >
+        <TableProperties size={15} />
+      </button>
+      <button
+        type="button"
+        className={`tool ${viewMode === "columns" ? "on" : ""}`}
+        onClick={() => setViewMode("columns")}
+        title="多列视图"
+        aria-pressed={viewMode === "columns"}
+      >
+        <Columns3 size={15} />
+      </button>
+      <span className="tool-sep" />
+      <button type="button" className="tool" onClick={() => onUpload(currentDir)} title="上传到当前目录">
+        <Upload size={15} />
+      </button>
+      <button
+        type="button"
+        className="tool"
+        disabled={selectedDownloadEntries.length === 0}
+        onClick={() => onDownload(selectedDownloadEntries)}
+        title={selectedDownloadEntries.length > 1 ? `下载所选 ${selectedDownloadEntries.length} 个文件` : "下载所选文件"}
+      >
+        <Download size={15} />
+      </button>
+      {selectedEditableEntry && (
+        <button
+          type="button"
+          className="tool"
+          onClick={() => onEdit(selectedEditableEntry)}
+          title="编辑文本文件"
+        >
+          <FilePenLine size={15} />
+        </button>
+      )}
+      <span className="tool-sep" />
+      <button type="button" className="tool" onClick={onRefresh} title="刷新">
+        <RefreshCw size={15} className={busy ? "spin" : ""} />
+      </button>
+    </div>
+  );
+
   return (
     <div className="sftp" onContextMenu={openEmptyMenu}>
-      <div className="sftp-bar">
-        <label className="pathbar" title="输入远程路径后按 Enter 跳转">
-          <HardDrive size={14} />
-          <input
-            value={pathValue}
-            aria-label="远程路径"
-            spellCheck={false}
-            onChange={(event) => setPathValue(event.target.value)}
-            onContextMenu={(event) => event.stopPropagation()}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                submitPath();
-                event.currentTarget.blur();
-              }
-              if (event.key === "Escape") {
-                setPathValue(currentDir);
-                event.currentTarget.blur();
-              }
-            }}
-          />
-        </label>
-
-        <div className="sftp-tools">
-          <button
-            type="button"
-            className={`tool ${viewMode === "tree" ? "on" : ""}`}
-            onClick={() => setViewMode("tree")}
-            title="目录树明细视图"
-            aria-pressed={viewMode === "tree"}
-          >
-            <TableProperties size={15} />
-          </button>
-          <button
-            type="button"
-            className={`tool ${viewMode === "columns" ? "on" : ""}`}
-            onClick={() => setViewMode("columns")}
-            title="多列视图"
-            aria-pressed={viewMode === "columns"}
-          >
-            <Columns3 size={15} />
-          </button>
-          <span className="tool-sep" />
-          <div className="sort-control" ref={sortMenuRef}>
-            <button
-              type="button"
-              className={`tool ${sortMenuOpen ? "on" : ""}`}
-              onClick={() => setSortMenuOpen((open) => !open)}
-              title={`排序：${sortLabel(sort)}`}
-              aria-haspopup="menu"
-              aria-expanded={sortMenuOpen}
-            >
-              <ArrowDownUp size={15} />
-            </button>
-            {sortMenuOpen && (
-              <div className="sort-menu" role="menu">
-                {SORT_OPTIONS.map((option) => (
-                  <button
-                    key={option.key}
-                    type="button"
-                    className={sort.key === option.key ? "on" : ""}
-                    onClick={() => setSortKey(option.key)}
-                    role="menuitem"
-                  >
-                    <Check size={13} />
-                    <span>{option.label}</span>
-                    {sort.key === option.key && <small>{sort.direction === "asc" ? "升序" : "降序"}</small>}
-                  </button>
-                ))}
-                {sort.key === null && (
-                  <div className="sort-none" role="presentation">
-                    <Check size={13} />
-                    <span>未排序</span>
-                  </div>
-                )}
-                <div className="ctx-sep" />
-                <div className="sort-dir" role="group" aria-label="排序方向">
-                  <button
-                    type="button"
-                    className={sort.direction === "asc" ? "on" : ""}
-                    onClick={() => setSortDirection("asc")}
-                  >
-                    升序
-                  </button>
-                  <button
-                    type="button"
-                    className={sort.direction === "desc" ? "on" : ""}
-                    onClick={() => setSortDirection("desc")}
-                  >
-                    降序
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-          <span className="tool-sep" />
-          <button type="button" className="tool" onClick={() => onUpload(currentDir)} title="上传到当前目录">
-            <Upload size={15} />
-          </button>
-          <button
-            type="button"
-            className="tool"
-            disabled={selectedDownloadEntries.length === 0}
-            onClick={() => onDownload(selectedDownloadEntries)}
-            title={selectedDownloadEntries.length > 1 ? `下载所选 ${selectedDownloadEntries.length} 个文件` : "下载所选文件"}
-          >
-            <Download size={15} />
-          </button>
-          {selectedEditableEntry && (
-            <button
-              type="button"
-              className="tool"
-              onClick={() => onEdit(selectedEditableEntry)}
-              title="编辑文本文件"
-            >
-              <FilePenLine size={15} />
-            </button>
-          )}
-          <button type="button" className="tool" onClick={() => startCreateDir(currentDir)} title="新建文件夹">
-            <FolderPlus size={15} />
-          </button>
-          <button
-            type="button"
-            className="tool"
-            disabled={selectedEntries.length !== 1 || !selected}
-            onClick={() => selected && startRename(selected, selectedColumnIndex)}
-            title="重命名"
-          >
-            <Pencil size={15} />
-          </button>
-          <button
-            type="button"
-            className="tool danger"
-            disabled={selectedEntries.length === 0}
-            onClick={() => selectedEntries.length > 0 && onDelete(selectedEntries, selectedColumnIndex)}
-            title={selectedEntries.length > 1 ? `删除所选 ${selectedEntries.length} 项` : "删除"}
-          >
-            <Trash2 size={15} />
-          </button>
-          <span className="tool-sep" />
-          <button type="button" className="tool" onClick={onRefresh} title="刷新">
-            <RefreshCw size={15} className={busy ? "spin" : ""} />
-          </button>
-          <button type="button" className="tool" onClick={onClose} title="关闭文件面板">
-            <X size={15} />
-          </button>
-        </div>
-      </div>
-
-      {viewMode === "tree" ? (
-        <div className="sftp-split">
+      <div className="sftp-stage">
+        {viewMode === "tree" ? (
+        <>
           <aside className="sftp-tree" onContextMenu={(event) => openMenu(event, null, currentColumnIndex)}>
+            <div className="sftp-tree-head">{pathBar}</div>
             <div className="tree-scroll">
               {columns.length === 0 ? (
                 <div className="column-state">正在打开目录…</div>
@@ -606,7 +506,7 @@ function SftpBrowserBase({
                   </div>
                 ) : currentColumn?.error ? (
                   <div className="column-state bad">{currentColumn.error}</div>
-                ) : currentColumn?.entries.length === 0 && currentColumn.loading ? (
+                ) : currentEntries.length === 0 && currentColumn.loading ? (
                   <div className="column-skeleton">
                     {Array.from({ length: 7 }).map((_, skeleton) => (
                       <span key={skeleton} className="skeleton-row" />
@@ -644,10 +544,10 @@ function SftpBrowserBase({
                         <span />
                       </div>
                     )}
-                    {currentColumn?.entries.length === 0 ? (
+                    {currentEntries.length === 0 ? (
                       <div className="column-state">空目录</div>
                     ) : (
-                      currentColumn?.entries.map((entry) => {
+                      currentEntries.map((entry) => {
                         const isActive = selectedPathSet.has(entry.path);
                         const inPath = columns[currentColumnIndex + 1]?.path === entry.path;
                         const isOpening = entry.isDir && inPath && columns[currentColumnIndex + 1]?.loading;
@@ -717,8 +617,16 @@ function SftpBrowserBase({
               </div>
             </div>
           </section>
-        </div>
+        </>
       ) : (
+        <>
+        <aside className="sftp-tree compact" onContextMenu={(event) => openMenu(event, null, currentColumnIndex)}>
+          <div className="sftp-tree-head">{pathBar}</div>
+          <div className="sftp-left-note">
+            <Columns3 size={14} />
+            <span>多列浏览</span>
+          </div>
+        </aside>
         <div className="columns" ref={columnsRef}>
           {columns.length === 0 ? (
             <div className="sftp-empty">
@@ -727,7 +635,6 @@ function SftpBrowserBase({
             </div>
           ) : (
             columns.map((column, index) => {
-              const sortedColumn = sortedColumns[index] ?? column;
               const className = [
                 "column",
                 column.loading ? "loading" : "",
@@ -771,10 +678,10 @@ function SftpBrowserBase({
                           <span key={skeleton} className="skeleton-row" />
                         ))}
                       </div>
-                    ) : sortedColumn.entries.length === 0 ? (
+                    ) : column.entries.length === 0 ? (
                       <div className="column-state">空目录</div>
                     ) : (
-                      sortedColumn.entries.map((entry) => {
+                      column.entries.map((entry) => {
                         const isActive = selectedPathSet.has(entry.path);
                         const inPath = columns[index + 1]?.path === entry.path;
                         const isOpening = entry.isDir && inPath && columns[index + 1]?.loading;
@@ -844,7 +751,12 @@ function SftpBrowserBase({
             })
           )}
         </div>
+        </>
       )}
+        <aside className="sftp-tool-rail" aria-label="文件操作">
+          {toolRail}
+        </aside>
+      </div>
 
       {dragOver && (
         <div className="sftp-drop">
@@ -873,7 +785,8 @@ function SftpBrowserBase({
                 >
                   <FolderOpen size={14} /> 打开
                 </button>
-              ) : (
+              ) : null}
+              {!menu.entry.isDir && (
                 <>
                   <button
                     type="button"
@@ -1001,14 +914,6 @@ function appendDirectoryRows(
   }
 }
 
-function sortFileColumns(columns: ShellTab["files"], sort: SortState): ShellTab["files"] {
-  if (!sort.key) return columns;
-  return columns.map((column) => ({
-    ...column,
-    entries: sortEntriesForView(column.entries, sort),
-  }));
-}
-
 function sortEntriesForView(entries: SftpEntry[], sort: SortState) {
   if (!sort.key) return entries;
   return [...entries].sort((a, b) => compareEntries(a, b, sort));
@@ -1042,12 +947,6 @@ function compareEntries(a: SftpEntry, b: SftpEntry, sort: SortState) {
 
 function compareNames(a: string, b: string) {
   return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
-}
-
-function sortLabel(sort: SortState) {
-  if (!sort.key) return "未排序";
-  const option = SORT_OPTIONS.find((item) => item.key === sort.key);
-  return `${option?.label ?? "名称"}${sort.direction === "asc" ? "升序" : "降序"}`;
 }
 
 function sortArrow(direction: SortDirection) {
@@ -1088,12 +987,6 @@ function findEntry(tab: ShellTab, path: string | null): SftpEntry | null {
     if (found) return found;
   }
   return null;
-}
-
-function findEntryColumnIndex(tab: ShellTab, path: string | null): number {
-  if (!path) return Math.max(0, tab.files.length - 1);
-  const index = tab.files.findIndex((column) => column.entries.some((entry) => entry.path === path));
-  return index >= 0 ? index : Math.max(0, tab.files.length - 1);
 }
 
 function normalizePath(path: string) {

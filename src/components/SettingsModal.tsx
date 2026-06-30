@@ -1,6 +1,14 @@
-import { Moon, Sun, X } from "lucide-react";
+import { Layers, X } from "lucide-react";
+import {
+  appThemeDefinitions,
+  appThemeOrder,
+  type AppTheme,
+  type ThemeIcon,
+} from "../constants/theme";
 
-export type AppTheme = "dark" | "light";
+const themeIcons: Record<ThemeIcon, typeof Layers> = {
+  layers: Layers,
+};
 
 export function SettingsModal({
   theme,
@@ -41,39 +49,30 @@ export function SettingsModal({
           </div>
 
           <div className="theme-options" role="radiogroup" aria-label="主题">
-            <button
-              type="button"
-              className={`theme-option ${theme === "dark" ? "on" : ""}`}
-              role="radio"
-              aria-checked={theme === "dark"}
-              onClick={() => onThemeChange("dark")}
-            >
-              <span className="theme-preview dark">
-                <span />
-                <span />
-              </span>
-              <span className="theme-option-text">
-                <Moon size={15} />
-                暗色
-              </span>
-            </button>
+            {appThemeOrder.map((themeId) => {
+              const option = appThemeDefinitions[themeId];
+              const Icon = themeIcons[option.icon];
 
-            <button
-              type="button"
-              className={`theme-option ${theme === "light" ? "on" : ""}`}
-              role="radio"
-              aria-checked={theme === "light"}
-              onClick={() => onThemeChange("light")}
-            >
-              <span className="theme-preview light">
-                <span />
-                <span />
-              </span>
-              <span className="theme-option-text">
-                <Sun size={15} />
-                亮色
-              </span>
-            </button>
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={`theme-option ${theme === option.id ? "on" : ""}`}
+                  role="radio"
+                  aria-checked={theme === option.id}
+                  onClick={() => onThemeChange(option.id)}
+                >
+                  <span className={`theme-preview ${option.previewClassName}`}>
+                    <span />
+                    <span />
+                  </span>
+                  <span className="theme-option-text">
+                    <Icon size={15} />
+                    {option.label}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 

@@ -18,7 +18,7 @@ use uuid::Uuid;
 use crate::{
     models::{
         ConnectionExport, ConnectionExportServer, ConnectionImport, ConnectionImportServer,
-        ConnectionTest, EncryptedExportSecret, NetworkSample, ServerInput, ServerRecord,
+        ConnectionTest, EncryptedExportSecret, NetworkSample, ServerInput, ServerOrderInput, ServerRecord,
         ServerStatus, SftpEntry, TerminalSnapshotPayload,
     },
     pool::SshPool,
@@ -30,7 +30,7 @@ use crate::{
     store::{
         append_command_history, delete_server as remove_server, get_server,
         list_command_history as load_command_history, list_servers as load_servers, mark_connected,
-        normalize_tags, read_secret, upsert_server, validate_server,
+        normalize_tags, read_secret, reorder_servers as save_server_order, upsert_server, validate_server,
     },
     terminal::{self, TerminalRegistry},
     time::now,
@@ -166,6 +166,7 @@ fn server_record_to_input(server: ServerRecord) -> ServerInput {
         key_path: server.key_path,
         color: server.color,
         notes: server.notes,
+        sort_order: Some(server.sort_order),
     }
 }
 
@@ -259,15 +260,24 @@ pub fn save_server(
         key_path: input.key_path.filter(|path| !path.trim().is_empty()),
         color: input.color,
         notes: input.notes.trim().to_string(),
+        sort_order: input
+            .sort_order
+            .or_else(|| current.as_ref().map(|server| server.sort_order))
+            .unwrap_or(created_at),
         created_at,
         updated_at: now(),
-        last_connected_at: current.and_then(|server| server.last_connected_at),
+        last_connected_at: current.as_ref().and_then(|server| server.last_connected_at),
     };
 
     let secret = password.as_deref().filter(|value| !value.is_empty());
     upsert_server(&app, &record, secret)?;
 
     Ok(record)
+}
+
+#[tauri::command]
+pub fn reorder_servers(app: AppHandle, items: Vec<ServerOrderInput>) -> Result<(), String> {
+    save_server_order(&app, &items)
 }
 
 #[tauri::command]

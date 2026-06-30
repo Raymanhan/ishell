@@ -24,6 +24,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::list_servers,
             commands::save_server,
+            commands::reorder_servers,
             commands::export_connections,
             commands::import_connections,
             commands::delete_server,

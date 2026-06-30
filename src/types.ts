@@ -12,6 +12,7 @@ export interface ServerRecord {
   keyPath?: string | null;
   color: string;
   notes: string;
+  sortOrder: number;
   createdAt: number;
   updatedAt: number;
   lastConnectedAt?: number | null;
@@ -29,6 +30,7 @@ export interface ServerInput {
   keyPath?: string | null;
   color: string;
   notes: string;
+  sortOrder?: number | null;
 }
 
 export interface ServerStatus {

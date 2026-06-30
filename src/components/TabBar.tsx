@@ -1,18 +1,20 @@
 import {
-  useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
-  type MouseEvent as ReactMouseEvent,
+  type MouseEvent,
   type PointerEvent as ReactPointerEvent,
-  type WheelEvent as ReactWheelEvent,
 } from "react";
-import { Activity, ArrowLeft, ArrowRight, Clock3, FolderTree, RefreshCw, Server, Settings, X } from "lucide-react";
+import { Activity, Clock3, Copy, FolderTree, PanelLeft, Plus, RefreshCw, Settings, X } from "lucide-react";
 import type { ShellTab } from "../features/shell/types";
 
 export function TabBar({
+  connectionsOpen,
+  onNewServer,
   tabs,
   activeTabId,
+  activeTabTitle,
   filesOpen,
   statusOpen,
   historyOpen,
@@ -22,14 +24,18 @@ export function TabBar({
   onToggleFiles,
   onToggleStatus,
   onToggleHistory,
-  notice,
   onActivate,
+  onClone,
   onReconnect,
   onClose,
   onCloseTabs,
+  onReorder,
 }: {
+  connectionsOpen: boolean;
+  onNewServer: () => void;
   tabs: ShellTab[];
   activeTabId: string | null;
+  activeTabTitle: string | null;
   filesOpen: boolean;
   statusOpen: boolean;
   historyOpen: boolean;
@@ -39,54 +45,62 @@ export function TabBar({
   onToggleFiles: () => void;
   onToggleStatus: () => void;
   onToggleHistory: () => void;
-  notice: string;
   onActivate: (id: string) => void;
+  onClone: (id: string) => void;
   onReconnect: (id: string) => void;
   onClose: (id: string) => void;
   onCloseTabs: (ids: string[]) => void;
+  onReorder: (draggedId: string, targetId: string) => void;
 }) {
-  const tabsRef = useRef<HTMLDivElement>(null);
-  const activeTabRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [scrollbar, setScrollbar] = useState({ left: 0, width: 0, visible: false });
+  const tabRefs = useRef(new Map<string, HTMLDivElement>());
+  const tabRectsBeforeReorder = useRef(new Map<string, DOMRect>());
+  const tabDragRef = useRef<{
+    tabId: string;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    dragging: boolean;
+  } | null>(null);
+  const suppressTabClickRef = useRef(false);
   const [menu, setMenu] = useState<{ tabId: string; x: number; y: number } | null>(null);
+  const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
   const menuIndex = menu ? tabs.findIndex((tab) => tab.id === menu.tabId) : -1;
   const leftTabIds = menuIndex > 0 ? tabs.slice(0, menuIndex).map((tab) => tab.id) : [];
   const rightTabIds = menuIndex >= 0 ? tabs.slice(menuIndex + 1).map((tab) => tab.id) : [];
 
-  const updateScrollbar = useCallback(() => {
-    const node = tabsRef.current;
-    if (!node) return;
-    const { clientWidth, scrollLeft, scrollWidth } = node;
-    const visible = scrollWidth > clientWidth + 1;
-    const width = visible ? Math.max(36, (clientWidth / scrollWidth) * clientWidth) : 0;
-    const maxLeft = Math.max(0, clientWidth - width);
-    const left = visible ? (scrollLeft / Math.max(1, scrollWidth - clientWidth)) * maxLeft : 0;
-    setScrollbar({ left, width, visible });
-  }, []);
+  useLayoutEffect(() => {
+    const previousRects = tabRectsBeforeReorder.current;
+    if (previousRects.size === 0) return;
 
-  useEffect(() => {
-    if (!activeTabRef.current || !tabsRef.current) return;
-    activeTabRef.current.scrollIntoView({
-      block: "nearest",
-      inline: "nearest",
-      behavior: "smooth",
-    });
-    window.setTimeout(updateScrollbar, 240);
-  }, [activeTabId, tabs.length]);
+    for (const tab of tabs) {
+      if (tab.id === draggingTabId) continue;
+      const node = tabRefs.current.get(tab.id);
+      const previous = previousRects.get(tab.id);
+      if (!node || !previous) continue;
 
-  useEffect(() => {
-    updateScrollbar();
-    const node = tabsRef.current;
-    if (!node) return;
-    const observer = new ResizeObserver(updateScrollbar);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [tabs.length, updateScrollbar]);
+      const next = node.getBoundingClientRect();
+      const deltaX = previous.left - next.left;
+      const deltaY = previous.top - next.top;
+      if (Math.abs(deltaX) < 0.5 && Math.abs(deltaY) < 0.5) continue;
+
+      node.animate(
+        [
+          { transform: `translate3d(${deltaX}px, ${deltaY}px, 0) scale(1)` },
+          { transform: "translate3d(0, 0, 0) scale(1)" },
+        ],
+        {
+          duration: 190,
+          easing: "cubic-bezier(0.2, 0.85, 0.25, 1)",
+        },
+      );
+    }
+
+    previousRects.clear();
+  }, [tabs, draggingTabId]);
 
   useEffect(() => {
     if (!menu) return;
-    const closeMenu = () => setMenu(null);
     const close = (event: PointerEvent) => {
       if (menuRef.current?.contains(event.target as Node)) return;
       setMenu(null);
@@ -94,59 +108,24 @@ export function TabBar({
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") setMenu(null);
     };
+    const closeOnResize = () => setMenu(null);
     window.addEventListener("pointerdown", close);
     window.addEventListener("keydown", closeOnEscape);
-    window.addEventListener("resize", closeMenu);
+    window.addEventListener("resize", closeOnResize);
     return () => {
       window.removeEventListener("pointerdown", close);
       window.removeEventListener("keydown", closeOnEscape);
-      window.removeEventListener("resize", closeMenu);
+      window.removeEventListener("resize", closeOnResize);
     };
   }, [menu]);
 
-  function startScrollbarDrag(event: ReactPointerEvent<HTMLSpanElement>) {
-    const node = tabsRef.current;
-    if (!node || !scrollbar.visible) return;
-    event.preventDefault();
-    const pointerId = event.pointerId;
-    const startX = event.clientX;
-    const startScrollLeft = node.scrollLeft;
-    const maxScrollLeft = node.scrollWidth - node.clientWidth;
-    const maxThumbLeft = node.clientWidth - scrollbar.width;
-
-    const onMove = (move: PointerEvent) => {
-      if (move.pointerId !== pointerId) return;
-      const delta = move.clientX - startX;
-      node.scrollLeft = startScrollLeft + (delta / Math.max(1, maxThumbLeft)) * maxScrollLeft;
-      updateScrollbar();
-    };
-    const stop = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", stop);
-      window.removeEventListener("pointercancel", stop);
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", stop);
-    window.addEventListener("pointercancel", stop);
-  }
-
-  function scrollTabsWithWheel(event: ReactWheelEvent<HTMLDivElement>) {
-    const node = tabsRef.current;
-    if (!node || node.scrollWidth <= node.clientWidth) return;
-    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
-    if (delta === 0) return;
-    event.preventDefault();
-    node.scrollLeft += delta;
-    updateScrollbar();
-  }
-
-  function openTabMenu(event: ReactMouseEvent<HTMLDivElement>, tabId: string) {
+  function openTabMenu(event: MouseEvent<HTMLDivElement>, tabId: string) {
     event.preventDefault();
     event.stopPropagation();
     setMenu({
       tabId,
-      x: Math.min(event.clientX, window.innerWidth - 180),
-      y: Math.min(event.clientY, window.innerHeight - 150),
+      x: Math.min(event.clientX, window.innerWidth - 188),
+      y: Math.min(event.clientY, window.innerHeight - 224),
     });
   }
 
@@ -155,96 +134,194 @@ export function TabBar({
     action();
   }
 
-  return (
-    <header className="workbench-bar">
-      <div className="topbar-drag-strip" data-tauri-drag-region aria-hidden />
-      <button type="button" className="connection-trigger" onClick={onOpenConnections} title="连接管理" aria-label={`连接管理，${serverCount} 台主机`}>
-        <Server size={15} />
-        <span>连接</span>
-      </button>
+  function rememberTabRects() {
+    const rects = new Map<string, DOMRect>();
+    for (const [tabId, node] of tabRefs.current) {
+      rects.set(tabId, node.getBoundingClientRect());
+    }
+    tabRectsBeforeReorder.current = rects;
+  }
 
-      <div className="tabs-shell">
-        <div className="tabs" ref={tabsRef} onScroll={updateScrollbar} onWheel={scrollTabsWithWheel}>
-          {tabs.map((tab) => (
-            <div
-              key={tab.id}
-              ref={tab.id === activeTabId ? activeTabRef : undefined}
-              role="button"
-              tabIndex={0}
-              className={`tab ${tab.id === activeTabId ? "on" : ""}`}
-              onClick={() => onActivate(tab.id)}
-              onContextMenu={(event) => openTabMenu(event, tab.id)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") onActivate(tab.id);
-              }}
-            >
-              <span className={`tab-dot ${tab.state}`} style={{ color: tab.color }} />
-              <span className="tab-title">{tab.title}</span>
-              <span
-                className="tab-x"
-                role="button"
-                tabIndex={-1}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onClose(tab.id);
+  function beginTabPointerDrag(event: ReactPointerEvent<HTMLDivElement>, tabId: string) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if ((event.target as HTMLElement).closest(".terminal-tab-action")) return;
+    tabDragRef.current = {
+      tabId,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      dragging: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function moveTabPointerDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = tabDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const moved = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
+    if (!drag.dragging && moved < 4) return;
+
+    event.preventDefault();
+    drag.dragging = true;
+    suppressTabClickRef.current = true;
+    setDraggingTabId(drag.tabId);
+
+    const target = document
+      .elementsFromPoint(event.clientX, event.clientY)
+      .find((element) => element instanceof HTMLElement && element.classList.contains("terminal-tab")) as HTMLElement | undefined;
+    const targetId = target?.dataset.tabId;
+    if (targetId && targetId !== drag.tabId) {
+      rememberTabRects();
+      onReorder(drag.tabId, targetId);
+    }
+  }
+
+  function endTabPointerDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = tabDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const shouldActivate = !drag.dragging;
+    tabDragRef.current = null;
+    setDraggingTabId(null);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (shouldActivate) {
+      onActivate(drag.tabId);
+      return;
+    }
+    window.setTimeout(() => {
+      suppressTabClickRef.current = false;
+    }, 0);
+  }
+
+  return (
+    <header className={`workbench-bar ${connectionsOpen ? "connections-open" : ""} ${tabs.length > 0 ? "has-tabs" : ""}`}>
+      <div className="topbar-drag-strip" data-tauri-drag-region aria-hidden />
+
+      <div className="topbar-left">
+        <button
+          type="button"
+          className={`connection-trigger ${connectionsOpen ? "on" : ""}`}
+          onClick={onOpenConnections}
+          title="连接管理"
+          aria-label={`连接管理，${serverCount} 台主机`}
+          aria-pressed={connectionsOpen}
+        >
+          <PanelLeft size={15} />
+        </button>
+
+        {connectionsOpen && (
+          <button
+            type="button"
+            className="icon-button topbar-new"
+            onClick={onNewServer}
+            title="新建"
+            aria-label="新建"
+          >
+            <Plus size={16} />
+          </button>
+        )}
+      </div>
+
+      <div
+        className={`topbar-title ${tabs.length > 0 ? "has-tabs" : ""}`}
+        {...(tabs.length === 0 ? { "data-tauri-drag-region": true } : {})}
+      >
+        {tabs.length > 0 ? (
+          <div className={`terminal-tabs ${draggingTabId ? "is-sorting" : ""}`} role="tablist" aria-label="已连接服务器">
+            {tabs.map((tab) => (
+              <div
+                key={tab.id}
+                ref={(node) => {
+                  if (node) tabRefs.current.set(tab.id, node);
+                  else tabRefs.current.delete(tab.id);
                 }}
+                className={`terminal-tab ${tab.id === activeTabId ? "active" : ""} ${tab.id === draggingTabId ? "dragging" : ""}`}
+                data-tab-id={tab.id}
+                role="presentation"
+                title={`${tab.title} · ${tab.subtitle}`}
+                onContextMenu={(event) => openTabMenu(event, tab.id)}
+                onPointerDown={(event) => beginTabPointerDrag(event, tab.id)}
+                onPointerMove={moveTabPointerDrag}
+                onPointerUp={endTabPointerDrag}
+                onPointerCancel={endTabPointerDrag}
               >
-                <X size={12} />
-              </span>
-            </div>
-          ))}
-        </div>
-        <div className={`tab-scrollbar ${scrollbar.visible ? "visible" : ""}`} aria-hidden>
-          <span
-            style={{ width: scrollbar.width, transform: `translateX(${scrollbar.left}px)` }}
-            onPointerDown={startScrollbarDrag}
-          />
-        </div>
-        <div className="tabs-drag-fill" data-tauri-drag-region aria-hidden />
+                <button
+                  type="button"
+                  className="terminal-tab-main"
+                  role="tab"
+                  aria-selected={tab.id === activeTabId}
+                  onClick={(event) => {
+                    if (suppressTabClickRef.current) {
+                      event.preventDefault();
+                      return;
+                    }
+                    if (event.detail !== 0) return;
+                    onActivate(tab.id);
+                  }}
+                >
+                  <span className={`tab-dot ${tab.state}`} style={{ color: tab.color }} />
+                  <span className="terminal-tab-title">{tab.title}</span>
+                </button>
+                <button
+                  type="button"
+                  className="terminal-tab-action"
+                  onClick={() => onClose(tab.id)}
+                  title="关闭连接"
+                  aria-label={`关闭 ${tab.title}`}
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <span className="topbar-title-text">
+            iShell{activeTabTitle ? ` · ${activeTabTitle}` : ""}
+          </span>
+        )}
       </div>
 
       <div className="bar-right">
-        <div className="bar-right-drag-fill" data-tauri-drag-region aria-hidden />
-        {notice && <span className="notice">{notice}</span>}
         <div className="dock-switcher" role="group" aria-label="工具">
           {activeTabId && (
             <>
-            <button
-              type="button"
-              className={`dock-toggle ${filesOpen ? "on" : ""}`}
-              onClick={onToggleFiles}
-              title="文件面板"
-              aria-label="文件面板"
-              aria-pressed={filesOpen}
-            >
-              <span className="dock-toggle-icon">
-                <FolderTree size={14} />
-              </span>
-            </button>
-            <button
-              type="button"
-              className={`dock-toggle ${statusOpen ? "on" : ""}`}
-              onClick={onToggleStatus}
-              title="监控面板"
-              aria-label="监控面板"
-              aria-pressed={statusOpen}
-            >
-              <span className="dock-toggle-icon">
-                <Activity size={14} />
-              </span>
-            </button>
-            <button
-              type="button"
-              className={`dock-toggle ${historyOpen ? "on" : ""}`}
-              onClick={onToggleHistory}
-              title="历史命令"
-              aria-label="历史命令"
-              aria-pressed={historyOpen}
-            >
-              <span className="dock-toggle-icon">
-                <Clock3 size={14} />
-              </span>
-            </button>
+              <button
+                type="button"
+                className={`dock-toggle ${filesOpen ? "on" : ""}`}
+                onClick={onToggleFiles}
+                title="文件面板"
+                aria-label="文件面板"
+                aria-pressed={filesOpen}
+              >
+                <span className="dock-toggle-icon">
+                  <FolderTree size={14} />
+                </span>
+              </button>
+              <button
+                type="button"
+                className={`dock-toggle ${statusOpen ? "on" : ""}`}
+                onClick={onToggleStatus}
+                title="监控面板"
+                aria-label="监控面板"
+                aria-pressed={statusOpen}
+              >
+                <span className="dock-toggle-icon">
+                  <Activity size={14} />
+                </span>
+              </button>
+              <button
+                type="button"
+                className={`dock-toggle ${historyOpen ? "on" : ""}`}
+                onClick={onToggleHistory}
+                title="历史命令"
+                aria-label="历史命令"
+                aria-pressed={historyOpen}
+              >
+                <span className="dock-toggle-icon">
+                  <Clock3 size={14} />
+                </span>
+              </button>
             </>
           )}
           <button
@@ -269,22 +346,22 @@ export function TabBar({
           role="menu"
           onContextMenu={(event) => event.preventDefault()}
         >
+          <button type="button" role="menuitem" onClick={() => runMenu(() => onClone(menu.tabId))}>
+            <Copy size={14} />
+            克隆
+          </button>
           <button type="button" role="menuitem" onClick={() => runMenu(() => onReconnect(menu.tabId))}>
             <RefreshCw size={14} />
             重新连接
           </button>
-          <button type="button" role="menuitem" onClick={() => runMenu(() => onClose(menu.tabId))}>
-            <X size={14} />
-            关闭标签
-          </button>
+          <div className="ctx-sep" role="separator" />
           <button
             type="button"
             role="menuitem"
             disabled={leftTabIds.length === 0}
             onClick={() => runMenu(() => onCloseTabs(leftTabIds))}
           >
-            <ArrowLeft size={14} />
-            关闭左侧标签
+            关闭左侧
           </button>
           <button
             type="button"
@@ -292,8 +369,13 @@ export function TabBar({
             disabled={rightTabIds.length === 0}
             onClick={() => runMenu(() => onCloseTabs(rightTabIds))}
           >
-            <ArrowRight size={14} />
-            关闭右侧标签
+            关闭右侧
+          </button>
+          <button type="button" role="menuitem" onClick={() => runMenu(() => onClose(menu.tabId))}>
+            关闭当前
+          </button>
+          <button type="button" role="menuitem" className="danger" onClick={() => runMenu(() => onCloseTabs(tabs.map((tab) => tab.id)))}>
+            关闭全部
           </button>
         </div>
       )}

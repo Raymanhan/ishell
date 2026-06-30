@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
@@ -17,11 +18,16 @@ import { CommandHistoryPanel } from "./components/CommandHistoryPanel";
 import { DownloadQueue } from "./components/DownloadQueue";
 import { ServerDetail } from "./components/ServerDetail";
 import { ServerEditor, type ServerForm } from "./components/ServerEditor";
-import { SettingsModal, type AppTheme } from "./components/SettingsModal";
+import { SettingsModal } from "./components/SettingsModal";
 import { StatusDashboard } from "./components/StatusDashboard";
 import { TabBar } from "./components/TabBar";
 import { UploadQueue } from "./components/UploadQueue";
-import { swatches } from "./constants/theme";
+import {
+  getThemeDefinition,
+  readSavedTheme,
+  swatches,
+  type AppTheme,
+} from "./constants/theme";
 import { createTabId, type ShellTab } from "./features/shell/types";
 import { demoFiles, demoServers, demoStatus } from "./mocks/demoData";
 import type {
@@ -38,7 +44,7 @@ import type {
   UploadProgressPayload,
 } from "./types";
 import { formatBytes } from "./utils/format";
-import { filterServers, groupServers } from "./utils/servers";
+import { groupServers } from "./utils/servers";
 
 const TerminalPane = lazy(() =>
   import("./components/TerminalPane").then((module) => ({ default: module.TerminalPane })),
@@ -70,12 +76,20 @@ const COMMAND_HISTORY_LIMIT = 10_000;
 const DEMO_COMMAND_HISTORY_KEY = "ishell.commandHistory";
 const CONNECTION_FOLDERS_KEY = "ishell.connectionFolders";
 const MAX_EDITABLE_TEXT_BYTES = 1024 * 1024;
-
+const FILES_PANEL_RATIO = 0.4;
+const STATUS_PANEL_WIDTH = 300;
 interface DeleteConfirmState {
   entries: SftpEntry[];
   columnIndex: number;
   tabId: string;
   serverId: string;
+  busy?: boolean;
+  error?: string;
+}
+
+interface ConnectionDeleteConfirmState {
+  target: { serverIds: string[]; folders: string[] };
+  servers: ServerRecord[];
   busy?: boolean;
   error?: string;
 }
@@ -99,8 +113,6 @@ interface ConnectionImportPayload {
 export default function App() {
   const [servers, setServers] = useState<ServerRecord[]>([]);
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [activeGroup, setActiveGroup] = useState("全部");
   const [connectionFolders, setConnectionFolders] = useState<string[]>(() => {
     try {
       const parsed = JSON.parse(window.localStorage.getItem(CONNECTION_FOLDERS_KEY) || "[]");
@@ -112,34 +124,36 @@ export default function App() {
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [theme, setTheme] = useState<AppTheme>(
-    () => (window.localStorage.getItem("ishell.theme") === "light" ? "light" : "dark"),
+    () => readSavedTheme(window.localStorage.getItem("ishell.theme")),
   );
   const [terminalFontSize, setTerminalFontSize] = useState(() => {
     const saved = Number(window.localStorage.getItem("ishell.terminalFontSize"));
     return Number.isFinite(saved) ? Math.min(20, Math.max(11, saved)) : 14;
   });
-  const [notice, setNotice] = useState("");
+  const [, setNotice] = useState("");
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<ServerForm>(defaultForm);
   const [saving, setSaving] = useState(false);
   const [tabs, setTabs] = useState<ShellTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
-  const [filesRatio, setFilesRatio] = useState(0.4); // file dock height as a fraction
+  const [filesRatio, setFilesRatio] = useState(FILES_PANEL_RATIO);
   const [filesDragging, setFilesDragging] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
-  const [statusPanelWidth, setStatusPanelWidth] = useState(360);
+  const [statusPanelWidth, setStatusPanelWidth] = useState(STATUS_PANEL_WIDTH);
   const [pasteRequest, setPasteRequest] = useState<{ tabId: string; id: number; command: string } | null>(null);
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [downloads, setDownloads] = useState<DownloadItem[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null);
+  const [connectionDeleteConfirm, setConnectionDeleteConfirm] = useState<ConnectionDeleteConfirmState | null>(null);
   const [fileEditor, setFileEditor] = useState<FileEditorState | null>(null);
+  const workbenchBodyRef = useRef<HTMLDivElement>(null);
   const terminalDockRef = useRef<HTMLDivElement>(null);
-  const workbenchMainRef = useRef<HTMLDivElement>(null);
   const filesRegionRef = useRef<HTMLDivElement>(null);
+  const statusPanelRef = useRef<HTMLElement>(null);
   const fileEditorHighlightRef = useRef<HTMLPreElement>(null);
   const dockDragCleanupRef = useRef<(() => void) | null>(null);
   const statusDragCleanupRef = useRef<(() => void) | null>(null);
@@ -167,19 +181,14 @@ export default function App() {
     () => tabs.find((tab) => tab.id === activeTabId) ?? null,
     [activeTabId, tabs],
   );
-  const filteredServers = useMemo(
-    () => filterServers(servers, activeGroup, query),
-    [activeGroup, query, servers],
-  );
   const connectionFolderNames = useMemo(() => {
     const names = new Set<string>(connectionFolders);
     for (const group of Object.keys(groupServers(servers))) names.add(group);
     return [...names].filter(Boolean).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   }, [connectionFolders, servers]);
-  const groups = useMemo(() => ["全部", ...connectionFolderNames], [connectionFolderNames]);
   const grouped = useMemo(
-    () => groupServersForTree(filteredServers, connectionFolderNames, activeGroup, query),
-    [activeGroup, connectionFolderNames, filteredServers, query],
+    () => groupServersForTree(servers, connectionFolderNames),
+    [connectionFolderNames, servers],
   );
 
   // Keep the native drag-drop listener (registered once) reading fresh state.
@@ -212,6 +221,11 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem("ishell.theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (!isTauri) return;
+    void applyNativeWindowTheme(theme);
   }, [theme]);
 
   useEffect(() => {
@@ -342,8 +356,7 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusOpen, filesOpen, activeTabId]);
 
-  // Drag the divider between the terminal and the docked file panel.
-  function startDockDrag(event: React.PointerEvent<HTMLDivElement>) {
+  function startDockDrag(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     event.preventDefault();
     const dock = terminalDockRef.current;
@@ -356,12 +369,22 @@ export default function App() {
     const rect = dock.getBoundingClientRect();
     const previousCursor = document.body.style.cursor;
     const previousUserSelect = document.body.style.userSelect;
+    let nextRatio = filesRatio;
+    let frame = 0;
+
+    const applyRatio = () => {
+      frame = 0;
+      const value = `${nextRatio * 100}%`;
+      filesRegionRef.current?.style.setProperty("--files-panel-height", value);
+      workbenchBodyRef.current?.style.setProperty("--connection-panel-bottom", value);
+    };
 
     const onMove = (move: PointerEvent) => {
       if (move.pointerId !== pointerId) return;
       move.preventDefault();
       const ratio = (rect.bottom - move.clientY) / rect.height;
-      setFilesRatio(Math.min(0.8, Math.max(0.15, ratio)));
+      nextRatio = Math.min(0.8, Math.max(0.15, ratio));
+      if (!frame) frame = window.requestAnimationFrame(applyRatio);
     };
 
     const stopDrag = () => {
@@ -369,11 +392,16 @@ export default function App() {
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
       window.removeEventListener("blur", stopDrag);
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+        applyRatio();
+      }
       if (divider.hasPointerCapture(pointerId)) {
         divider.releasePointerCapture(pointerId);
       }
       document.body.style.cursor = previousCursor;
       document.body.style.userSelect = previousUserSelect;
+      setFilesRatio(nextRatio);
       setFilesDragging(false);
       dockDragCleanupRef.current = null;
     };
@@ -395,8 +423,7 @@ export default function App() {
     dockDragCleanupRef.current = stopDrag;
   }
 
-  // Drag the divider between the terminal workspace and the status side panel.
-  function startStatusDrag(event: React.PointerEvent<HTMLDivElement>) {
+  function startStatusDrag(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     event.preventDefault();
 
@@ -409,12 +436,20 @@ export default function App() {
     const startWidth = panel?.getBoundingClientRect().width || statusPanelWidth;
     const previousCursor = document.body.style.cursor;
     const previousUserSelect = document.body.style.userSelect;
+    let nextWidth = startWidth;
+    let frame = 0;
+
+    const applyWidth = () => {
+      frame = 0;
+      statusPanelRef.current?.style.setProperty("--status-panel-width", `${nextWidth}px`);
+    };
 
     const onMove = (move: PointerEvent) => {
       if (move.pointerId !== pointerId) return;
       move.preventDefault();
       const width = startWidth - (move.clientX - startX);
-      setStatusPanelWidth(Math.min(560, Math.max(300, width)));
+      nextWidth = Math.min(560, Math.max(300, width));
+      if (!frame) frame = window.requestAnimationFrame(applyWidth);
     };
 
     const stopDrag = () => {
@@ -422,11 +457,16 @@ export default function App() {
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
       window.removeEventListener("blur", stopDrag);
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+        applyWidth();
+      }
       if (divider.hasPointerCapture(pointerId)) {
         divider.releasePointerCapture(pointerId);
       }
       document.body.style.cursor = previousCursor;
       document.body.style.userSelect = previousUserSelect;
+      setStatusPanelWidth(nextWidth);
       statusDragCleanupRef.current = null;
     };
 
@@ -565,12 +605,15 @@ export default function App() {
     }, remaining);
   }
 
-  function editServer(server?: ServerRecord | null, targetGroup = "Default") {
-    if (!server) {
-      setForm({ ...defaultForm, group: targetGroup || "Default" });
-      setEditing(true);
-      return;
-    }
+  function newServer(group?: string) {
+    setForm({
+      ...defaultForm,
+      group: group?.trim() || "Default",
+    });
+    setEditing(true);
+  }
+
+  function editServer(server: ServerRecord) {
     setForm({
       id: server.id,
       name: server.name,
@@ -601,7 +644,6 @@ export default function App() {
       if (existingFolders.has(name.toLowerCase())) return current;
       return ensureFolder(current, name);
     });
-    setActiveGroup("全部");
   }
 
   async function exportConnections(target: { serverIds: string[]; folders: string[] }) {
@@ -686,19 +728,26 @@ export default function App() {
     }
   }
 
-  async function deleteConnections(target: { serverIds: string[]; folders: string[] }) {
+  function requestDeleteConnections(target: { serverIds: string[]; folders: string[] }) {
     const folderSet = new Set(target.folders);
     const idSet = new Set(target.serverIds);
     const targets = servers.filter((server) => idSet.has(server.id) || folderSet.has(server.group || "Default"));
     if (targets.length === 0 && target.folders.length === 0) return;
+    setConnectionDeleteConfirm({ target, servers: targets });
+  }
 
-    const message = target.folders.length > 0
-      ? `确定删除 ${target.folders.length} 个文件夹及其中 ${targets.length} 台服务器吗？`
-      : targets.length > 1
-        ? `确定删除所选 ${targets.length} 台服务器吗？`
-        : `确定删除「${targets[0]?.name ?? "该服务器"}」吗？`;
-    if (!window.confirm(message)) return;
+  async function confirmDeleteConnections() {
+    if (!connectionDeleteConfirm || connectionDeleteConfirm.busy) return;
+    const { target } = connectionDeleteConfirm;
+    const folderSet = new Set(target.folders);
+    const idSet = new Set(target.serverIds);
+    const targets = servers.filter((server) => idSet.has(server.id) || folderSet.has(server.group || "Default"));
+    if (targets.length === 0 && target.folders.length === 0) {
+      setConnectionDeleteConfirm(null);
+      return;
+    }
 
+    setConnectionDeleteConfirm((current) => (current ? { ...current, busy: true, error: undefined } : current));
     try {
       if (isTauri) {
         for (const server of targets) {
@@ -710,9 +759,14 @@ export default function App() {
       setTabs((current) => current.filter((tab) => !deleteIds.has(tab.serverId)));
       setConnectionFolders((current) => current.filter((folder) => !folderSet.has(folder)));
       setSelectedServerId((current) => (current && deleteIds.has(current) ? null : current));
+      setConnectionDeleteConfirm(null);
       showNotice(target.folders.length > 0 ? "已删除文件夹" : "已删除");
     } catch (error) {
-      showNotice(String(error));
+      const message = String(error);
+      showNotice(message);
+      setConnectionDeleteConfirm((current) =>
+        current ? { ...current, busy: false, error: message } : current,
+      );
     }
   }
 
@@ -724,7 +778,7 @@ export default function App() {
       host: form.host,
       port: Number(form.port),
       username: form.username,
-      group: form.group || "Default",
+      group: form.group.trim() || "Default",
       tags: form.tagsText.split(",").map((tag) => tag.trim()).filter(Boolean),
       authType: form.authType as AuthType,
       keyPath: form.authType === "key" ? form.keyPath || null : null,
@@ -737,6 +791,7 @@ export default function App() {
         const saved: ServerRecord = {
           ...input,
           id: input.id || crypto.randomUUID(),
+          sortOrder: servers.length,
           createdAt: Date.now() / 1000,
           updatedAt: Date.now() / 1000,
           lastConnectedAt: null,
@@ -867,6 +922,24 @@ export default function App() {
       patchTab(tabId, { state: "closed" });
       showNotice(String(error));
     }
+  }
+
+  function cloneShell(tabId: string) {
+    const tab = tabs.find((item) => item.id === tabId);
+    const server = tab ? servers.find((item) => item.id === tab.serverId) : null;
+    if (server) void openShell(server);
+  }
+
+  function reorderShellTabs(draggedId: string, targetId: string) {
+    setTabs((current) => {
+      const from = current.findIndex((tab) => tab.id === draggedId);
+      const to = current.findIndex((tab) => tab.id === targetId);
+      if (from < 0 || to < 0 || from === to) return current;
+      const next = [...current];
+      const [dragged] = next.splice(from, 1);
+      next.splice(to, 0, dragged);
+      return next;
+    });
   }
 
   function handleTerminalReady(tabId: string, serverId: string, title: string) {
@@ -1611,8 +1684,11 @@ export default function App() {
     <div className="app">
       <main className="workspace">
         <TabBar
+          connectionsOpen={connectionsOpen}
+          onNewServer={() => newServer()}
           tabs={tabs}
           activeTabId={activeTabId}
+          activeTabTitle={activeTab?.title ?? null}
           filesOpen={filesOpen}
           statusOpen={statusOpen}
           historyOpen={historyOpen}
@@ -1622,70 +1698,68 @@ export default function App() {
           onToggleFiles={() => setFilesOpen((open) => !open)}
           onToggleStatus={toggleStatusPanel}
           onToggleHistory={toggleHistoryPanel}
-          notice={notice}
           onActivate={setActiveTabId}
+          onClone={cloneShell}
           onReconnect={reconnectShell}
           onClose={closeShell}
           onCloseTabs={closeShells}
+          onReorder={reorderShellTabs}
         />
 
         <div
+          ref={workbenchBodyRef}
           className={`workbench-body ${connectionsOpen ? "connections-open" : ""} ${
-            statusOpen && activeTab ? "has-status-panel" : ""
+            (statusOpen || historyOpen) && activeTab ? "has-status-panel" : ""
           }`}
           style={{
-            "--connection-panel-width": "320px",
-            "--connection-panel-bottom": activeTab && filesOpen ? `calc(${filesRatio * 100}% + 7px)` : "0px",
+            "--connection-panel-width": "240px",
+            "--connection-panel-bottom": activeTab && filesOpen ? `${filesRatio * 100}%` : "0px",
           } as CSSProperties}
         >
           <ConnectionManager
             open={connectionsOpen}
             grouped={grouped}
-            query={query}
-            setQuery={setQuery}
-            groups={groups}
-            activeGroup={activeGroup}
-            setActiveGroup={setActiveGroup}
             selectedServerId={selectedServerId}
             onSelect={(server) => setSelectedServerId(server.id)}
             onConnect={openShell}
             onEdit={editServer}
-            onNew={(group) => editServer(null, group || "Default")}
+            onNew={(group) => newServer(group)}
             onCreateFolder={createConnectionFolder}
             onExport={exportConnections}
             onImport={importConnections}
-            onDelete={deleteConnections}
+            onDelete={requestDeleteConnections}
             onClose={() => setConnectionsOpen(false)}
-            count={servers.length}
           />
 
-          <div className="workbench-main" ref={workbenchMainRef}>
+          <div className="workbench-main">
             {/* Terminal + docked file panel. Kept mounted so xterm survives tab switches. */}
             {tabs.length > 0 && (
-              <div className={`terminal-dock ${filesDragging ? "dragging" : ""}`} ref={terminalDockRef}>
+              <div className={`terminal-dock ${filesOpen ? "files-open" : ""} ${filesDragging ? "dragging" : ""}`} ref={terminalDockRef}>
                 <div className="terminal-region">
-                  <Suspense fallback={null}>
-                    {tabs.map((tab) => (
-                      <TerminalPane
-                        key={tab.id}
-                        tab={tab}
-                        visible={tab.id === activeTabId}
-                        theme={theme}
-                        fontSize={terminalFontSize}
-                        layoutSignal={`${filesOpen}:${filesRatio}:${filesDragging}:${connectionsOpen}:${statusOpen}:${statusPanelWidth}`}
-                        setNotice={showNotice}
-                        onReady={() => handleTerminalReady(tab.id, tab.serverId, tab.title)}
-                        onCommandSubmitted={handleCommandSubmitted}
-                        pasteRequest={pasteRequest?.tabId === tab.id ? pasteRequest : null}
-                        commandHistory={commandHistory}
-                        onClosed={() => {
-                          terminalReadyTabs.current.delete(tab.id);
-                          patchTab(tab.id, { state: "closed" });
-                        }}
-                        onReconnect={() => reconnectShell(tab.id)}
-                      />
-                    ))}
-                  </Suspense>
+                  <div className="terminal-stack">
+                    <Suspense fallback={null}>
+                      {tabs.map((tab) => (
+                        <TerminalPane
+                          key={tab.id}
+                          tab={tab}
+                          visible={tab.id === activeTabId}
+                          theme={theme}
+                          fontSize={terminalFontSize}
+                          layoutSignal={`${filesOpen}:${filesRatio}:${filesDragging}:${connectionsOpen}:${statusOpen}:${historyOpen}:${statusPanelWidth}:${tabs.length}`}
+                          setNotice={showNotice}
+                          onReady={() => handleTerminalReady(tab.id, tab.serverId, tab.title)}
+                          onCommandSubmitted={handleCommandSubmitted}
+                          pasteRequest={pasteRequest?.tabId === tab.id ? pasteRequest : null}
+                          commandHistory={commandHistory}
+                          onClosed={() => {
+                            terminalReadyTabs.current.delete(tab.id);
+                            patchTab(tab.id, { state: "closed" });
+                          }}
+                          onReconnect={() => reconnectShell(tab.id)}
+                        />
+                      ))}
+                    </Suspense>
+                  </div>
                 </div>
 
                 {activeTab && (
@@ -1694,9 +1768,7 @@ export default function App() {
                       className={`dock-divider ${filesOpen ? "open" : ""}`}
                       onPointerDown={startDockDrag}
                       title="拖动调整比例"
-                    >
-                      <span className="dock-grip" />
-                    </div>
+                    />
                     <div
                       className={`files-region ${filesOpen ? "open" : ""}`}
                       ref={filesRegionRef}
@@ -1749,10 +1821,9 @@ export default function App() {
                 className={`status-divider ${statusOpen || historyOpen ? "open" : ""}`}
                 onPointerDown={startStatusDrag}
                 title="拖动调整面板宽度"
-              >
-                <span className="status-grip" />
-              </div>
+              />
               <aside
+                ref={statusPanelRef}
                 className={`status-panel ${statusOpen || historyOpen ? "open" : ""}`}
                 style={{ "--status-panel-width": `${statusPanelWidth}px` } as CSSProperties}
               >
@@ -1762,11 +1833,7 @@ export default function App() {
                     className={`status-panel-content ${statusOpen ? "status-view" : "history-view"}`}
                   >
                     {statusOpen ? (
-                      <StatusDashboard
-                        tab={activeTab}
-                        loading={statusLoading}
-                        onRefresh={() => refreshStatus()}
-                      />
+                      <StatusDashboard tab={activeTab} />
                     ) : (
                       <CommandHistoryPanel commands={commandHistory} onPick={pasteHistoryCommand} />
                     )}
@@ -1781,7 +1848,7 @@ export default function App() {
               <ServerDetail
                 servers={servers}
                 onConnect={openShell}
-                onNew={() => editServer()}
+                onNew={() => newServer()}
                 onOpenConnections={() => setConnectionsOpen(true)}
               />
             </div>
@@ -1797,6 +1864,46 @@ export default function App() {
           onTerminalFontSizeChange={setTerminalFontSize}
           onClose={() => setSettingsOpen(false)}
         />
+      )}
+
+      {connectionDeleteConfirm && (
+        <div className="delete-confirm-backdrop" role="presentation">
+          <div
+            className="delete-confirm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="connection-delete-confirm-title"
+          >
+            <h2 id="connection-delete-confirm-title">确认删除</h2>
+            <p>{connectionDeleteDescription(connectionDeleteConfirm)}</p>
+            <div
+              className="delete-target"
+              title={connectionDeleteTargetText(connectionDeleteConfirm)}
+            >
+              {connectionDeleteTargetText(connectionDeleteConfirm)}
+            </div>
+            {connectionDeleteConfirm.error && <div className="delete-error">{connectionDeleteConfirm.error}</div>}
+            <div className="delete-actions">
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={connectionDeleteConfirm.busy}
+                onClick={() => setConnectionDeleteConfirm(null)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="danger-button"
+                autoFocus
+                disabled={connectionDeleteConfirm.busy}
+                onClick={confirmDeleteConnections}
+              >
+                {connectionDeleteConfirm.busy ? "删除中…" : "删除"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {deleteConfirm && (
@@ -1937,6 +2044,48 @@ function networkPatch(
   };
 }
 
+async function applyNativeWindowTheme(theme: AppTheme) {
+  const [{ Effect, EffectState, getCurrentWindow }, { getCurrentWebview }] = await Promise.all([
+    import("@tauri-apps/api/window"),
+    import("@tauri-apps/api/webview"),
+  ]);
+  const appWindow = getCurrentWindow();
+  const webview = getCurrentWebview();
+  const nativeTheme = getThemeDefinition(theme).native;
+  const windowBackgroundColor = nativeTheme.backgroundColor;
+  // For transparent themes the macOS vibrancy view IS the window background. Painting
+  // any non-clear color over it hides the blur, so the window/webview must be fully
+  // transparent and let the NSVisualEffectView (set below) supply the gray frost.
+  const transparent = { red: 0, green: 0, blue: 0, alpha: 0 };
+  const webviewBackgroundColor = nativeTheme.transparentChrome ? transparent : windowBackgroundColor;
+  const appWindowBackgroundColor = nativeTheme.transparentChrome ? transparent : windowBackgroundColor;
+
+  await Promise.allSettled([
+    appWindow.setBackgroundColor(appWindowBackgroundColor),
+    webview.setBackgroundColor(webviewBackgroundColor),
+  ]);
+
+  if (nativeTheme.effect !== "glass") {
+    await appWindow.clearEffects().catch(() => undefined);
+    return;
+  }
+
+  const platform = document.documentElement.dataset.platform;
+  const effects =
+    platform === "macos"
+      ? // UnderWindowBackground is the most translucent macOS material: it passes
+        // the real desktop colors through (unlike HudWindow, which flattens them to
+        // gray) so the CSS blur(40px) saturate(200%) can render a vivid glass.
+        { effects: [Effect.UnderWindowBackground], state: EffectState.Active, radius: 14 }
+      : platform === "windows"
+        ? { effects: [Effect.Acrylic, Effect.Blur], color: windowBackgroundColor }
+        : null;
+
+  if (effects) {
+    await appWindow.setEffects(effects).catch(() => undefined);
+  }
+}
+
 function loadDemoFiles(path: string) {
   return new Promise<SftpEntry[]>((resolve) => {
     setTimeout(() => {
@@ -1995,14 +2144,31 @@ function ensureFolder(current: string[], folder: string) {
   return [...current, name].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
 
+function connectionDeleteDescription(state: ConnectionDeleteConfirmState) {
+  const folderCount = state.target.folders.length;
+  const serverCount = state.servers.length;
+  if (folderCount > 0) {
+    return `将删除 ${folderCount} 个文件夹及其中 ${serverCount} 台服务器。`;
+  }
+  if (serverCount > 1) {
+    return `将删除所选 ${serverCount} 台服务器。`;
+  }
+  return "该服务器会被删除。";
+}
+
+function connectionDeleteTargetText(state: ConnectionDeleteConfirmState) {
+  const folders = state.target.folders.map((folder) => `文件夹：${folder}`);
+  const servers = state.target.folders.length > 0
+    ? []
+    : state.servers.map((server) => server.name);
+  return [...folders, ...servers].join("、") || "所选连接";
+}
+
 function groupServersForTree(
   servers: ServerRecord[],
   folders: string[],
-  activeGroup: string,
-  query: string,
 ) {
   const groupedServers = groupServers(servers);
-  const needle = query.trim().toLowerCase();
   const folderNames = new Set(folders);
   for (const group of Object.keys(groupedServers)) folderNames.add(group);
 
@@ -2011,11 +2177,7 @@ function groupServersForTree(
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
     .reduce<Record<string, ServerRecord[]>>((acc, folder) => {
       const list = groupedServers[folder] ?? [];
-      const inActiveGroup = activeGroup === "全部" || activeGroup === folder;
-      const folderMatchesQuery = !needle || folder.toLowerCase().includes(needle);
-      if (list.length > 0 || (inActiveGroup && folderMatchesQuery)) {
-        acc[folder] = list;
-      }
+      acc[folder] = list;
       return acc;
     }, {});
 }

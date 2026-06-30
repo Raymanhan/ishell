@@ -32,7 +32,8 @@ const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS servers (
     secret BLOB,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
-    last_connected_at INTEGER
+    last_connected_at INTEGER,
+    sort_order INTEGER NOT NULL DEFAULT 0
 );";
 
 const COMMAND_HISTORY_SCHEMA: &str = "CREATE TABLE IF NOT EXISTS command_history (
@@ -42,11 +43,11 @@ const COMMAND_HISTORY_SCHEMA: &str = "CREATE TABLE IF NOT EXISTS command_history
 );
 CREATE INDEX IF NOT EXISTS idx_command_history_created_at ON command_history(created_at DESC);";
 
-const COLUMNS: &str = "id,name,host,port,username,\"group\",tags,auth_type,key_path,color,notes,created_at,updated_at,last_connected_at";
+const COLUMNS: &str = "id,name,host,port,username,\"group\",tags,auth_type,key_path,color,notes,created_at,updated_at,last_connected_at,sort_order";
 
 pub fn list_servers(app: &AppHandle) -> Result<Vec<ServerRecord>, String> {
     let conn = open_db(app)?;
-    let sql = format!("SELECT {COLUMNS} FROM servers ORDER BY \"group\", name");
+    let sql = format!("SELECT {COLUMNS} FROM servers ORDER BY \"group\", sort_order, name");
     let mut stmt = conn.prepare(&sql).map_err(db_err)?;
     let rows = stmt.query_map([], row_to_record).map_err(db_err)?;
 
@@ -80,14 +81,15 @@ pub fn upsert_server(
     conn.execute(
         &format!(
             "INSERT INTO servers ({COLUMNS}, secret)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14, NULL)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15, NULL)
              ON CONFLICT(id) DO UPDATE SET
                name=excluded.name, host=excluded.host, port=excluded.port,
                username=excluded.username, \"group\"=excluded.\"group\",
                tags=excluded.tags, auth_type=excluded.auth_type,
                key_path=excluded.key_path, color=excluded.color,
                notes=excluded.notes, updated_at=excluded.updated_at,
-               last_connected_at=excluded.last_connected_at"
+               last_connected_at=excluded.last_connected_at,
+               sort_order=excluded.sort_order"
         ),
         params![
             record.id,
@@ -104,6 +106,7 @@ pub fn upsert_server(
             record.created_at as i64,
             record.updated_at as i64,
             record.last_connected_at.map(|value| value as i64),
+            record.sort_order as i64,
         ],
     )
     .map_err(db_err)?;
@@ -124,6 +127,21 @@ pub fn delete_server(app: &AppHandle, id: &str) -> Result<(), String> {
     let conn = open_db(app)?;
     conn.execute("DELETE FROM servers WHERE id = ?1", [id])
         .map_err(db_err)?;
+    Ok(())
+}
+
+pub fn reorder_servers(app: &AppHandle, items: &[crate::models::ServerOrderInput]) -> Result<(), String> {
+    let mut conn = open_db(app)?;
+    let tx = conn.transaction().map_err(db_err)?;
+    let stamp = now() as i64;
+    for item in items {
+        tx.execute(
+            "UPDATE servers SET \"group\" = ?1, sort_order = ?2, updated_at = ?3 WHERE id = ?4",
+            params![item.group.trim(), item.sort_order as i64, stamp, item.id],
+        )
+        .map_err(db_err)?;
+    }
+    tx.commit().map_err(db_err)?;
     Ok(())
 }
 
@@ -250,15 +268,35 @@ fn row_to_record(row: &rusqlite::Row) -> rusqlite::Result<ServerRecord> {
         created_at: row.get::<_, i64>(11)? as u64,
         updated_at: row.get::<_, i64>(12)? as u64,
         last_connected_at: row.get::<_, Option<i64>>(13)?.map(|value| value as u64),
+        sort_order: row.get::<_, i64>(14)? as u64,
     })
 }
 
 fn open_db(app: &AppHandle) -> Result<Connection, String> {
     let conn = Connection::open(db_path(app)?).map_err(db_err)?;
     conn.execute_batch(SCHEMA).map_err(db_err)?;
+    ensure_sort_order_column(&conn)?;
     conn.execute_batch(COMMAND_HISTORY_SCHEMA).map_err(db_err)?;
     migrate_legacy_json(app, &conn)?;
     Ok(conn)
+}
+
+fn ensure_sort_order_column(conn: &Connection) -> Result<(), String> {
+    let has_sort_order = conn
+        .prepare("PRAGMA table_info(servers)")
+        .map_err(db_err)?
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(db_err)?
+        .filter_map(Result::ok)
+        .any(|name| name == "sort_order");
+    if !has_sort_order {
+        conn.execute(
+            "ALTER TABLE servers ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0",
+            [],
+        )
+        .map_err(db_err)?;
+    }
+    Ok(())
 }
 
 /// Best-effort one-time import of host metadata from the old `servers.json`
@@ -287,7 +325,7 @@ fn migrate_legacy_json(app: &AppHandle, conn: &Connection) -> Result<(), String>
         let _ = conn.execute(
             &format!(
                 "INSERT OR IGNORE INTO servers ({COLUMNS}, secret)
-                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14, NULL)"
+                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15, NULL)"
             ),
             params![
                 record.id,
@@ -304,6 +342,7 @@ fn migrate_legacy_json(app: &AppHandle, conn: &Connection) -> Result<(), String>
                 record.created_at as i64,
                 record.updated_at as i64,
                 record.last_connected_at.map(|value| value as i64),
+                record.sort_order as i64,
             ],
         );
     }

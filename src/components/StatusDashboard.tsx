@@ -4,9 +4,7 @@ import {
   ArrowUp,
   Cpu,
   Gauge as GaugeIcon,
-  HardDrive,
   MemoryStick,
-  RefreshCw,
 } from "lucide-react";
 import type { DiskMount } from "../types";
 import type { ShellTab } from "../features/shell/types";
@@ -14,12 +12,8 @@ import { formatBytes, memoryPercent } from "../utils/format";
 
 export function StatusDashboard({
   tab,
-  loading,
-  onRefresh,
 }: {
   tab: ShellTab;
-  loading: boolean;
-  onRefresh: () => void;
 }) {
   const status = tab.status;
   const mem = memoryPercent(status);
@@ -32,6 +26,10 @@ export function StatusDashboard({
       : null;
   const memoryTotalGb = status?.memoryTotalMb != null ? status.memoryTotalMb / 1024 : null;
   const memoryAvailableGb = status?.memoryAvailableMb != null ? status.memoryAvailableMb / 1024 : null;
+  const memoryValueText =
+    memoryUsedGb != null && memoryTotalGb != null
+      ? `${formatCapacityGb(memoryUsedGb, true)}/${formatCapacityGb(memoryTotalGb, true)}`
+      : `${mem}%`;
   const swapTotalMb = status?.swapTotalMb;
   const swapFreeMb = status?.swapFreeMb;
   const swapUsedMb = swapTotalMb != null && swapFreeMb != null ? Math.max(0, swapTotalMb - swapFreeMb) : null;
@@ -42,20 +40,13 @@ export function StatusDashboard({
   return (
     <div className="dashboard">
       <div className="dash-head">
-        <div>
-          <span className="eyebrow">实时监控</span>
-          <h2>{tab.title}</h2>
-          <p>{tab.subtitle}</p>
+        <div className="dash-id" title={tab.subtitle}>
+          <strong>{tab.title}</strong>
         </div>
-        <button type="button" className="btn-ghost" onClick={onRefresh} disabled={loading}>
-          <RefreshCw size={14} className={loading ? "spin" : ""} />
-          刷新
-        </button>
       </div>
 
       <section className="network-card">
         <div className="network-head">
-          <span>网络速度</span>
           <div className="network-speeds">
             <SpeedPill icon={<ArrowDown size={12} />} value={tab.networkRxBps} label="下载" />
             <SpeedPill icon={<ArrowUp size={12} />} value={tab.networkTxBps} label="上传" />
@@ -65,12 +56,6 @@ export function StatusDashboard({
       </section>
 
       <section className="metric-section">
-        <div className="metric-section-head">
-          <span>
-            <GaugeIcon size={14} />
-            指标
-          </span>
-        </div>
         <div className="metric-list">
           <MetricBar
             icon={<Cpu size={14} />}
@@ -84,7 +69,7 @@ export function StatusDashboard({
             icon={<MemoryStick size={14} />}
             label="内存"
             value={mem}
-            valueText={`${mem}%`}
+            valueText={memoryValueText}
             detail={
               memoryUsedGb != null && memoryTotalGb != null && memoryAvailableGb != null
                 ? `${memoryUsedGb.toFixed(1)} / ${memoryTotalGb.toFixed(1)} GB · 可用 ${memoryAvailableGb.toFixed(1)} GB`
@@ -118,12 +103,6 @@ export function StatusDashboard({
       </section>
 
       <section className="metric-section">
-        <div className="metric-section-head">
-          <span>
-            <HardDrive size={14} />
-            磁盘挂载
-          </span>
-        </div>
         <div className="mount-card">
           {diskMounts.length ? (
             diskMounts.map((mount) => (
@@ -247,7 +226,6 @@ function MetricBar({
         <div className="metric-track" aria-label={`${label} ${valueText}`}>
           <span className="metric-fill" style={{ width: `${clamped}%` }} />
         </div>
-        <span className="metric-detail">{detail}</span>
       </div>
       <strong>{valueText}</strong>
     </article>
