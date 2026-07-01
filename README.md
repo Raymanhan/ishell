@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.0.4](https://github.com/Raymanhan/ishell/releases/tag/v1.0.4)**
+**[Download iShell v1.0.5](https://github.com/Raymanhan/ishell/releases/tag/v1.0.5)**
 
 Available packages:
 
@@ -88,6 +88,8 @@ connections, secret export is optional and can be passphrase-protected.
 - Each connected host opens as a tab.
 - Tabs can be activated, closed, cloned, reconnected, and reordered.
 - Tabs can be dragged out and handed off to another iShell window.
+- Closing the native window closes active terminal tabs and hides the app
+  instead of leaving background sessions behind.
 - Right-click a tab for tab-level actions.
 - The terminal font size is configurable in Settings.
 - Command history can be searched and pasted back into the active terminal.
@@ -198,8 +200,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.0.4
-git push origin v1.0.4
+git tag v1.0.5
+git push origin v1.0.5
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -233,6 +235,8 @@ src-tauri/src/
 
 ## Recent Changes
 
+- `v1.0.5` changes native window close behavior to close terminal tabs, reset
+  transient panels, and hide the app cleanly.
 - `v1.0.4` adds tab handoff between windows, improves connection tree dragging,
   splits the CSS into focused modules, and makes SFTP symlink handling safer.
 - `v1.0.3` refines SFTP selection typing and keeps the release metadata aligned

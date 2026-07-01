@@ -192,6 +192,8 @@ export default function App() {
   const sftpBusyTimer = useRef<number | null>(null);
   const noticeTimer = useRef<number | null>(null);
   const statusOpenRef = useRef(false);
+  const tabsRef = useRef<ShellTab[]>([]);
+  const nativeCloseInFlightRef = useRef(false);
   const terminalReadyTabs = useRef<Set<string>>(new Set());
 
   const selectedServer = useMemo(
@@ -217,6 +219,7 @@ export default function App() {
   uploadsRef.current = uploads;
   downloadsRef.current = downloads;
   statusOpenRef.current = statusOpen;
+  tabsRef.current = tabs;
 
   async function refreshServers() {
     if (!isTauri) {
@@ -277,6 +280,25 @@ export default function App() {
     if (!isTauri) return;
     void applyNativeWindowTheme(theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (!isTauri) return;
+    let unlisten: (() => void) | undefined;
+    let active = true;
+    (async () => {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const un = await getCurrentWindow().onCloseRequested((event) => {
+        event.preventDefault();
+        void closeTabsAndHideApp();
+      });
+      if (active) unlisten = un;
+      else un();
+    })();
+    return () => {
+      active = false;
+      unlisten?.();
+    };
+  }, []);
 
   useEffect(() => {
     window.localStorage.setItem("ishell.terminalFontSize", String(terminalFontSize));
@@ -1145,8 +1167,7 @@ export default function App() {
   async function closeShells(tabIds: string[]) {
     const ids = new Set(tabIds);
     if (ids.size === 0) return;
-    const closingTabs = tabs.filter((tab) => ids.has(tab.id));
-    const firstClosedIndex = tabs.findIndex((tab) => ids.has(tab.id));
+    const closingTabs = tabsRef.current.filter((tab) => ids.has(tab.id));
     if (isTauri) {
       await Promise.all(
         closingTabs.map((tab) =>
@@ -1157,13 +1178,36 @@ export default function App() {
       );
     }
     closingTabs.forEach((tab) => terminalReadyTabs.current.delete(tab.id));
-    const remaining = tabs.filter((tab) => !ids.has(tab.id));
+    const latestTabs = tabsRef.current;
+    const firstClosedIndex = latestTabs.findIndex((tab) => ids.has(tab.id));
+    const remaining = latestTabs.filter((tab) => !ids.has(tab.id));
+    tabsRef.current = remaining;
     setTabs(remaining);
     setActiveTabId((current) => {
       if (current && !ids.has(current)) return current;
       if (remaining.length === 0) return null;
       return remaining[Math.min(Math.max(0, firstClosedIndex), remaining.length - 1)]?.id ?? null;
     });
+  }
+
+  async function closeTabsAndHideApp() {
+    if (nativeCloseInFlightRef.current) return;
+    nativeCloseInFlightRef.current = true;
+    try {
+      const tabIds = tabsRef.current.map((tab) => tab.id);
+      if (tabIds.length > 0) await closeShells(tabIds);
+      setFilesOpen(false);
+      setStatusOpen(false);
+      setHistoryOpen(false);
+      setFileEditor(null);
+      setDeleteConfirm(null);
+      const { hide } = await import("@tauri-apps/api/app");
+      await hide();
+    } catch (error) {
+      showNotice(String(error));
+    } finally {
+      nativeCloseInFlightRef.current = false;
+    }
   }
 
   async function refreshStatus(
