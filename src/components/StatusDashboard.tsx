@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -12,10 +12,13 @@ import { formatBytes, memoryPercent } from "../utils/format";
 
 export function StatusDashboard({
   tab,
+  onHostCopied,
 }: {
   tab: ShellTab;
+  onHostCopied?: (host: string) => void;
 }) {
   const status = tab.status;
+  const [hostCopied, setHostCopied] = useState(false);
   const mem = memoryPercent(status);
   const cpu = Math.round(status?.cpuPercent ?? 0);
   const cpuCores = Math.max(1, status?.cpuCores ?? 1);
@@ -37,11 +40,33 @@ export function StatusDashboard({
   const swapPercent = swapEnabled && swapUsedMb != null && swapTotalMb ? Math.round((swapUsedMb / swapTotalMb) * 100) : 0;
   const diskMounts = getDiskMounts(status);
 
+  async function copyHost() {
+    if (!tab.host) return;
+    try {
+      await copyText(tab.host);
+      setHostCopied(true);
+      onHostCopied?.(tab.host);
+      window.setTimeout(() => setHostCopied(false), 1200);
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
   return (
     <div className="dashboard">
       <div className="dash-head">
         <div className="dash-id" title={tab.subtitle}>
           <strong>{tab.title}</strong>
+          {tab.host && (
+            <button
+              type="button"
+              className={`dash-host ${hostCopied ? "copied" : ""}`}
+              onClick={copyHost}
+              title={hostCopied ? "已复制 IP 地址" : "点击复制 IP 地址"}
+            >
+              {hostCopied ? "已复制" : tab.host}
+            </button>
+          )}
         </div>
       </div>
 
@@ -127,6 +152,24 @@ function SpeedPill({ icon, value, label }: { icon: ReactNode; value: number; lab
       {value > 0 ? formatBytes(value) : "0 B"}/s
     </span>
   );
+}
+
+async function copyText(text: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  if (!copied) throw new Error("复制失败");
 }
 
 function NetworkWave({ history }: { history: ShellTab["networkHistory"] }) {

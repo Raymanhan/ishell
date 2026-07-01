@@ -144,6 +144,13 @@ export default function App() {
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [statusPanelWidth, setStatusPanelWidth] = useState(STATUS_PANEL_WIDTH);
   const [pasteRequest, setPasteRequest] = useState<{ tabId: string; id: number; command: string } | null>(null);
+  const [commandRequest, setCommandRequest] = useState<{
+    tabId: string;
+    id: number;
+    command: string;
+    requirePromptStart?: boolean;
+    blockedNotice?: string;
+  } | null>(null);
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [downloads, setDownloads] = useState<DownloadItem[]>([]);
   const [dragOver, setDragOver] = useState(false);
@@ -544,6 +551,21 @@ export default function App() {
     showNotice("已粘贴历史命令");
   }
 
+  function jumpTerminalToDir(targetDir: string) {
+    if (!activeTab) return;
+    if (!activeTab.sessionId) {
+      showNotice("终端尚未连接，无法跳转目录");
+      return;
+    }
+    setCommandRequest({
+      tabId: activeTab.id,
+      id: Date.now() + Math.random(),
+      command: `cd -- ${quoteShellArg(targetDir)}\r`,
+      requirePromptStart: true,
+      blockedNotice: "终端当前不在普通命令行状态，未执行目录跳转",
+    });
+  }
+
   // Auto-refresh the dashboard with different cadences:
   // network 1s, core metrics 5s, disk mounts 60s.
   useEffect(() => {
@@ -862,6 +884,7 @@ export default function App() {
       serverId: server.id,
       title: server.name,
       subtitle: `${server.username}@${server.host}:${server.port}`,
+      host: server.host,
       color: server.color,
       sessionId: null,
       state: "connecting",
@@ -1750,6 +1773,7 @@ export default function App() {
                           onReady={() => handleTerminalReady(tab.id, tab.serverId, tab.title)}
                           onCommandSubmitted={handleCommandSubmitted}
                           pasteRequest={pasteRequest?.tabId === tab.id ? pasteRequest : null}
+                          commandRequest={commandRequest?.tabId === tab.id ? commandRequest : null}
                           commandHistory={commandHistory}
                           onClosed={() => {
                             terminalReadyTabs.current.delete(tab.id);
@@ -1788,6 +1812,7 @@ export default function App() {
                           onUpload={uploadFile}
                           onDownload={downloadFiles}
                           onEdit={openFileEditor}
+                          onTerminalJump={jumpTerminalToDir}
                           onMkdir={makeDir}
                           onRename={renameEntry}
                           onDelete={deleteEntries}
@@ -1833,7 +1858,7 @@ export default function App() {
                     className={`status-panel-content ${statusOpen ? "status-view" : "history-view"}`}
                   >
                     {statusOpen ? (
-                      <StatusDashboard tab={activeTab} />
+                      <StatusDashboard tab={activeTab} onHostCopied={(host) => showNotice(`已复制 ${host}`)} />
                     ) : (
                       <CommandHistoryPanel commands={commandHistory} onPick={pasteHistoryCommand} />
                     )}
@@ -1966,9 +1991,7 @@ export default function App() {
             </header>
             {fileEditor.error && <div className="file-editor-error">{fileEditor.error}</div>}
             <div className="file-editor-code">
-              <pre ref={fileEditorHighlightRef} className="file-editor-highlight" aria-hidden="true">
-                {renderHighlightedCode(fileEditor.entry.name, fileEditor.content)}
-              </pre>
+              <pre ref={fileEditorHighlightRef} className="file-editor-highlight" aria-hidden="true">{renderHighlightedCode(fileEditor.entry.name, fileEditor.content)}</pre>
               <textarea
                 className="file-editor-textarea"
                 value={fileEditor.content}
@@ -2340,6 +2363,10 @@ function buildPathChain(path: string) {
     chain.push(acc);
   }
   return chain;
+}
+
+function quoteShellArg(value: string) {
+  return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
 function buildPathColumns(pathChain: string[], cache: Record<string, SftpEntry[]>): FileColumn[] {

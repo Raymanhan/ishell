@@ -50,6 +50,7 @@ function TerminalPaneBase({
   onReconnect,
   onCommandSubmitted,
   pasteRequest,
+  commandRequest,
   commandHistory,
 }: {
   tab: ShellTab;
@@ -63,6 +64,7 @@ function TerminalPaneBase({
   onReconnect?: () => void;
   onCommandSubmitted?: (command: string) => void;
   pasteRequest?: { id: number; command: string } | null;
+  commandRequest?: { id: number; command: string; requirePromptStart?: boolean; blockedNotice?: string } | null;
   commandHistory: string[];
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -124,7 +126,11 @@ function TerminalPaneBase({
     terminalRef.current?.write(nextData);
     renderedOffsetRef.current[sessionId] = eventEnd;
     trackSensitivePrompt(nextData);
-    if (nextData.includes("[iShell] connected")) markReady(sessionId);
+    // Scan the full payload, not just the part actually written: if an earlier
+    // chunk carrying the marker was dropped (e.g. a `terminal:ready`/`terminal:data`
+    // listener race on fast/reused sessions), the snapshot catch-up still delivers
+    // the whole buffer here and `overlap` trims it out of `nextData` before we can see it.
+    if (data.includes("[iShell] connected")) markReady(sessionId);
   }
 
   function reportTerminalSize() {
@@ -442,6 +448,20 @@ function TerminalPaneBase({
   }, [pasteRequest?.id, visible]);
 
   useEffect(() => {
+    if (!visible || !commandRequest) return;
+    closeHistorySuggest();
+    if (
+      commandRequest.requirePromptStart &&
+      (sensitiveInputRef.current || commandDraftRef.current.length > 0 || !isAtShellPromptCommandStart())
+    ) {
+      setNotice(commandRequest.blockedNotice ?? "终端当前不在普通命令行状态，已取消操作");
+      return;
+    }
+    terminalRef.current?.focus();
+    rawSendTerminalInput(commandRequest.command);
+  }, [commandRequest?.id, visible]);
+
+  useEffect(() => {
     if (!terminalRef.current) return;
     terminalRef.current.options.theme = getTerminalTheme(theme);
   }, [theme]);
@@ -641,6 +661,7 @@ export const TerminalPane = memo(TerminalPaneBase, (previous, next) => {
     previous.fontSize === next.fontSize &&
     previous.layoutSignal === next.layoutSignal &&
     previous.pasteRequest?.id === next.pasteRequest?.id &&
+    previous.commandRequest?.id === next.commandRequest?.id &&
     previous.commandHistory === next.commandHistory
   );
 });

@@ -4,6 +4,8 @@ import {
   ChevronRight,
   Columns3,
   Download,
+  Eye,
+  EyeOff,
   File,
   FilePenLine,
   Folder,
@@ -13,6 +15,7 @@ import {
   Pencil,
   RefreshCw,
   TableProperties,
+  SquareTerminal,
   Trash2,
   Upload,
   UploadCloud,
@@ -49,6 +52,10 @@ interface SortState {
   direction: SortDirection;
 }
 
+function filterHiddenEntries(entries: SftpEntry[], showHidden: boolean) {
+  return showHidden ? entries : entries.filter((entry) => !isHiddenEntry(entry));
+}
+
 function SftpBrowserBase({
   tab,
   busy,
@@ -60,6 +67,7 @@ function SftpBrowserBase({
   onUpload,
   onDownload,
   onEdit,
+  onTerminalJump,
   onMkdir,
   onRename,
   onDelete,
@@ -75,6 +83,7 @@ function SftpBrowserBase({
   onUpload: (targetDir?: string) => void;
   onDownload: (entries: SftpEntry[]) => void;
   onEdit: (entry: SftpEntry) => void;
+  onTerminalJump: (targetDir: string) => void;
   onMkdir: (name: string, targetDir?: string) => void;
   onRename: (entry: SftpEntry, columnIndex: number, nextName: string) => void;
   onDelete: (entries: SftpEntry[], columnIndex: number) => void;
@@ -82,15 +91,19 @@ function SftpBrowserBase({
 }) {
   const columns = tab.files;
   const [sort, setSort] = useState<SortState>({ key: null, direction: "asc" });
+  const [showHidden, setShowHidden] = useState(false);
   const currentDir = columns.length ? columns[columns.length - 1].path : "/";
   const currentColumnIndex = Math.max(0, columns.length - 1);
   const currentColumn = columns[currentColumnIndex] ?? null;
   const currentEntries = useMemo(
-    () => sortEntriesForView(currentColumn?.entries ?? [], sort),
-    [currentColumn?.entries, sort],
+    () => sortEntriesForView(filterHiddenEntries(currentColumn?.entries ?? [], showHidden), sort),
+    [currentColumn?.entries, showHidden, sort],
   );
   const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(() => new Set());
-  const treeRows = useMemo(() => buildDirectoryTreeRows(columns, collapsedPaths), [columns, collapsedPaths]);
+  const treeRows = useMemo(
+    () => buildDirectoryTreeRows(columns, collapsedPaths, showHidden),
+    [columns, collapsedPaths, showHidden],
+  );
   const selectedPaths = useMemo(
     () => (
       tab.selectedPaths?.length
@@ -103,8 +116,10 @@ function SftpBrowserBase({
   );
   const selectedPathSet = useMemo(() => new Set(selectedPaths), [selectedPaths]);
   const selectedEntries = useMemo(
-    () => selectedPaths.map((path) => findEntry(tab, path)).filter((entry): entry is SftpEntry => Boolean(entry)),
-    [selectedPaths, tab],
+    () => selectedPaths
+      .map((path) => findEntry(tab, path))
+      .filter((entry): entry is SftpEntry => entry != null && (showHidden || !isHiddenEntry(entry))),
+    [selectedPaths, showHidden, tab],
   );
   const selectedDownloadEntries = useMemo(
     () => selectedEntries.filter((entry) => !entry.isDir),
@@ -300,7 +315,9 @@ function SftpBrowserBase({
 
   function selectEntry(entry: SftpEntry, columnIndex: number, event: React.MouseEvent) {
     if (event.shiftKey) {
-      const entries = columnIndex === currentColumnIndex ? currentEntries : (columns[columnIndex]?.entries ?? []);
+      const entries = columnIndex === currentColumnIndex
+        ? currentEntries
+        : filterHiddenEntries(columns[columnIndex]?.entries ?? [], showHidden);
       const anchorPath = tab.selectedPath;
       const anchorIndex = entries.findIndex((item) => item.path === anchorPath);
       const entryIndex = entries.findIndex((item) => item.path === entry.path);
@@ -384,6 +401,15 @@ function SftpBrowserBase({
         aria-pressed={viewMode === "columns"}
       >
         <Columns3 size={15} />
+      </button>
+      <button
+        type="button"
+        className={`tool ${showHidden ? "on" : ""}`}
+        onClick={() => setShowHidden((current) => !current)}
+        title={showHidden ? "隐藏隐藏文件" : "显示隐藏文件"}
+        aria-pressed={showHidden}
+      >
+        {showHidden ? <Eye size={15} /> : <EyeOff size={15} />}
       </button>
       <span className="tool-sep" />
       <button type="button" className="tool" onClick={() => onUpload(currentDir)} title="上传到当前目录">
@@ -585,7 +611,7 @@ function SftpBrowserBase({
                                 <input
                                   ref={renameInputRef}
                                   className="entry-rename"
-                                  value={renaming.value}
+	                                  value={renaming?.value ?? ""}
                                   onChange={(event) =>
                                     setRenaming((current) =>
                                       current ? { ...current, value: event.target.value } : current,
@@ -635,6 +661,7 @@ function SftpBrowserBase({
             </div>
           ) : (
             columns.map((column, index) => {
+              const columnEntries = filterHiddenEntries(column.entries, showHidden);
               const className = [
                 "column",
                 column.loading ? "loading" : "",
@@ -672,16 +699,16 @@ function SftpBrowserBase({
                     )}
                     {column.error ? (
                       <div className="column-state bad">{column.error}</div>
-                    ) : column.entries.length === 0 && column.loading ? (
+                    ) : columnEntries.length === 0 && column.loading ? (
                       <div className="column-skeleton">
                         {Array.from({ length: 7 }).map((_, skeleton) => (
                           <span key={skeleton} className="skeleton-row" />
                         ))}
                       </div>
-                    ) : column.entries.length === 0 ? (
+                    ) : columnEntries.length === 0 ? (
                       <div className="column-state">空目录</div>
                     ) : (
-                      column.entries.map((entry) => {
+                      columnEntries.map((entry) => {
                         const isActive = selectedPathSet.has(entry.path);
                         const inPath = columns[index + 1]?.path === entry.path;
                         const isOpening = entry.isDir && inPath && columns[index + 1]?.loading;
@@ -718,7 +745,7 @@ function SftpBrowserBase({
                               <input
                                 ref={renameInputRef}
                                 className="entry-rename"
-                                value={renaming.value}
+	                                value={renaming?.value ?? ""}
                                 onChange={(event) =>
                                   setRenaming((current) =>
                                     current ? { ...current, value: event.target.value } : current,
@@ -809,6 +836,9 @@ function SftpBrowserBase({
               <button type="button" onClick={() => runMenu(() => onUpload(targetDirFor(menu.entry, menu.columnIndex)))}>
                 <Upload size={14} /> 上传到此处
               </button>
+              <button type="button" onClick={() => runMenu(() => onTerminalJump(targetDirFor(menu.entry, menu.columnIndex)))}>
+                <SquareTerminal size={14} /> 跳转到此处
+              </button>
               <button type="button" onClick={() => runMenu(() => startCreateDirFromMenu(menu))}>
                 <FolderPlus size={14} /> 新建文件夹
               </button>
@@ -828,6 +858,9 @@ function SftpBrowserBase({
             <>
               <button type="button" onClick={() => runMenu(() => onUpload(targetDirFor(null, menu.columnIndex)))}>
                 <Upload size={14} /> 上传文件
+              </button>
+              <button type="button" onClick={() => runMenu(() => onTerminalJump(targetDirFor(null, menu.columnIndex)))}>
+                <SquareTerminal size={14} /> 跳转到此处
               </button>
               <button type="button" onClick={() => runMenu(() => startCreateDirFromMenu(menu))}>
                 <FolderPlus size={14} /> 新建文件夹
@@ -859,6 +892,7 @@ export const SftpBrowser = memo(SftpBrowserBase, (previous, next) => (
   previous.onUpload === next.onUpload &&
   previous.onDownload === next.onDownload &&
   previous.onEdit === next.onEdit &&
+  previous.onTerminalJump === next.onTerminalJump &&
   previous.onMkdir === next.onMkdir &&
   previous.onRename === next.onRename &&
   previous.onDelete === next.onDelete &&
@@ -873,7 +907,11 @@ interface DirectoryTreeRow {
   loading: boolean;
 }
 
-function buildDirectoryTreeRows(columns: ShellTab["files"], collapsedPaths: Set<string>): DirectoryTreeRow[] {
+function buildDirectoryTreeRows(
+  columns: ShellTab["files"],
+  collapsedPaths: Set<string>,
+  showHidden: boolean,
+): DirectoryTreeRow[] {
   const rows: DirectoryTreeRow[] = [
     {
       entry: rootEntry(),
@@ -884,7 +922,7 @@ function buildDirectoryTreeRows(columns: ShellTab["files"], collapsedPaths: Set<
     },
   ];
 
-  if (!collapsedPaths.has("/")) appendDirectoryRows(rows, columns, collapsedPaths, 0, 1);
+  if (!collapsedPaths.has("/")) appendDirectoryRows(rows, columns, collapsedPaths, showHidden, 0, 1);
   return rows;
 }
 
@@ -892,6 +930,7 @@ function appendDirectoryRows(
   rows: DirectoryTreeRow[],
   columns: ShellTab["files"],
   collapsedPaths: Set<string>,
+  showHidden: boolean,
   columnIndex: number,
   level: number,
 ) {
@@ -900,6 +939,7 @@ function appendDirectoryRows(
   const nextColumn = columns[columnIndex + 1];
   for (const entry of column.entries) {
     if (!entry.isDir) continue;
+    if (!showHidden && isHiddenEntry(entry)) continue;
     const inTrail = nextColumn?.path === entry.path;
     rows.push({
       entry,
@@ -909,7 +949,7 @@ function appendDirectoryRows(
       loading: inTrail && Boolean(nextColumn?.loading),
     });
     if (inTrail && !collapsedPaths.has(entry.path)) {
-      appendDirectoryRows(rows, columns, collapsedPaths, columnIndex + 1, level + 1);
+      appendDirectoryRows(rows, columns, collapsedPaths, showHidden, columnIndex + 1, level + 1);
     }
   }
 }

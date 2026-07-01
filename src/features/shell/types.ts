@@ -7,6 +7,7 @@ export interface ShellTab {
   serverId: string;
   title: string;
   subtitle: string;
+  host: string;
   color: string;
   sessionId: string | null;
   state: ShellState;
