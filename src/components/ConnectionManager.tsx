@@ -88,6 +88,7 @@ export function ConnectionManager({
   const createFolderInputRef = useRef<HTMLInputElement>(null);
   const createFolderFocusedRef = useRef(false);
   const suppressTreeClickRef = useRef(false);
+  const dropHintRef = useRef<ConnectionMoveRequest | null>(null);
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set());
   const [lastSelectedKey, setLastSelectedKey] = useState<string | null>(null);
@@ -317,6 +318,11 @@ export function ConnectionManager({
     event.currentTarget.setPointerCapture(event.pointerId);
   }
 
+  function updateDropHint(next: ConnectionMoveRequest | null) {
+    dropHintRef.current = next;
+    setDropHint(next);
+  }
+
   function moveTreeDrag(event: ReactPointerEvent<HTMLElement>) {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
@@ -337,7 +343,7 @@ export function ConnectionManager({
       .find((element): element is HTMLElement => Boolean(element));
     const targetKey = target?.dataset.connectionKey;
     if (!target || !targetKey || targetKey === drag.key) {
-      setDropHint(null);
+      updateDropHint(null);
       return;
     }
 
@@ -355,10 +361,10 @@ export function ConnectionManager({
         : "after";
     const next = { draggedKey: drag.key, targetKey, position };
     if (!canDropConnection(next)) {
-      setDropHint(null);
+      updateDropHint(null);
       return;
     }
-    setDropHint(next);
+    updateDropHint(next);
     if (position === "inside" && isFolderTarget) {
       setCollapsedFolders((current) => {
         const group = targetKey.slice("folder:".length);
@@ -378,8 +384,8 @@ export function ConnectionManager({
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    if (drag.dragging && dropHint) {
-      onMove(dropHint);
+    if (drag.dragging && dropHintRef.current) {
+      onMove(dropHintRef.current);
     }
     if (drag.dragging) {
       suppressTreeClickRef.current = true;
@@ -387,7 +393,7 @@ export function ConnectionManager({
         suppressTreeClickRef.current = false;
       }, 0);
     }
-    setDropHint(null);
+    updateDropHint(null);
   }
 
   function canDropConnection(request: ConnectionMoveRequest) {
@@ -491,6 +497,9 @@ export function ConnectionManager({
                         onPointerMove={moveTreeDrag}
                         onPointerUp={endTreeDrag}
                         onPointerCancel={endTreeDrag}
+                        onDoubleClick={() => {
+                          if (!suppressTreeClickRef.current) connect(server);
+                        }}
                       >
                         <button
                           type="button"
@@ -498,9 +507,6 @@ export function ConnectionManager({
                           onClick={(event) => {
                             if (suppressTreeClickRef.current) return;
                             selectTreeItem(event, serverKey(server.id), server);
-                          }}
-                          onDoubleClick={() => {
-                            if (!suppressTreeClickRef.current) connect(server);
                           }}
                           onContextMenu={(event) => handleContextMenu(event, server)}
                           title={`${server.username}@${server.host}:${server.port} · 双击连接`}

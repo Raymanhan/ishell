@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.0.5](https://github.com/Raymanhan/ishell/releases/tag/v1.0.5)**
+**[Download iShell v1.0.6](https://github.com/Raymanhan/ishell/releases/tag/v1.0.6)**
 
 Available packages:
 
@@ -71,6 +71,8 @@ Available packages:
 - Multi-select supported items before running bulk export or delete actions.
 - New and edited servers keep a `sortOrder`, so the connection tree remains
   stable after restart.
+- Connection groups are sorted by saved order, then by natural name order for
+  predictable browsing.
 
 ### Server Profiles
 
@@ -200,8 +202,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.0.5
-git push origin v1.0.5
+git tag v1.0.6
+git push origin v1.0.6
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -235,6 +237,9 @@ src-tauri/src/
 
 ## Recent Changes
 
+- `v1.0.6` improves connection tree drag/drop reliability, restores double-click
+  connection behavior during pointer handling, and sorts grouped servers by
+  saved order.
 - `v1.0.5` changes native window close behavior to close terminal tabs, reset
   transient panels, and hide the app cleanly.
 - `v1.0.4` adds tab handoff between windows, improves connection tree dragging,
