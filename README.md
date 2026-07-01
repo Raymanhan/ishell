@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.0.1](https://github.com/Raymanhan/ishell/releases/tag/v1.0.1)**
+**[Download iShell v1.0.4](https://github.com/Raymanhan/ishell/releases/tag/v1.0.4)**
 
 Available packages:
 
@@ -35,13 +35,15 @@ Available packages:
 - **Import and export**: export selected hosts or folders as JSON/ZIP, with
   optional passphrase-protected secrets.
 - **Interactive terminals**: xterm-powered tabs backed by real PTY sessions,
-  reconnect support, tab cloning, tab reordering, and command history.
+  reconnect support, tab cloning, tab reordering, tab handoff between windows,
+  and command history.
 - **OpenSSH and russh transports**: macOS/Linux use the system OpenSSH client;
   Windows uses a pure-Rust `russh` backend with pooled sessions.
 - **SFTP browser**: column or tree browsing, upload, download, rename, delete,
-  mkdir, context menus, and remote text editing for small files.
+  mkdir, context menus, symlink-aware entries, terminal directory jump, and
+  remote text editing for small files.
 - **Live monitoring**: CPU, memory, swap, disk, load, processes, and network
-  throughput per connected host.
+  throughput per connected host, plus one-click host/IP copy.
 - **Glass desktop UI**: transparent native window, glass gray theme, xterm
   transparency, and platform-tuned font rendering.
 
@@ -85,6 +87,7 @@ connections, secret export is optional and can be passphrase-protected.
 
 - Each connected host opens as a tab.
 - Tabs can be activated, closed, cloned, reconnected, and reordered.
+- Tabs can be dragged out and handed off to another iShell window.
 - Right-click a tab for tab-level actions.
 - The terminal font size is configurable in Settings.
 - Command history can be searched and pasted back into the active terminal.
@@ -99,6 +102,9 @@ Supported operations:
 - Upload files to the current directory.
 - Download selected files.
 - Create folders, rename entries, and delete one or more entries.
+- Symlinks are shown with link icons and safer delete messaging.
+- Jump the active terminal to the selected remote directory from the SFTP
+  context menu.
 - Open small text files in the built-in editor and save changes back to the
   remote host.
 - Use the path bar to jump directly to a directory.
@@ -116,6 +122,7 @@ The status panel samples remote host information through SSH:
 - Load average
 - Process count
 - Network upload/download throughput
+- Host/IP copy shortcut
 
 ### Settings
 
@@ -191,8 +198,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.0.1
-git push origin v1.0.1
+git tag v1.0.4
+git push origin v1.0.4
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -207,6 +214,7 @@ src/
   constants/        Theme tokens and shared constants
   features/         Feature-owned types and helpers
   mocks/            Browser-preview demo data
+  styles/           CSS modules for base, layout, controls, views, and themes
   utils/            Formatting and filtering helpers
   App.tsx           Application orchestration
 
@@ -225,6 +233,12 @@ src-tauri/src/
 
 ## Recent Changes
 
+- `v1.0.4` adds tab handoff between windows, improves connection tree dragging,
+  splits the CSS into focused modules, and makes SFTP symlink handling safer.
+- `v1.0.3` refines SFTP selection typing and keeps the release metadata aligned
+  with the current source.
+- `v1.0.2` adds SFTP-to-terminal directory jumps, host/IP copy in the status
+  panel, and improves terminal readiness detection.
 - `v1.0.1` refreshes the glass UI, adds persistent connection ordering, improves
   terminal/SFTP layout ergonomics, and expands the documentation.
 - `v1.0.0` adds connection import/export, encrypted secret export, and a small
