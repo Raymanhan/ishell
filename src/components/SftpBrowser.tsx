@@ -118,7 +118,8 @@ function SftpBrowserBase({
   const selectedEntries = useMemo(
     () => selectedPaths
       .map((path) => findEntry(tab, path))
-      .filter((entry): entry is SftpEntry => entry != null && (showHidden || !isHiddenEntry(entry))),
+      .filter((entry): entry is SftpEntry => entry != null)
+      .filter((entry) => showHidden || !isHiddenEntry(entry)),
     [selectedPaths, showHidden, tab],
   );
   const selectedDownloadEntries = useMemo(

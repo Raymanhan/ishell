@@ -1,6 +1,6 @@
 {
   "name": "ishell",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "A lightweight Tauri SSH and SFTP workbench",
   "private": true,
   "license": "MIT",
