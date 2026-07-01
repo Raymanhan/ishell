@@ -68,7 +68,31 @@ jobs:
         run: npm ci
 
       - name: Build installer
+        if: runner.os != 'macOS'
         run: npm run tauri -- build --target ${{ matrix.target }}
+
+      - name: Build macOS app bundle
+        if: runner.os == 'macOS'
+        run: npm run tauri -- build --target ${{ matrix.target }} --bundles app
+
+      - name: Create macOS DMG
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          if [[ "${{ matrix.target }}" == "aarch64-apple-darwin" ]]; then
+            ARCH_SUFFIX="aarch64"
+          else
+            ARCH_SUFFIX="x64"
+          fi
+
+          APP_PATH="src-tauri/target/${{ matrix.target }}/release/bundle/macos/iShell.app"
+          DMG_DIR="src-tauri/target/${{ matrix.target }}/release/bundle/dmg"
+          DMG_PATH="${DMG_DIR}/iShell_${VERSION}_${ARCH_SUFFIX}.dmg"
+
+          test -d "${APP_PATH}"
+          mkdir -p "${DMG_DIR}"
+          hdiutil create -volname "iShell" -srcfolder "${APP_PATH}" -ov -format UDZO "${DMG_PATH}"
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
