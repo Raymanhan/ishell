@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import {
   ChevronRight,
@@ -13,6 +13,12 @@ import {
 } from "lucide-react";
 import type { ServerRecord } from "../types";
 
+export interface ConnectionMoveRequest {
+  draggedKey: string;
+  targetKey: string;
+  position: "before" | "after" | "inside";
+}
+
 export function ConnectionManager({
   open,
   grouped,
@@ -25,6 +31,7 @@ export function ConnectionManager({
   onExport,
   onImport,
   onDelete,
+  onMove,
   onClose,
 }: {
   open: boolean;
@@ -38,6 +45,7 @@ export function ConnectionManager({
   onExport: (target: { serverIds: string[]; folders: string[] }) => void;
   onImport: () => void;
   onDelete: (target: { serverIds: string[]; folders: string[] }) => void;
+  onMove: (request: ConnectionMoveRequest) => void;
   onClose: () => void;
 }) {
   const entries = useMemo(() => Object.entries(grouped), [grouped]);
@@ -70,12 +78,22 @@ export function ConnectionManager({
     [entries],
   );
   const menuRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{
+    key: string;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    dragging: boolean;
+  } | null>(null);
   const createFolderInputRef = useRef<HTMLInputElement>(null);
   const createFolderFocusedRef = useRef(false);
+  const suppressTreeClickRef = useRef(false);
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set());
   const [lastSelectedKey, setLastSelectedKey] = useState<string | null>(null);
   const [creatingFolderName, setCreatingFolderName] = useState<string | null>(null);
+  const [draggingKey, setDraggingKey] = useState<string | null>(null);
+  const [dropHint, setDropHint] = useState<ConnectionMoveRequest | null>(null);
   const [menu, setMenu] = useState<
     | { type: "server"; server: ServerRecord; x: number; y: number }
     | { type: "folder" | "blank"; group?: string; x: number; y: number }
@@ -286,6 +304,104 @@ export function ConnectionManager({
     setCreatingFolderName(null);
   }
 
+  function beginTreeDrag(event: ReactPointerEvent<HTMLElement>, key: string) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if ((event.target as HTMLElement).closest("input")) return;
+    dragRef.current = {
+      key,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      dragging: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function moveTreeDrag(event: ReactPointerEvent<HTMLElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const moved = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
+    if (!drag.dragging && moved < 4) return;
+
+    event.preventDefault();
+    drag.dragging = true;
+    setDraggingKey(drag.key);
+
+    const target = document
+      .elementsFromPoint(event.clientX, event.clientY)
+      .map((element) =>
+        element instanceof HTMLElement
+          ? element.closest<HTMLElement>("[data-connection-key]")
+          : null,
+      )
+      .find((element): element is HTMLElement => Boolean(element));
+    const targetKey = target?.dataset.connectionKey;
+    if (!target || !targetKey || targetKey === drag.key) {
+      setDropHint(null);
+      return;
+    }
+
+    const rect = target.getBoundingClientRect();
+    const offsetY = event.clientY - rect.top;
+    const isFolderTarget = targetKey.startsWith("folder:");
+    const position: ConnectionMoveRequest["position"] = isFolderTarget
+      ? offsetY < rect.height * 0.28
+        ? "before"
+        : offsetY > rect.height * 0.72
+          ? "after"
+          : "inside"
+      : offsetY < rect.height / 2
+        ? "before"
+        : "after";
+    const next = { draggedKey: drag.key, targetKey, position };
+    if (!canDropConnection(next)) {
+      setDropHint(null);
+      return;
+    }
+    setDropHint(next);
+    if (position === "inside" && isFolderTarget) {
+      setCollapsedFolders((current) => {
+        const group = targetKey.slice("folder:".length);
+        if (!current.has(group)) return current;
+        const nextCollapsed = new Set(current);
+        nextCollapsed.delete(group);
+        return nextCollapsed;
+      });
+    }
+  }
+
+  function endTreeDrag(event: ReactPointerEvent<HTMLElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    setDraggingKey(null);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (drag.dragging && dropHint) {
+      onMove(dropHint);
+    }
+    if (drag.dragging) {
+      suppressTreeClickRef.current = true;
+      window.setTimeout(() => {
+        suppressTreeClickRef.current = false;
+      }, 0);
+    }
+    setDropHint(null);
+  }
+
+  function canDropConnection(request: ConnectionMoveRequest) {
+    if (request.draggedKey === request.targetKey) return false;
+    if (request.draggedKey.startsWith("folder:") && request.position === "inside") return false;
+    if (request.draggedKey.startsWith("folder:") && request.targetKey.startsWith("server:")) return false;
+    return true;
+  }
+
+  function dropClassFor(key: string) {
+    if (!dropHint || dropHint.targetKey !== key) return "";
+    return `drop-${dropHint.position}`;
+  }
+
   const selectedExportCount = selectedKeys.size;
 
   return (
@@ -339,8 +455,16 @@ export function ConnectionManager({
               <section key={group} className="connection-folder">
                 <button
                   type="button"
-                  className={`connection-folder-row ${selectedKeys.has(folderKey(group)) ? "on" : ""}`}
+                  className={`connection-folder-row ${selectedKeys.has(folderKey(group)) ? "on" : ""} ${
+                    draggingKey === folderKey(group) ? "dragging" : ""
+                  } ${dropClassFor(folderKey(group))}`}
+                  data-connection-key={folderKey(group)}
+                  onPointerDown={(event) => beginTreeDrag(event, folderKey(group))}
+                  onPointerMove={moveTreeDrag}
+                  onPointerUp={endTreeDrag}
+                  onPointerCancel={endTreeDrag}
                   onClick={(event) => {
+                    if (suppressTreeClickRef.current) return;
                     if (event.shiftKey || event.metaKey || event.ctrlKey) {
                       selectTreeItem(event, folderKey(group));
                     } else {
@@ -361,13 +485,23 @@ export function ConnectionManager({
                         key={server.id}
                         className={`connection-node ${
                           selectedServerId === server.id || selectedKeys.has(serverKey(server.id)) ? "on" : ""
-                        }`}
+                        } ${draggingKey === serverKey(server.id) ? "dragging" : ""} ${dropClassFor(serverKey(server.id))}`}
+                        data-connection-key={serverKey(server.id)}
+                        onPointerDown={(event) => beginTreeDrag(event, serverKey(server.id))}
+                        onPointerMove={moveTreeDrag}
+                        onPointerUp={endTreeDrag}
+                        onPointerCancel={endTreeDrag}
                       >
                         <button
                           type="button"
                           className="connection-node-main"
-                          onClick={(event) => selectTreeItem(event, serverKey(server.id), server)}
-                          onDoubleClick={() => connect(server)}
+                          onClick={(event) => {
+                            if (suppressTreeClickRef.current) return;
+                            selectTreeItem(event, serverKey(server.id), server);
+                          }}
+                          onDoubleClick={() => {
+                            if (!suppressTreeClickRef.current) connect(server);
+                          }}
                           onContextMenu={(event) => handleContextMenu(event, server)}
                           title={`${server.username}@${server.host}:${server.port} · 双击连接`}
                         >

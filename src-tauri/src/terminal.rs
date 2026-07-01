@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{mpsc, Arc, Mutex},
     thread,
 };
@@ -37,6 +37,7 @@ pub struct TerminalRegistry {
     output_buffers: Mutex<HashMap<String, String>>,
     output_starts: Mutex<HashMap<String, usize>>,
     output_offsets: Mutex<HashMap<String, usize>>,
+    ready_sessions: Mutex<HashSet<String>>,
 }
 
 pub(crate) enum TerminalControl {
@@ -84,6 +85,11 @@ pub fn open_terminal(
         .lock()
         .map_err(|_| "终端输出偏移已锁定".to_string())?
         .insert(session_id.clone(), 0);
+    registry
+        .ready_sessions
+        .lock()
+        .map_err(|_| "终端就绪状态已锁定".to_string())?
+        .remove(&session_id);
 
     let thread_app = app.clone();
     let thread_session_id = session_id.clone();
@@ -176,6 +182,9 @@ pub fn close_terminal(
     if let Ok(mut offsets) = registry.output_offsets.lock() {
         offsets.remove(&session_id);
     }
+    if let Ok(mut ready_sessions) = registry.ready_sessions.lock() {
+        ready_sessions.remove(&session_id);
+    }
 
     Ok(())
 }
@@ -206,11 +215,17 @@ fn terminal_snapshot_inner(
         .copied()
         .unwrap_or_default();
     let end_offset = start_offset + data.chars().count();
+    let ready = registry
+        .ready_sessions
+        .lock()
+        .map_err(|_| "终端就绪状态已锁定".to_string())?
+        .contains(session_id);
 
     Ok(TerminalSnapshotPayload {
         data,
         start_offset,
         end_offset,
+        ready,
     })
 }
 
@@ -260,7 +275,10 @@ fn emit_terminal_data(
     );
 }
 
-fn emit_terminal_ready(app: &AppHandle, session_id: &str) {
+fn emit_terminal_ready(app: &AppHandle, registry: &TerminalRegistry, session_id: &str) {
+    if let Ok(mut ready_sessions) = registry.ready_sessions.lock() {
+        ready_sessions.insert(session_id.to_string());
+    }
     let _ = app.emit(
         "terminal:ready",
         TerminalReadyPayload {
@@ -497,11 +515,11 @@ fn run_terminal_thread(
                         if connection_tail.contains(CONNECTED_MARKER) {
                             connected_seen = true;
                             mark_connected(&read_app, &read_server_id).ok();
-                            emit_terminal_ready(&read_app, &read_session_id);
+                            emit_terminal_ready(&read_app, &read_registry, &read_session_id);
                         } else if looks_like_shell_ready(&connection_tail) {
                             connected_seen = true;
                             mark_connected(&read_app, &read_server_id).ok();
-                            emit_terminal_ready(&read_app, &read_session_id);
+                            emit_terminal_ready(&read_app, &read_registry, &read_session_id);
                             emit_terminal_data(
                                 &read_app,
                                 &read_registry,
@@ -626,7 +644,7 @@ fn run_terminal_thread(
     let ready_session_id = session_id.clone();
     let on_ready = move || {
         mark_connected(&ready_app, &ready_server_id).ok();
-        emit_terminal_ready(&ready_app, &ready_session_id);
+        emit_terminal_ready(&ready_app, &ready_registry, &ready_session_id);
         emit_terminal_data(
             &ready_app,
             &ready_registry,

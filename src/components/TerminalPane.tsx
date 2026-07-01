@@ -533,7 +533,9 @@ function TerminalPaneBase({
       const renderedOffset = renderedOffsetRef.current[sessionId] ?? 0;
       command<TerminalSnapshotPayload>("terminal_snapshot", { sessionId })
         .then((snapshot) => {
-          if (cancelled || sessionRef.current !== sessionId || !snapshot.data) return;
+          if (cancelled || sessionRef.current !== sessionId) return;
+          if (snapshot.ready) markReady(sessionId);
+          if (!snapshot.data) return;
           if ((renderedOffsetRef.current[sessionId] ?? 0) > renderedOffset) return;
           writeTerminalData(sessionId, snapshot.startOffset, snapshot.data);
         })

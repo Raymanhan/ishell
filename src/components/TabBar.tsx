@@ -6,8 +6,27 @@ import {
   type MouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { Activity, Clock3, Copy, FolderTree, PanelLeft, Plus, RefreshCw, Settings, X } from "lucide-react";
+import { Activity, Clock3, Copy, FolderTree, PanelLeft, PanelsTopLeft, Plus, RefreshCw, Settings, X } from "lucide-react";
+import type { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { ShellTab } from "../features/shell/types";
+
+interface TabDropPoint {
+  screenX: number;
+  screenY: number;
+}
+
+interface TabDragPreview {
+  tabId: string;
+  title: string;
+  subtitle: string;
+  color: string;
+  x: number;
+  y: number;
+  width: number;
+  offsetX: number;
+  offsetY: number;
+  detached: boolean;
+}
 
 export function TabBar({
   connectionsOpen,
@@ -27,6 +46,7 @@ export function TabBar({
   onActivate,
   onClone,
   onReconnect,
+  onDetach,
   onClose,
   onCloseTabs,
   onReorder,
@@ -48,6 +68,7 @@ export function TabBar({
   onActivate: (id: string) => void;
   onClone: (id: string) => void;
   onReconnect: (id: string) => void;
+  onDetach: (id: string, dropPoint?: TabDropPoint) => void;
   onClose: (id: string) => void;
   onCloseTabs: (ids: string[]) => void;
   onReorder: (draggedId: string, targetId: string) => void;
@@ -61,7 +82,18 @@ export function TabBar({
     startX: number;
     startY: number;
     dragging: boolean;
+    detached: boolean;
+    captureTarget: HTMLDivElement;
+    lastDropPoint: TabDropPoint;
+    tabBarRect: DOMRect;
   } | null>(null);
+  const nativeGhostRef = useRef<{
+    token: number;
+    windowRef: WebviewWindow | null;
+    timer: number | null;
+  } | null>(null);
+  const nativeGhostTokenRef = useRef(0);
+  const tabDragCleanupRef = useRef<(() => void) | null>(null);
   const suppressTabClickRef = useRef(false);
   const [menu, setMenu] = useState<{ tabId: string; x: number; y: number } | null>(null);
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
@@ -119,6 +151,11 @@ export function TabBar({
     };
   }, [menu]);
 
+  useEffect(() => () => {
+    tabDragCleanupRef.current?.();
+    stopNativeDragGhost();
+  }, []);
+
   function openTabMenu(event: MouseEvent<HTMLDivElement>, tabId: string) {
     event.preventDefault();
     event.stopPropagation();
@@ -151,13 +188,134 @@ export function TabBar({
       startX: event.clientX,
       startY: event.clientY,
       dragging: false,
+      detached: false,
+      captureTarget: event.currentTarget,
+      lastDropPoint: { screenX: event.screenX, screenY: event.screenY },
+      tabBarRect: event.currentTarget.closest(".terminal-tabs")?.getBoundingClientRect() ?? event.currentTarget.getBoundingClientRect(),
     };
     event.currentTarget.setPointerCapture(event.pointerId);
+    installTabDragFallback(event.pointerId);
+  }
+
+  function installTabDragFallback(pointerId: number) {
+    tabDragCleanupRef.current?.();
+    const onPointerMove = (event: PointerEvent) => {
+      const drag = tabDragRef.current;
+      if (!drag || drag.pointerId !== pointerId) return;
+      drag.lastDropPoint = { screenX: event.screenX, screenY: event.screenY };
+    };
+    const onPointerUp = (event: PointerEvent) => {
+      if (event.pointerId !== pointerId) return;
+      void finishTabDrag({ screenX: event.screenX, screenY: event.screenY });
+    };
+    const onPointerCancel = (event: PointerEvent) => {
+      if (event.pointerId !== pointerId) return;
+      void finishTabDrag();
+    };
+    const onBlur = () => {
+      void finishTabDrag();
+    };
+    window.addEventListener("pointermove", onPointerMove, true);
+    window.addEventListener("pointerup", onPointerUp, true);
+    window.addEventListener("pointercancel", onPointerCancel, true);
+    window.addEventListener("blur", onBlur);
+    tabDragCleanupRef.current = () => {
+      window.removeEventListener("pointermove", onPointerMove, true);
+      window.removeEventListener("pointerup", onPointerUp, true);
+      window.removeEventListener("pointercancel", onPointerCancel, true);
+      window.removeEventListener("blur", onBlur);
+      tabDragCleanupRef.current = null;
+    };
+  }
+
+  function canUseNativeGhost() {
+    return typeof window !== "undefined" && Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
+  }
+
+  function startNativeDragGhost(preview: TabDragPreview) {
+    if (!canUseNativeGhost() || nativeGhostRef.current) return;
+    const token = ++nativeGhostTokenRef.current;
+    nativeGhostRef.current = { token, windowRef: null, timer: null };
+
+    void (async () => {
+      const [{ WebviewWindow }, { PhysicalPosition }, { cursorPosition }] = await Promise.all([
+        import("@tauri-apps/api/webviewWindow"),
+        import("@tauri-apps/api/dpi"),
+        import("@tauri-apps/api/window"),
+      ]);
+      if (nativeGhostRef.current?.token !== token) return;
+
+      const width = Math.min(184, Math.max(118, Math.round(preview.width)));
+      const height = 22;
+      const cursor = await cursorPosition();
+      if (nativeGhostRef.current?.token !== token) return;
+      const label = `tab-ghost-${preview.tabId.replace(/[^a-zA-Z0-9-/:_]/g, "-")}-${Date.now()}`;
+      const payload = encodeURIComponent(JSON.stringify({
+        title: preview.title,
+        subtitle: preview.subtitle,
+        color: preview.color,
+        width,
+      }));
+      const windowRef = new WebviewWindow(label, {
+        url: `/#tabGhost=${payload}`,
+        title: preview.title,
+        x: cursor.x - Math.round(preview.offsetX),
+        y: cursor.y - Math.round(preview.offsetY),
+        width,
+        height,
+        minWidth: width,
+        minHeight: height,
+        maxWidth: width,
+        maxHeight: height,
+        transparent: true,
+        backgroundColor: "#00000000",
+        decorations: false,
+        alwaysOnTop: true,
+        skipTaskbar: true,
+        focus: false,
+        focusable: false,
+        resizable: false,
+        shadow: false,
+        visible: true,
+      });
+      if (nativeGhostRef.current?.token !== token) {
+        void windowRef.close().catch(() => undefined);
+        return;
+      }
+
+      nativeGhostRef.current.windowRef = windowRef;
+      void windowRef.once("tauri://created", () => {
+        void windowRef.setIgnoreCursorEvents(true);
+        void windowRef.setShadow(false).catch(() => undefined);
+      });
+      nativeGhostRef.current.timer = window.setInterval(async () => {
+        if (nativeGhostRef.current?.token !== token) return;
+        const nextCursor = await cursorPosition().catch(() => null);
+        if (!nextCursor) return;
+        await windowRef
+          .setPosition(new PhysicalPosition(
+            Math.round(nextCursor.x - preview.offsetX),
+            Math.round(nextCursor.y - preview.offsetY - 6),
+          ))
+          .catch(() => undefined);
+      }, 16);
+    })().catch(() => stopNativeDragGhost());
+  }
+
+  function stopNativeDragGhost() {
+    nativeGhostTokenRef.current += 1;
+    const ghost = nativeGhostRef.current;
+    nativeGhostRef.current = null;
+    if (ghost?.timer !== null && ghost?.timer !== undefined) {
+      window.clearInterval(ghost.timer);
+    }
+    void ghost?.windowRef?.close().catch(() => undefined);
   }
 
   function moveTabPointerDrag(event: ReactPointerEvent<HTMLDivElement>) {
     const drag = tabDragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
+    drag.lastDropPoint = { screenX: event.screenX, screenY: event.screenY };
     const moved = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
     if (!drag.dragging && moved < 4) return;
 
@@ -165,6 +323,35 @@ export function TabBar({
     drag.dragging = true;
     suppressTabClickRef.current = true;
     setDraggingTabId(drag.tabId);
+
+    const verticalDistance = Math.abs(event.clientY - drag.startY);
+    const outsideTabBar =
+      event.clientY < drag.tabBarRect.top - 10 ||
+      event.clientY > drag.tabBarRect.bottom + 10 ||
+      event.clientX < drag.tabBarRect.left - 18 ||
+      event.clientX > drag.tabBarRect.right + 18;
+    if (!drag.detached && outsideTabBar && verticalDistance > 18) {
+      drag.detached = true;
+      const tab = tabs.find((item) => item.id === drag.tabId);
+      const node = tabRefs.current.get(drag.tabId);
+      const rect = node?.getBoundingClientRect();
+      if (tab && rect) {
+        startNativeDragGhost({
+          tabId: tab.id,
+          title: tab.title,
+          subtitle: tab.subtitle,
+          color: tab.color,
+          x: event.clientX,
+          y: event.clientY,
+          width: rect.width,
+          offsetX: drag.startX - rect.left,
+          offsetY: drag.startY - rect.top,
+          detached: true,
+        });
+      }
+      return;
+    }
+    if (drag.detached) return;
 
     const target = document
       .elementsFromPoint(event.clientX, event.clientY)
@@ -177,21 +364,42 @@ export function TabBar({
   }
 
   function endTabPointerDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    void finishTabDrag({ screenX: event.screenX, screenY: event.screenY });
+  }
+
+  async function finishTabDrag(dropPoint?: TabDropPoint) {
     const drag = tabDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const shouldActivate = !drag.dragging;
+    if (!drag) return;
+    const shouldActivate = !drag.dragging && !drag.detached;
     tabDragRef.current = null;
+    tabDragCleanupRef.current?.();
     setDraggingTabId(null);
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
+    stopNativeDragGhost();
+    if (drag.captureTarget.hasPointerCapture(drag.pointerId)) {
+      drag.captureTarget.releasePointerCapture(drag.pointerId);
     }
     if (shouldActivate) {
       onActivate(drag.tabId);
       return;
     }
+    if (drag.detached) {
+      const finalDropPoint = dropPoint ?? await lastCursorDropPoint(drag.lastDropPoint);
+      onDetach(drag.tabId, finalDropPoint);
+    }
     window.setTimeout(() => {
       suppressTabClickRef.current = false;
     }, 0);
+  }
+
+  async function lastCursorDropPoint(fallback: TabDropPoint) {
+    if (!canUseNativeGhost()) return fallback;
+    try {
+      const { cursorPosition } = await import("@tauri-apps/api/window");
+      const position = await cursorPosition();
+      return { screenX: position.x, screenY: position.y };
+    } catch {
+      return fallback;
+    }
   }
 
   return (
@@ -354,6 +562,12 @@ export function TabBar({
             <RefreshCw size={14} />
             重新连接
           </button>
+          {tabs.length > 1 && (
+            <button type="button" role="menuitem" onClick={() => runMenu(() => onDetach(menu.tabId))}>
+              <PanelsTopLeft size={14} />
+              移到新窗口
+            </button>
+          )}
           <div className="ctx-sep" role="separator" />
           <button
             type="button"

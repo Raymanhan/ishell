@@ -95,14 +95,6 @@ pub struct ConnectionImportServer {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ConnectionTest {
-    pub ok: bool,
-    pub message: String,
-    pub latency_ms: u128,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ServerStatus {
     pub id: String,
     pub os: String,
@@ -148,6 +140,12 @@ pub struct SftpEntry {
     pub name: String,
     pub path: String,
     pub is_dir: bool,
+    #[serde(default)]
+    pub is_symlink: bool,
+    #[serde(default)]
+    pub link_target: Option<String>,
+    #[serde(default)]
+    pub target_is_dir: Option<bool>,
     pub size: Option<u64>,
     pub uid: Option<u32>,
     pub gid: Option<u32>,
@@ -186,6 +184,7 @@ pub struct TerminalSnapshotPayload {
     pub data: String,
     pub start_offset: usize,
     pub end_offset: usize,
+    pub ready: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

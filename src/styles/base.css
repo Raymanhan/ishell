@@ -1,0 +1,177 @@
+:root {
+  color-scheme: dark;
+
+  --bg: rgba(20, 26, 36, 0.34);
+  --titlebar: rgba(16, 22, 32, 0.4);
+  --panel: rgba(16, 22, 32, 0.5);
+  --panel-2: rgba(28, 36, 48, 0.38);
+  --inset: rgba(18, 24, 34, 0.34);
+  --card: rgba(40, 50, 64, 0.26);
+  --card-hover: rgba(255, 255, 255, 0.1);
+
+  --hairline: rgba(255, 255, 255, 0.13);
+  --hairline-2: rgba(255, 255, 255, 0.2);
+  --hairline-3: rgba(255, 255, 255, 0.3);
+
+  --text: #f7f9fb;
+  --dim: #dde4ec;
+  --faint: #b8c1cc;
+
+  --accent: #c7d5ff;
+  --accent-2: #96b8ff;
+  --accent-soft: rgba(199, 213, 255, 0.16);
+  --focus-ring: rgba(91, 157, 255, 0.55);
+  --focus-bg: rgba(91, 157, 255, 0.06);
+  --control-hover-bg: rgba(255, 255, 255, 0.08);
+  --control-active-bg: rgba(255, 255, 255, 0.06);
+  --row-hover-bg: rgba(255, 255, 255, 0.05);
+  --row-active-bg: var(--accent-soft);
+  --row-busy-bg: rgba(79, 209, 197, 0.13);
+  --surface-soft-bg: rgba(255, 255, 255, 0.035);
+  --surface-muted-bg: rgba(255, 255, 255, 0.026);
+
+  --ok: #9ee6b8;
+  --warn: #f7d58c;
+  --info: #b8caff;
+  --bad: #ff8f9d;
+  --danger: #ffb4b4;
+  --danger-strong: #ffd2d2;
+  --danger-soft: rgba(245, 107, 107, 0.08);
+  --danger-hover-bg: rgba(245, 107, 107, 0.15);
+  --violet: #d5bbff;
+
+  --r: 10px;
+  --r-sm: 7px;
+  --tab-width: 150px;
+  --shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+  --ctx-menu-bg: rgba(25, 28, 34, 0.98);
+  --ctx-menu-hover: rgba(91, 157, 255, 0.14);
+  --ctx-menu-danger-hover: rgba(245, 107, 107, 0.14);
+  --ctx-menu-shadow: 0 14px 34px rgba(0, 0, 0, 0.38);
+  --glass-blur: blur(40px) saturate(200%);
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI",
+    "Microsoft YaHei UI", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", "Cascadia Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas,
+    "Microsoft YaHei Mono", "Microsoft YaHei", monospace;
+
+  font-family: var(--font-sans);
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+  font-optical-sizing: auto;
+  text-rendering: auto;
+}
+
+:root[data-platform="windows"] {
+  --font-sans: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", Arial, sans-serif;
+  --font-mono: "Cascadia Mono", "Cascadia Code", Consolas, "Microsoft YaHei Mono", "Microsoft YaHei", monospace;
+
+  font-synthesis-weight: none;
+  text-rendering: optimizeSpeed;
+}
+
+:root[data-platform="windows"] .detail-header,
+:root[data-platform="windows"] .network-head > span,
+:root[data-platform="windows"] .metric-label {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+:root[data-platform="windows"] .speed-pill,
+:root[data-platform="windows"] .metric-row strong,
+:root[data-platform="windows"] .mount-id strong,
+:root[data-platform="windows"] .mount-size,
+:root[data-platform="windows"] .entry small {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+:root[data-platform="macos"] {
+  -webkit-font-smoothing: subpixel-antialiased;
+}
+
+:root.tab-ghost-root {
+  background: transparent !important;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 980px;
+  min-height: 640px;
+  overflow: hidden;
+  background: var(--bg);
+}
+body.tab-ghost-body {
+  min-width: 0;
+  min-height: 0;
+  width: 100vw;
+  height: 100vh;
+  background: transparent !important;
+}
+:root[data-theme="glass"] body,
+:root[data-theme="glass"] #root {
+  background: transparent;
+}
+body.tab-ghost-body #root {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: transparent !important;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+  -webkit-font-smoothing: inherit;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+  background: transparent;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-track-piece,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.18);
+  background-clip: padding-box;
+}
+:root[data-theme="glass"] ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  background-clip: padding-box;
+}
+:root[data-theme="glass"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.26);
+  background-clip: padding-box;
+}
+
+.spin {
+  animation: spin 900ms linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

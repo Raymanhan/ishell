@@ -13,7 +13,7 @@ import {
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { Save, X } from "lucide-react";
 import { command, isTauri } from "./api/tauri";
-import { ConnectionManager } from "./components/ConnectionManager";
+import { ConnectionManager, type ConnectionMoveRequest } from "./components/ConnectionManager";
 import { CommandHistoryPanel } from "./components/CommandHistoryPanel";
 import { DownloadQueue } from "./components/DownloadQueue";
 import { ServerDetail } from "./components/ServerDetail";
@@ -110,7 +110,23 @@ interface ConnectionImportPayload {
   servers: Array<ServerInput & { password?: string | null }>;
 }
 
+interface TabDropPoint {
+  screenX: number;
+  screenY: number;
+}
+
+interface TabGhostPayload {
+  title: string;
+  subtitle: string;
+  color: string;
+  width: number;
+}
+
 export default function App() {
+  const tabGhost = useMemo(() => readTabGhostFromUrl(), []);
+  if (tabGhost) return <TabGhostWindow ghost={tabGhost} />;
+
+  const handedOffInitialTab = useMemo(() => readHandedOffTabFromUrl(), []);
   const [servers, setServers] = useState<ServerRecord[]>([]);
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
   const [connectionFolders, setConnectionFolders] = useState<string[]>(() => {
@@ -130,12 +146,11 @@ export default function App() {
     const saved = Number(window.localStorage.getItem("ishell.terminalFontSize"));
     return Number.isFinite(saved) ? Math.min(20, Math.max(11, saved)) : 14;
   });
-  const [, setNotice] = useState("");
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<ServerForm>(defaultForm);
   const [saving, setSaving] = useState(false);
-  const [tabs, setTabs] = useState<ShellTab[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [tabs, setTabs] = useState<ShellTab[]>(() => handedOffInitialTab ? [handedOffInitialTab] : []);
+  const [activeTabId, setActiveTabId] = useState<string | null>(() => handedOffInitialTab?.id ?? null);
   const [filesOpen, setFilesOpen] = useState(false);
   const [filesRatio, setFilesRatio] = useState(FILES_PANEL_RATIO);
   const [filesDragging, setFilesDragging] = useState(false);
@@ -171,7 +186,6 @@ export default function App() {
   const downloadChainRef = useRef<Promise<void>>(Promise.resolve());
   const uploadsRef = useRef<UploadItem[]>([]);
   const downloadsRef = useRef<DownloadItem[]>([]);
-  const [statusLoading, setStatusLoading] = useState(false);
   const [sftpBusy, setSftpBusy] = useState(false);
   const sftpBusyCount = useRef(0);
   const sftpBusySince = useRef(0);
@@ -188,11 +202,10 @@ export default function App() {
     () => tabs.find((tab) => tab.id === activeTabId) ?? null,
     [activeTabId, tabs],
   );
-  const connectionFolderNames = useMemo(() => {
-    const names = new Set<string>(connectionFolders);
-    for (const group of Object.keys(groupServers(servers))) names.add(group);
-    return [...names].filter(Boolean).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-  }, [connectionFolders, servers]);
+  const connectionFolderNames = useMemo(
+    () => orderedConnectionFolders(connectionFolders, servers),
+    [connectionFolders, servers],
+  );
   const grouped = useMemo(
     () => groupServersForTree(servers, connectionFolderNames),
     [connectionFolderNames, servers],
@@ -223,6 +236,36 @@ export default function App() {
   useEffect(() => {
     refreshServers();
     loadCommandHistory();
+  }, []);
+
+  useEffect(() => {
+    if (!handedOffInitialTab) return;
+    setSelectedServerId(handedOffInitialTab.serverId);
+    loadCommandHistory();
+  }, [handedOffInitialTab]);
+
+  useEffect(() => {
+    if (!isTauri) return;
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+
+    import("@tauri-apps/api/event")
+      .then(({ listen }) => listen<ShellTab>("ishell:receive-tab", (event) => {
+        const tab = normalizeHandedOffTab(event.payload);
+        if (!tab) return;
+        setTabs((current) => current.some((item) => item.id === tab.id) ? current : [...current, tab]);
+        setActiveTabId(tab.id);
+        setSelectedServerId(tab.serverId);
+      }))
+      .then((cleanup) => {
+        if (cancelled) cleanup();
+        else unlisten = cleanup;
+      });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -595,12 +638,10 @@ export default function App() {
       window.clearTimeout(noticeTimer.current);
       noticeTimer.current = null;
     }
-    setNotice(message);
     if (!message || durationMs <= 0) return;
 
     noticeTimer.current = window.setTimeout(() => {
       noticeTimer.current = null;
-      setNotice((current) => (current === message ? "" : current));
     }, durationMs);
   }, []);
 
@@ -857,25 +898,6 @@ export default function App() {
     }
   }
 
-  async function testSelectedConnection() {
-    if (!selectedServer) return;
-    showNotice("连接测试中…");
-    try {
-      if (!isTauri) {
-        await new Promise((resolve) => setTimeout(resolve, 420));
-        showNotice(`已连接 ${selectedServer.username}@${selectedServer.host} · 42ms`);
-        return;
-      }
-      const result = await command<{ message: string; latencyMs: number }>("test_connection", {
-        id: selectedServer.id,
-      });
-      showNotice(`${result.message} · ${result.latencyMs}ms`);
-      await refreshServers();
-    } catch (error) {
-      showNotice(String(error));
-    }
-  }
-
   async function openShell(server: ServerRecord | null = selectedServer) {
     if (!server) return;
     const tabId = createTabId(server.id);
@@ -953,6 +975,91 @@ export default function App() {
     if (server) void openShell(server);
   }
 
+  async function detachShell(tabId: string, dropPoint?: TabDropPoint) {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab || !tab.sessionId) {
+      showNotice("连接建立后才能拖出为新窗口");
+      return;
+    }
+    if (!isTauri) {
+      showNotice("桌面应用中才支持拖出窗口");
+      return;
+    }
+
+    try {
+      if (dropPoint) {
+        const target = await peerWindowAtPoint(dropPoint);
+        if (target) {
+          await moveShellToWindow(tabId, target.label, true);
+          return;
+        }
+      }
+      if (tabs.length <= 1) return;
+
+      const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+      const handedOffTab = handoffTabSnapshot(tab);
+      const payload = encodeURIComponent(JSON.stringify(handedOffTab));
+      const label = `shell-${tab.id.replace(/[^a-zA-Z0-9-/:_]/g, "-")}`;
+      const windowRef = new WebviewWindow(label, {
+        url: `/#handoff=${payload}`,
+        title: `iShell · ${tab.title}`,
+        width: 960,
+        height: 680,
+        minWidth: 720,
+        minHeight: 520,
+        transparent: true,
+        backgroundColor: "#00000000",
+        decorations: true,
+        hiddenTitle: true,
+        titleBarStyle: "overlay",
+        focus: true,
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        void windowRef.once("tauri://created", () => resolve());
+        void windowRef.once<string>("tauri://error", (event) => reject(new Error(String(event.payload))));
+      });
+      removeShellWithoutClosing(tabId, false);
+    } catch (error) {
+      showNotice(String(error));
+    }
+  }
+
+  async function moveShellToWindow(tabId: string, targetWindowLabel: string, closeWhenEmpty = true) {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab || !tab.sessionId) {
+      showNotice("连接建立后才能移动到其他窗口");
+      return;
+    }
+    if (!isTauri) {
+      showNotice("桌面应用中才支持窗口间移动");
+      return;
+    }
+    try {
+      const { emitTo } = await import("@tauri-apps/api/event");
+      await emitTo(targetWindowLabel, "ishell:receive-tab", handoffTabSnapshot(tab));
+      removeShellWithoutClosing(tabId, closeWhenEmpty);
+    } catch (error) {
+      showNotice(String(error));
+    }
+  }
+
+  function removeShellWithoutClosing(tabId: string, closeWhenEmpty: boolean) {
+    const ids = new Set([tabId]);
+    const firstClosedIndex = tabs.findIndex((tab) => tab.id === tabId);
+    terminalReadyTabs.current.delete(tabId);
+    const remaining = tabs.filter((tab) => tab.id !== tabId);
+    setTabs(remaining);
+    setActiveTabId((current) => {
+      if (current && !ids.has(current)) return current;
+      if (remaining.length === 0) return null;
+      return remaining[Math.min(Math.max(0, firstClosedIndex), remaining.length - 1)]?.id ?? null;
+    });
+    if (closeWhenEmpty && remaining.length === 0 && isTauri) {
+      void closeCurrentWindowIfPeerExists();
+    }
+  }
+
   function reorderShellTabs(draggedId: string, targetId: string) {
     setTabs((current) => {
       const from = current.findIndex((tab) => tab.id === draggedId);
@@ -963,6 +1070,29 @@ export default function App() {
       next.splice(to, 0, dragged);
       return next;
     });
+  }
+
+  function moveConnectionNode(request: ConnectionMoveRequest) {
+    if (!canMoveConnectionNode(request)) return;
+    const nextFolders = moveConnectionFolders(connectionFolderNames, request);
+    if (nextFolders !== connectionFolderNames) setConnectionFolders(nextFolders);
+
+    const nextServers = moveConnectionServers(servers, nextFolders, request);
+    if (nextServers === servers) return;
+
+    setServers(nextServers);
+    const items = nextServers.map((server, index) => ({
+      id: server.id,
+      group: server.group || "Default",
+      sortOrder: index,
+    }));
+    if (isTauri) {
+      command("reorder_servers", { items })
+        .catch((error) => {
+          showNotice(String(error));
+          refreshServers();
+        });
+    }
   }
 
   function handleTerminalReady(tabId: string, serverId: string, title: string) {
@@ -1044,7 +1174,6 @@ export default function App() {
   ) {
     if (!tabId || !serverId) return;
     if (!statusOpenRef.current) return;
-    if (!silent) setStatusLoading(true);
     try {
       if (!isTauri) {
         if (!silent) await new Promise((resolve) => setTimeout(resolve, 260));
@@ -1070,8 +1199,6 @@ export default function App() {
       );
     } catch (error) {
       if (!silent) showNotice(String(error));
-    } finally {
-      if (!silent) setStatusLoading(false);
     }
   }
 
@@ -1724,6 +1851,7 @@ export default function App() {
           onActivate={setActiveTabId}
           onClone={cloneShell}
           onReconnect={reconnectShell}
+          onDetach={detachShell}
           onClose={closeShell}
           onCloseTabs={closeShells}
           onReorder={reorderShellTabs}
@@ -1751,6 +1879,7 @@ export default function App() {
             onExport={exportConnections}
             onImport={importConnections}
             onDelete={requestDeleteConnections}
+            onMove={moveConnectionNode}
             onClose={() => setConnectionsOpen(false)}
           />
 
@@ -1940,13 +2069,7 @@ export default function App() {
             aria-labelledby="delete-confirm-title"
           >
             <h2 id="delete-confirm-title">确认删除</h2>
-            <p>
-              {deleteConfirm.entries.length > 1
-                ? `将删除 ${deleteConfirm.entries.length} 项，文件夹及其中所有内容也会被删除。`
-                : deleteConfirm.entries[0]?.isDir
-                  ? "该文件夹及其中所有内容都会被删除。"
-                  : "该文件会被删除。"}
-            </p>
+            <p>{sftpDeleteDescription(deleteConfirm.entries)}</p>
             <div className="delete-target" title={deleteConfirm.entries.map((entry) => entry.path).join("\n")}>
               {deleteConfirm.entries.length > 1
                 ? deleteConfirm.entries.map((entry) => entry.name).join("、")
@@ -2167,6 +2290,266 @@ function ensureFolder(current: string[], folder: string) {
   return [...current, name].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
 
+function readTabGhostFromUrl() {
+  const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
+  const params = new URLSearchParams(hash);
+  const raw = params.get("tabGhost");
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<TabGhostPayload>;
+    if (
+      typeof parsed.title !== "string" ||
+      typeof parsed.subtitle !== "string" ||
+      typeof parsed.color !== "string" ||
+      typeof parsed.width !== "number"
+    ) {
+      return null;
+    }
+    return {
+      title: parsed.title,
+      subtitle: parsed.subtitle,
+      color: parsed.color,
+      width: Math.min(260, Math.max(120, parsed.width)),
+    } satisfies TabGhostPayload;
+  } catch {
+    return null;
+  }
+}
+
+function TabGhostWindow({ ghost }: { ghost: TabGhostPayload }) {
+  useEffect(() => {
+    document.documentElement.classList.add("tab-ghost-root");
+    document.documentElement.dataset.theme = readSavedTheme(window.localStorage.getItem("ishell.theme"));
+    document.body.classList.add("tab-ghost-body");
+    if (isTauri) {
+      void Promise.all([
+        import("@tauri-apps/api/window").then(({ getCurrentWindow }) =>
+          getCurrentWindow().setBackgroundColor({ red: 0, green: 0, blue: 0, alpha: 0 }),
+        ),
+        import("@tauri-apps/api/webview").then(({ getCurrentWebview }) =>
+          getCurrentWebview().setBackgroundColor({ red: 0, green: 0, blue: 0, alpha: 0 }),
+        ),
+      ]).catch(() => undefined);
+    }
+    return () => {
+      document.documentElement.classList.remove("tab-ghost-root");
+      document.body.classList.remove("tab-ghost-body");
+    };
+  }, []);
+
+  return (
+    <div className="tab-ghost-window" style={{ width: ghost.width }}>
+      <span className="tab-dot connected" style={{ color: ghost.color }} />
+      <span>
+        <strong>{ghost.title}</strong>
+        <small>{ghost.subtitle}</small>
+      </span>
+    </div>
+  );
+}
+
+function readHandedOffTabFromUrl() {
+  const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
+  const params = new URLSearchParams(hash);
+  const raw = params.get("handoff");
+  if (!raw) return null;
+  try {
+    return normalizeHandedOffTab(JSON.parse(raw) as Partial<ShellTab>);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeHandedOffTab(tab: Partial<ShellTab>) {
+  if (
+    typeof tab.id !== "string" ||
+    typeof tab.serverId !== "string" ||
+    typeof tab.title !== "string" ||
+    typeof tab.subtitle !== "string" ||
+    typeof tab.host !== "string" ||
+    typeof tab.color !== "string" ||
+    typeof tab.sessionId !== "string"
+  ) {
+    return null;
+  }
+  return {
+    id: tab.id,
+    serverId: tab.serverId,
+    title: tab.title,
+    subtitle: tab.subtitle,
+    host: tab.host,
+    color: tab.color,
+    sessionId: tab.sessionId,
+    state: tab.state === "closed" || tab.state === "connecting" ? tab.state : "connected",
+    status: tab.status ?? null,
+    networkSample: tab.networkSample ?? null,
+    networkRxBps: Number(tab.networkRxBps ?? 0),
+    networkTxBps: Number(tab.networkTxBps ?? 0),
+    networkHistory: Array.isArray(tab.networkHistory) ? tab.networkHistory : [],
+    files: [],
+    selectedPath: null,
+    selectedPaths: [],
+    cache: {},
+  } satisfies ShellTab;
+}
+
+function handoffTabSnapshot(tab: ShellTab): ShellTab {
+  return {
+    ...tab,
+    files: [],
+    selectedPath: null,
+    selectedPaths: [],
+    cache: {},
+  };
+}
+
+async function peerWindowAtPoint(point: TabDropPoint) {
+  const { getAllWebviewWindows, getCurrentWebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+  const current = getCurrentWebviewWindow();
+  const scaleFactor = await current.scaleFactor().catch(() => 1);
+  const candidates = [
+    { x: point.screenX, y: point.screenY },
+    { x: point.screenX * scaleFactor, y: point.screenY * scaleFactor },
+  ];
+  const windows = await getAllWebviewWindows();
+  for (const windowRef of windows) {
+    if (windowRef.label === current.label) continue;
+    const [position, size] = await Promise.all([
+      windowRef.outerPosition(),
+      windowRef.outerSize(),
+    ]);
+    if (
+      candidates.some(({ x, y }) =>
+        x >= position.x &&
+        x <= position.x + size.width &&
+        y >= position.y &&
+        y <= position.y + size.height
+      )
+    ) {
+      return {
+        label: windowRef.label,
+        title: windowRef.label === "main" ? "iShell" : windowRef.label.replace(/^shell-/, "窗口 "),
+      };
+    }
+  }
+  return null;
+}
+
+async function closeCurrentWindowIfPeerExists() {
+  const { getAllWebviewWindows, getCurrentWebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+  const current = getCurrentWebviewWindow();
+  const windows = await getAllWebviewWindows();
+  if (windows.some((windowRef) => windowRef.label !== current.label)) {
+    await current.close();
+  }
+}
+
+function orderedConnectionFolders(savedFolders: string[], servers: ServerRecord[]) {
+  const groupedServers = groupServers(servers);
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  for (const folder of savedFolders) {
+    const name = folder.trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    ordered.push(name);
+  }
+  const missing = Object.keys(groupedServers)
+    .filter((group) => group && !seen.has(group))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  return [...ordered, ...missing];
+}
+
+function canMoveConnectionNode(request: ConnectionMoveRequest) {
+  if (request.draggedKey === request.targetKey) return false;
+  if (request.draggedKey.startsWith("folder:") && request.position === "inside") return false;
+  if (request.draggedKey.startsWith("folder:") && request.targetKey.startsWith("server:")) return false;
+  return true;
+}
+
+function moveConnectionFolders(folders: string[], request: ConnectionMoveRequest) {
+  if (!request.draggedKey.startsWith("folder:") || !request.targetKey.startsWith("folder:")) return folders;
+  const dragged = request.draggedKey.slice("folder:".length);
+  const target = request.targetKey.slice("folder:".length);
+  const from = folders.indexOf(dragged);
+  const targetIndex = folders.indexOf(target);
+  if (from < 0 || targetIndex < 0 || from === targetIndex) return folders;
+
+  const next = [...folders];
+  const [item] = next.splice(from, 1);
+  const adjustedTarget = next.indexOf(target);
+  const insertAt = request.position === "after" ? adjustedTarget + 1 : adjustedTarget;
+  next.splice(insertAt, 0, item);
+  return next;
+}
+
+function moveConnectionServers(
+  servers: ServerRecord[],
+  folders: string[],
+  request: ConnectionMoveRequest,
+) {
+  const ordered = flattenServersByFolders(servers, folders);
+  if (request.draggedKey.startsWith("folder:")) {
+    const next = ordered.map((server, index) => ({ ...server, sortOrder: index }));
+    return sameServerOrder(servers, next) ? servers : next;
+  }
+  if (!request.draggedKey.startsWith("server:")) return servers;
+
+  const draggedId = request.draggedKey.slice("server:".length);
+  const dragged = ordered.find((server) => server.id === draggedId);
+  if (!dragged) return servers;
+
+  const withoutDragged = ordered.filter((server) => server.id !== draggedId);
+  const targetGroup = targetGroupForConnectionMove(request, ordered);
+  if (!targetGroup) return servers;
+
+  const targetIndex = insertionIndexForConnectionMove(request, withoutDragged, targetGroup);
+  const moved = { ...dragged, group: targetGroup };
+  const next = [...withoutDragged];
+  next.splice(targetIndex, 0, moved);
+  const normalized = next.map((server, index) => ({ ...server, sortOrder: index }));
+  return sameServerOrder(servers, normalized) ? servers : normalized;
+}
+
+function flattenServersByFolders(servers: ServerRecord[], folders: string[]) {
+  const byGroup = groupServers(servers);
+  return folders.flatMap((folder) => byGroup[folder] ?? []);
+}
+
+function targetGroupForConnectionMove(request: ConnectionMoveRequest, servers: ServerRecord[]) {
+  if (request.targetKey.startsWith("folder:")) return request.targetKey.slice("folder:".length);
+  const targetId = request.targetKey.startsWith("server:") ? request.targetKey.slice("server:".length) : "";
+  return servers.find((server) => server.id === targetId)?.group || null;
+}
+
+function insertionIndexForConnectionMove(
+  request: ConnectionMoveRequest,
+  servers: ServerRecord[],
+  targetGroup: string,
+) {
+  if (request.targetKey.startsWith("folder:")) {
+    const groupIndexes = servers
+      .map((server, index) => (server.group === targetGroup ? index : -1))
+      .filter((index) => index >= 0);
+    if (request.position === "before") return groupIndexes[0] ?? servers.length;
+    return groupIndexes.length ? groupIndexes[groupIndexes.length - 1] + 1 : servers.length;
+  }
+
+  const targetId = request.targetKey.slice("server:".length);
+  const targetIndex = servers.findIndex((server) => server.id === targetId);
+  if (targetIndex < 0) return servers.length;
+  return request.position === "after" ? targetIndex + 1 : targetIndex;
+}
+
+function sameServerOrder(previous: ServerRecord[], next: ServerRecord[]) {
+  if (previous.length !== next.length) return false;
+  return previous.every((server, index) =>
+    server.id === next[index]?.id &&
+    server.group === next[index]?.group &&
+    server.sortOrder === next[index]?.sortOrder
+  );
+}
+
 function connectionDeleteDescription(state: ConnectionDeleteConfirmState) {
   const folderCount = state.target.folders.length;
   const serverCount = state.servers.length;
@@ -2195,9 +2578,8 @@ function groupServersForTree(
   const folderNames = new Set(folders);
   for (const group of Object.keys(groupedServers)) folderNames.add(group);
 
-  return [...folderNames]
-    .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+  return folders
+    .filter((folder) => folder && folderNames.has(folder))
     .reduce<Record<string, ServerRecord[]>>((acc, folder) => {
       const list = groupedServers[folder] ?? [];
       acc[folder] = list;
@@ -2363,6 +2745,23 @@ function buildPathChain(path: string) {
     chain.push(acc);
   }
   return chain;
+}
+
+function sftpDeleteDescription(entries: SftpEntry[]) {
+  if (entries.length > 1) {
+    const hasRealDirectory = entries.some((entry) => entry.isDir && !entry.isSymlink);
+    const hasSymlink = entries.some((entry) => entry.isSymlink);
+    return hasRealDirectory
+      ? `将删除 ${entries.length} 项，文件夹及其中所有内容也会被删除。`
+      : hasSymlink
+        ? `将删除 ${entries.length} 项。软链接只会删除链接本身。`
+        : `将删除 ${entries.length} 项。`;
+  }
+  const entry = entries[0];
+  if (!entry) return "该项目会被删除。";
+  if (entry.isSymlink) return "该软链接会被删除，链接目标会保留。";
+  if (entry.isDir) return "该文件夹及其中所有内容都会被删除。";
+  return "该文件会被删除。";
 }
 
 function quoteShellArg(value: string) {

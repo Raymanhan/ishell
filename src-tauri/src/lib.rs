@@ -30,7 +30,6 @@ pub fn run() {
             commands::delete_server,
             commands::list_command_history,
             commands::save_command_history,
-            commands::test_connection,
             commands::fetch_server_status,
             commands::fetch_network_sample,
             commands::invalidate_connection,

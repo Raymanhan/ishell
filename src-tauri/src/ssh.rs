@@ -12,7 +12,7 @@ use std::{
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::{
-    models::{DiskMount, NetworkSample, ServerRecord, ServerStatus, SftpEntry, UploadProgress},
+    models::{DiskMount, NetworkSample, ServerStatus, SftpEntry, UploadProgress},
     openssh,
     pool::SshPool,
     store::{get_server, read_secret},
@@ -70,6 +70,19 @@ with os.scandir(path) as entries:
             st = entry.stat(follow_symlinks=False)
         except OSError:
             continue
+        is_symlink = stat.S_ISLNK(st.st_mode)
+        target_is_dir = False
+        link_target = None
+        if is_symlink:
+            try:
+                target = entry.stat(follow_symlinks=True)
+                target_is_dir = stat.S_ISDIR(target.st_mode)
+            except OSError:
+                target_is_dir = False
+            try:
+                link_target = os.readlink(entry.path)
+            except OSError:
+                link_target = None
         try:
             owner = pwd.getpwuid(st.st_uid).pw_name
         except KeyError:
@@ -82,7 +95,10 @@ with os.scandir(path) as entries:
         items.append({
             "name": entry.name,
             "path": full_path,
-            "isDir": stat.S_ISDIR(st.st_mode),
+            "isDir": stat.S_ISDIR(st.st_mode) or target_is_dir,
+            "isSymlink": is_symlink,
+            "linkTarget": link_target,
+            "targetIsDir": target_is_dir if is_symlink else None,
             "size": st.st_size,
             "uid": st.st_uid,
             "gid": st.st_gid,
@@ -93,12 +109,6 @@ with os.scandir(path) as entries:
         })
 print(json.dumps(items, ensure_ascii=False, separators=(",", ":")))
 "#;
-
-pub fn connect_server(app: &AppHandle, id: &str) -> Result<((), ServerRecord), String> {
-    let server = get_server(app, id)?;
-    run_remote_shell(app, id, "printf ok >/dev/null")?;
-    Ok(((), server))
-}
 
 pub fn fetch_status(
     _pool: &SshPool,

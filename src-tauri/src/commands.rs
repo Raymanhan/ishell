@@ -3,7 +3,6 @@ use std::{
     fs,
     io::{Cursor, Read, Write},
     sync::{Arc, Mutex},
-    time::SystemTime,
 };
 use aes_gcm::{
     aead::{Aead, KeyInit},
@@ -18,19 +17,18 @@ use uuid::Uuid;
 use crate::{
     models::{
         ConnectionExport, ConnectionExportServer, ConnectionImport, ConnectionImportServer,
-        ConnectionTest, EncryptedExportSecret, NetworkSample, ServerInput, ServerOrderInput, ServerRecord,
-        ServerStatus, SftpEntry, TerminalSnapshotPayload,
+        EncryptedExportSecret, NetworkSample, ServerInput, ServerOrderInput, ServerRecord, ServerStatus,
+        SftpEntry, TerminalSnapshotPayload,
     },
     pool::SshPool,
     ssh::{
-        connect_server, download_file, fetch_network_sample as fetch_network, fetch_status,
-        list_sftp, make_directory, read_text_file, remove_entry, rename_entry, upload_file,
-        write_text_file,
+        download_file, fetch_network_sample as fetch_network, fetch_status, list_sftp, make_directory,
+        read_text_file, remove_entry, rename_entry, upload_file, write_text_file,
     },
     store::{
         append_command_history, delete_server as remove_server, get_server,
-        list_command_history as load_command_history, list_servers as load_servers, mark_connected,
-        normalize_tags, read_secret, reorder_servers as save_server_order, upsert_server, validate_server,
+        list_command_history as load_command_history, list_servers as load_servers, normalize_tags, read_secret,
+        reorder_servers as save_server_order, upsert_server, validate_server,
     },
     terminal::{self, TerminalRegistry},
     time::now,
@@ -388,23 +386,6 @@ pub fn list_command_history(app: AppHandle) -> Result<Vec<String>, String> {
 #[tauri::command]
 pub fn save_command_history(app: AppHandle, command_text: String) -> Result<(), String> {
     append_command_history(&app, &command_text)
-}
-
-#[tauri::command]
-pub async fn test_connection(app: AppHandle, id: String) -> Result<ConnectionTest, String> {
-    run_blocking(move || {
-        let started = SystemTime::now();
-        let (_session, server) = connect_server(&app, &id)?;
-        mark_connected(&app, &id)?;
-        let latency_ms = started.elapsed().unwrap_or_default().as_millis();
-
-        Ok(ConnectionTest {
-            ok: true,
-            message: format!("已连接 {}@{}", server.username, server.host),
-            latency_ms,
-        })
-    })
-    .await
 }
 
 #[tauri::command]

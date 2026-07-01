@@ -1,0 +1,184 @@
+/* ===== Shared buttons ===== */
+.btn-primary,
+.btn-ghost,
+.solid-button,
+.danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 76px;
+  height: 32px;
+  padding: 0 13px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: none;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease, filter 120ms ease;
+  white-space: nowrap;
+}
+
+.btn-primary,
+.solid-button {
+  border-color: rgba(199, 213, 255, 0.28);
+  background: rgba(199, 213, 255, 0.12);
+  color: var(--text);
+  font-weight: 620;
+}
+.btn-primary:hover,
+.solid-button:hover:not(:disabled) {
+  border-color: rgba(199, 213, 255, 0.42);
+  background: rgba(199, 213, 255, 0.18);
+}
+.btn-ghost {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: transparent;
+  color: var(--dim);
+}
+.btn-ghost:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+}
+.btn-ghost.danger {
+  color: var(--danger);
+}
+.btn-ghost.danger:hover {
+  background: var(--ctx-menu-danger-hover);
+  border-color: rgba(245, 107, 107, 0.3);
+}
+.btn-primary:disabled,
+.btn-ghost:disabled,
+.solid-button:disabled,
+.danger-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.eyebrow {
+  display: block;
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ===== Shared controls ===== */
+.icon-button,
+.tool,
+.dock-toggle,
+.connection-trigger,
+.terminal-tab-action,
+.uq-x {
+  display: inline-grid;
+  place-items: center;
+  width: var(--icon-control-size, 30px);
+  height: var(--icon-control-size, 30px);
+  padding: 0;
+  border: var(--icon-control-border, 0);
+  border-radius: var(--icon-control-radius, 6px);
+  background: var(--icon-control-bg, transparent);
+  color: var(--icon-control-color, var(--dim));
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease,
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+.icon-button:hover,
+.tool:hover:not(:disabled),
+.dock-toggle:hover,
+.connection-trigger:hover,
+.terminal-tab-action:hover,
+.uq-x:hover {
+  background: var(--icon-control-hover-bg, var(--control-hover-bg));
+  color: var(--icon-control-hover-color, var(--text));
+}
+.tool:disabled,
+.dock-toggle:disabled,
+.connection-trigger:disabled,
+.terminal-tab-action:disabled,
+.uq-x:disabled {
+  opacity: 0.32;
+  cursor: not-allowed;
+}
+.dock-toggle:active,
+.connection-trigger:active,
+.terminal-tab-action:active,
+.uq-x:active {
+  transform: translateY(1px);
+}
+.dock-toggle:focus-visible,
+.connection-trigger:focus-visible,
+.terminal-tab-action:focus-visible,
+.uq-x:focus-visible,
+.tool:focus-visible,
+.icon-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.history-search,
+.pathbar {
+  display: flex;
+  align-items: center;
+  gap: var(--input-shell-gap, 7px);
+  height: var(--input-shell-height, 30px);
+  padding: var(--input-shell-padding, 0 9px);
+  border: 1px solid var(--input-shell-border, var(--hairline));
+  border-radius: var(--input-shell-radius, 7px);
+  background: var(--input-shell-bg, var(--surface-soft-bg));
+  color: var(--faint);
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.history-search:focus-within,
+.pathbar:focus-within {
+  border-color: var(--input-shell-focus-border, var(--accent-soft));
+  background: var(--input-shell-focus-bg, var(--focus-bg));
+}
+.history-search input,
+.pathbar input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--input-shell-font-size, 12.5px);
+}
+.history-search input::placeholder,
+.pathbar input::placeholder {
+  color: var(--faint);
+}
+
+.delete-confirm-backdrop,
+.file-editor-backdrop,
+.editor-backdrop,
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--modal-backdrop-padding, 24px);
+  background: var(--modal-backdrop-bg, rgba(0, 0, 0, 0.5));
+  backdrop-filter: var(--modal-backdrop-filter, blur(6px));
+  animation: fade 140ms ease;
+}
+.delete-confirm,
+.file-editor,
+.editor-sheet,
+.settings-modal {
+  overflow: hidden;
+  border: 1px solid var(--modal-surface-border, var(--hairline-2));
+  border-radius: var(--modal-surface-radius, 14px);
+  background: var(--modal-surface-bg, var(--panel));
+  box-shadow: var(--shadow);
+}

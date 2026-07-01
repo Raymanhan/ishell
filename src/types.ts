@@ -78,6 +78,9 @@ export interface SftpEntry {
   name: string;
   path: string;
   isDir: boolean;
+  isSymlink?: boolean;
+  linkTarget?: string | null;
+  targetIsDir?: boolean | null;
   size?: number | null;
   uid?: number | null;
   gid?: number | null;
@@ -151,6 +154,7 @@ export interface TerminalSnapshotPayload {
   data: string;
   startOffset: number;
   endOffset: number;
+  ready: boolean;
 }
 
 export interface TerminalClosedPayload {

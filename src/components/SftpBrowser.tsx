@@ -8,9 +8,11 @@ import {
   EyeOff,
   File,
   FilePenLine,
+  FileSymlink,
   Folder,
   FolderOpen,
   FolderPlus,
+  FolderSymlink,
   HardDrive,
   Pencil,
   RefreshCw,
@@ -24,6 +26,7 @@ import {
 import type { ShellTab } from "../features/shell/types";
 import type { SftpEntry } from "../types";
 import { formatBytes } from "../utils/format";
+import type { CSSProperties } from "react";
 
 interface ContextMenuState {
   x: number;
@@ -46,6 +49,17 @@ interface CreateDirState {
 type SftpViewMode = "tree" | "columns";
 type SortKey = "name" | "type" | "size" | "modifiedAt";
 type SortDirection = "asc" | "desc";
+
+const DETAIL_COLUMN_WIDTHS = [240, 96, 188, 116, 128];
+const DETAIL_COLUMN_MIN_WIDTHS = [180, 80, 156, 96, 96];
+const DETAIL_COLUMN_GAP = 12;
+const DETAIL_ROW_X_PADDING = 24;
+
+interface DetailResizeState {
+  dividerIndex: number;
+  startX: number;
+  widths: number[];
+}
 
 interface SortState {
   key: SortKey | null;
@@ -134,11 +148,28 @@ function SftpBrowserBase({
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
   const [renaming, setRenaming] = useState<RenameState | null>(null);
   const [creatingDir, setCreatingDir] = useState<CreateDirState | null>(null);
+  const [detailColumnWidths, setDetailColumnWidths] = useState(() => DETAIL_COLUMN_WIDTHS);
+  const [resizingDetailDivider, setResizingDetailDivider] = useState<number | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const createInputRef = useRef<HTMLInputElement>(null);
   const renameStartedForRef = useRef<string | null>(null);
   const createStartedForRef = useRef<string | null>(null);
+  const detailResizeRef = useRef<DetailResizeState | null>(null);
+
+  const detailTableMinWidth = useMemo(
+    () => detailColumnWidths.reduce((total, width) => total + width, 0)
+      + DETAIL_COLUMN_GAP * (detailColumnWidths.length - 1)
+      + DETAIL_ROW_X_PADDING,
+    [detailColumnWidths],
+  );
+  const detailGridStyle = useMemo<CSSProperties>(
+    () => ({
+      gridTemplateColumns: detailColumnWidths.map((width) => `${width}px`).join(" "),
+      minWidth: `${detailTableMinWidth}px`,
+    }),
+    [detailColumnWidths, detailTableMinWidth],
+  );
 
   // Keep the most recently opened column in view as the browser overflows right.
   const columnsRef = useRef<HTMLDivElement>(null);
@@ -191,6 +222,40 @@ function SftpBrowserBase({
       createInputRef.current?.select();
     });
   }, [creatingDir]);
+
+  useEffect(() => {
+    if (resizingDetailDivider == null) return;
+    const onPointerMove = (event: PointerEvent) => {
+      const drag = detailResizeRef.current;
+      if (!drag) return;
+      const leftIndex = drag.dividerIndex;
+      const rightIndex = leftIndex + 1;
+      const delta = event.clientX - drag.startX;
+      const pairWidth = drag.widths[leftIndex] + drag.widths[rightIndex];
+      const nextLeft = Math.min(
+        pairWidth - DETAIL_COLUMN_MIN_WIDTHS[rightIndex],
+        Math.max(DETAIL_COLUMN_MIN_WIDTHS[leftIndex], drag.widths[leftIndex] + delta),
+      );
+      const next = [...drag.widths];
+      next[leftIndex] = nextLeft;
+      next[rightIndex] = pairWidth - nextLeft;
+      setDetailColumnWidths(next);
+    };
+    const onPointerUp = () => {
+      detailResizeRef.current = null;
+      setResizingDetailDivider(null);
+      document.documentElement.classList.remove("resizing-detail-column");
+    };
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp, { once: true });
+    window.addEventListener("pointercancel", onPointerUp, { once: true });
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+      document.documentElement.classList.remove("resizing-detail-column");
+    };
+  }, [resizingDetailDivider]);
 
   // Dismiss the context menu on any outside interaction.
   useEffect(() => {
@@ -339,6 +404,18 @@ function SftpBrowserBase({
       if (current.direction === "asc") return { key, direction: "desc" };
       return { key: null, direction: "asc" };
     });
+  }
+
+  function startDetailResize(event: React.PointerEvent, dividerIndex: number) {
+    event.preventDefault();
+    event.stopPropagation();
+    detailResizeRef.current = {
+      dividerIndex,
+      startX: event.clientX,
+      widths: detailColumnWidths,
+    };
+    setResizingDetailDivider(dividerIndex);
+    document.documentElement.classList.add("resizing-detail-column");
   }
 
   function toggleTreeRow(event: React.MouseEvent, path: string) {
@@ -497,7 +574,7 @@ function SftpBrowserBase({
                         className="tree-caret"
                         onClick={(event) => toggleTreeRow(event, row.entry.path)}
                       />
-                      <Folder size={14} className="ic-dir" />
+                      {entryIcon(row.entry)}
                       <span>{isRoot ? "/" : row.entry.name}</span>
                     </button>
                   );
@@ -508,22 +585,60 @@ function SftpBrowserBase({
 
           <section className="sftp-detail">
             <div className="detail-table">
-              <div className="detail-row detail-header">
-                <button type="button" className={sort.key === "name" ? "on" : ""} onClick={() => setSortKey("name")}>
-                  文件名{sort.key === "name" ? sortArrow(sort.direction) : ""}
-                </button>
-                <button type="button" className={sort.key === "size" ? "on" : ""} onClick={() => setSortKey("size")}>
-                  大小{sort.key === "size" ? sortArrow(sort.direction) : ""}
-                </button>
-                <button
-                  type="button"
-                  className={sort.key === "modifiedAt" ? "on" : ""}
-                  onClick={() => setSortKey("modifiedAt")}
-                >
-                  修改时间{sort.key === "modifiedAt" ? sortArrow(sort.direction) : ""}
-                </button>
-                <span>权限</span>
-                <span>用户/组</span>
+              <div className="detail-row detail-header" style={detailGridStyle}>
+                <div className="detail-header-cell">
+                  <button type="button" className={sort.key === "name" ? "on" : ""} onClick={() => setSortKey("name")}>
+                    文件名{sort.key === "name" ? sortArrow(sort.direction) : ""}
+                  </button>
+                  <span
+                    className={`detail-resizer ${resizingDetailDivider === 0 ? "active" : ""}`}
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label="调整文件名列宽"
+                    onPointerDown={(event) => startDetailResize(event, 0)}
+                  />
+                </div>
+                <div className="detail-header-cell">
+                  <button type="button" className={sort.key === "size" ? "on" : ""} onClick={() => setSortKey("size")}>
+                    大小{sort.key === "size" ? sortArrow(sort.direction) : ""}
+                  </button>
+                  <span
+                    className={`detail-resizer ${resizingDetailDivider === 1 ? "active" : ""}`}
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label="调整大小列宽"
+                    onPointerDown={(event) => startDetailResize(event, 1)}
+                  />
+                </div>
+                <div className="detail-header-cell">
+                  <button
+                    type="button"
+                    className={sort.key === "modifiedAt" ? "on" : ""}
+                    onClick={() => setSortKey("modifiedAt")}
+                  >
+                    修改时间{sort.key === "modifiedAt" ? sortArrow(sort.direction) : ""}
+                  </button>
+                  <span
+                    className={`detail-resizer ${resizingDetailDivider === 2 ? "active" : ""}`}
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label="调整修改时间列宽"
+                    onPointerDown={(event) => startDetailResize(event, 2)}
+                  />
+                </div>
+                <div className="detail-header-cell">
+                  <span>权限</span>
+                  <span
+                    className={`detail-resizer ${resizingDetailDivider === 3 ? "active" : ""}`}
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label="调整权限列宽"
+                    onPointerDown={(event) => startDetailResize(event, 3)}
+                  />
+                </div>
+                <div className="detail-header-cell">
+                  <span>用户/组</span>
+                </div>
               </div>
               <div className="detail-body" onContextMenu={(event) => openMenu(event, null, currentColumnIndex)}>
                 {columns.length === 0 ? (
@@ -542,7 +657,7 @@ function SftpBrowserBase({
                 ) : (
                   <>
                     {creatingDir?.parentPath === currentDir && (
-                      <div className="detail-row creating">
+                      <div className="detail-row creating" style={detailGridStyle}>
                         <span className="detail-name">
                           <Folder size={14} className="ic-dir" />
                           <input
@@ -595,6 +710,7 @@ function SftpBrowserBase({
                             key={entry.path}
                             type="button"
                             className={rowClassName}
+                            style={detailGridStyle}
                             onClick={(event) => {
                               if (isRenaming) return;
                               selectEntry(entry, currentColumnIndex, event);
@@ -603,11 +719,7 @@ function SftpBrowserBase({
                             onContextMenu={(event) => openMenu(event, entry, currentColumnIndex)}
                           >
                             <span className="detail-name">
-                              {entry.isDir ? (
-                                <Folder size={14} className="ic-dir" />
-                              ) : (
-                                <File size={14} className="ic-file" />
-                              )}
+                              {entryIcon(entry)}
                               {isRenaming ? (
                                 <input
                                   ref={renameInputRef}
@@ -737,11 +849,7 @@ function SftpBrowserBase({
                             }}
                             onContextMenu={(event) => openMenu(event, entry, index)}
                           >
-                            {entry.isDir ? (
-                              <Folder size={14} className="ic-dir" />
-                            ) : (
-                              <File size={14} className="ic-file" />
-                            )}
+                            {entryIcon(entry)}
                             {isRenaming ? (
                               <input
                                 ref={renameInputRef}
@@ -1021,6 +1129,17 @@ function isEditableTextEntry(entry: SftpEntry | null | undefined) {
   return true;
 }
 
+function entryIcon(entry: SftpEntry) {
+  if (entry.isSymlink) {
+    return entry.isDir
+      ? <FolderSymlink size={14} className="ic-link ic-link-dir" />
+      : <FileSymlink size={14} className="ic-link ic-link-file" />;
+  }
+  return entry.isDir
+    ? <Folder size={14} className="ic-dir" />
+    : <File size={14} className="ic-file" />;
+}
+
 function findEntry(tab: ShellTab, path: string | null): SftpEntry | null {
   if (!path) return null;
   for (const column of tab.files) {
@@ -1064,7 +1183,8 @@ function formatPermissions(entry: SftpEntry) {
     0o001,
   ];
   const chars = ["r", "w", "x", "r", "w", "x", "r", "w", "x"];
-  return `${entry.isDir ? "d" : "-"}${bits.map((bit, index) => (mode & bit ? chars[index] : "-")).join("")}`;
+  const type = entry.isSymlink ? "l" : entry.isDir ? "d" : "-";
+  return `${type}${bits.map((bit, index) => (mode & bit ? chars[index] : "-")).join("")}`;
 }
 
 function formatOwnerGroup(entry: SftpEntry) {

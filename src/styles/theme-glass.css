@@ -1,0 +1,295 @@
+/* ===== Glass gray theme ===== */
+:root[data-theme="glass"] .app {
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03), transparent 38%, rgba(255, 255, 255, 0.02)),
+    rgba(18, 24, 34, 0.1);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+:root[data-theme="glass"] .workbench-bar {
+  border-bottom: 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+:root[data-theme="glass"] .workbench-main,
+:root[data-theme="glass"] .view-layer,
+:root[data-theme="glass"] .terminal-dock,
+:root[data-theme="glass"] .terminal-region,
+:root[data-theme="glass"] .columns,
+:root[data-theme="glass"] .sftp-stage {
+  background: transparent;
+}
+:root[data-theme="glass"] .sftp-tree,
+:root[data-theme="glass"] .sftp-detail,
+:root[data-theme="glass"] .sftp-tool-rail,
+:root[data-theme="glass"] .sftp-stage > .columns {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(34, 42, 52, 0.3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+/* One continuous terminal-tone base: the terminal surface AND every gap/moat
+   around the floating panels read this single frosted gray, so it all feels
+   like one sheet with the panels floating on top. */
+:root[data-theme="glass"] .workbench-body {
+  background: rgba(92, 93, 93, 0.5);
+  backdrop-filter: saturate(150%);
+  -webkit-backdrop-filter: saturate(150%);
+}
+:root[data-theme="glass"] .terminal-frame {
+  background: transparent;
+  box-shadow: none;
+}
+:root[data-theme="glass"] .files-region {
+  border-top-color: rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 72px),
+    rgba(92, 93, 93, 0.5);
+  backdrop-filter: blur(38px) saturate(144%);
+  -webkit-backdrop-filter: blur(38px) saturate(144%);
+}
+:root[data-theme="glass"] .connection-manager {
+  background: rgba(92, 93, 93, 0.5);
+  backdrop-filter: blur(38px) saturate(144%);
+  -webkit-backdrop-filter: blur(38px) saturate(144%);
+}
+:root[data-theme="glass"] .status-panel {
+  background: rgba(92, 93, 93, 0.5);
+  backdrop-filter: blur(38px) saturate(144%);
+  -webkit-backdrop-filter: blur(38px) saturate(144%);
+}
+:root[data-theme="glass"] .dashboard,
+:root[data-theme="glass"] .history-panel {
+  background: transparent;
+}
+:root[data-theme="glass"] .connection-manager.open {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+:root[data-theme="glass"] .status-panel.open {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+:root[data-theme="glass"] .status-panel-content {
+  border-left: 0;
+}
+:root[data-theme="glass"] .detail-header {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+}
+:root[data-theme="glass"] .column {
+  border-right-color: rgba(255, 255, 255, 0.13);
+}
+:root[data-theme="glass"] .dock-toggle.on,
+:root[data-theme="glass"] .connection-folder-row.on,
+:root[data-theme="glass"] .connection-node.on {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.12);
+}
+:root[data-theme="glass"] .dock-toggle:hover,
+:root[data-theme="glass"] .connection-folder-row:hover,
+:root[data-theme="glass"] .connection-node:hover,
+:root[data-theme="glass"] .history-row:hover,
+:root[data-theme="glass"] .history-row:focus-visible,
+:root[data-theme="glass"] .entry:hover,
+:root[data-theme="glass"] .entry.trail,
+:root[data-theme="glass"] .tree-row:hover,
+:root[data-theme="glass"] button.detail-row:hover,
+:root[data-theme="glass"] .detail-row.trail {
+  background: rgba(255, 255, 255, 0.095);
+}
+:root[data-theme="glass"] .history-search,
+:root[data-theme="glass"] .theme-option,
+:root[data-theme="glass"] .settings-range,
+:root[data-theme="glass"] .recent-card,
+:root[data-theme="glass"] .network-card,
+:root[data-theme="glass"] .metric-row,
+:root[data-theme="glass"] .mount-card,
+:root[data-theme="glass"] .editor-section,
+:root[data-theme="glass"] .field input,
+:root[data-theme="glass"] .field textarea,
+:root[data-theme="glass"] .auth-switch {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+}
+:root[data-theme="glass"] .history-search,
+:root[data-theme="glass"] .network-card,
+:root[data-theme="glass"] .metric-row,
+:root[data-theme="glass"] .mount-card {
+  border-color: rgba(255, 255, 255, 0.105);
+  background: rgba(255, 255, 255, 0.045);
+}
+:root[data-theme="glass"] .history-row:hover,
+:root[data-theme="glass"] .history-row:focus-visible {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+:root[data-theme="glass"] .history-search:focus-within,
+:root[data-theme="glass"] .pathbar:focus-within,
+:root[data-theme="glass"] .field input:focus,
+:root[data-theme="glass"] .field textarea:focus {
+  border-color: rgba(199, 213, 255, 0.58);
+  background: rgba(199, 213, 255, 0.12);
+}
+:root[data-theme="glass"] .btn-primary,
+:root[data-theme="glass"] .solid-button {
+  border-color: rgba(199, 213, 255, 0.36);
+  background: rgba(199, 213, 255, 0.16);
+  color: #f5f7ff;
+}
+:root[data-theme="glass"] .btn-primary:hover,
+:root[data-theme="glass"] .solid-button:hover:not(:disabled) {
+  border-color: rgba(199, 213, 255, 0.54);
+  background: rgba(199, 213, 255, 0.22);
+}
+:root[data-theme="glass"] .btn-ghost {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: transparent;
+  color: var(--dim);
+}
+:root[data-theme="glass"] .btn-ghost:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+}
+:root[data-theme="glass"] .icon-button,
+:root[data-theme="glass"] .tool:hover:not(:disabled),
+:root[data-theme="glass"] .uq-clear:hover,
+:root[data-theme="glass"] .uq-x:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+/* Keep the new-server button as ghost chrome under glass. */
+:root[data-theme="glass"] .topbar-new.icon-button {
+  border-color: transparent;
+  background: transparent;
+}
+:root[data-theme="glass"] .topbar-new.icon-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+:root[data-theme="glass"] .recent-open {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.11);
+}
+:root[data-theme="glass"] .tool.on,
+:root[data-theme="glass"] .entry.on,
+:root[data-theme="glass"] .tree-row.current,
+:root[data-theme="glass"] .tree-row.on,
+:root[data-theme="glass"] .detail-row.on {
+  background: var(--accent-soft);
+  color: #f6f8ff;
+}
+:root[data-theme="glass"] .settings-backdrop,
+:root[data-theme="glass"] .editor-backdrop,
+:root[data-theme="glass"] .delete-confirm-backdrop,
+:root[data-theme="glass"] .file-editor-backdrop {
+  background: rgba(18, 22, 28, 0.22);
+  backdrop-filter: blur(20px) saturate(132%);
+  -webkit-backdrop-filter: blur(20px) saturate(132%);
+}
+:root[data-theme="glass"] .settings-modal,
+:root[data-theme="glass"] .editor-sheet,
+:root[data-theme="glass"] .delete-confirm,
+:root[data-theme="glass"] .file-editor,
+:root[data-theme="glass"] .server-context-menu,
+:root[data-theme="glass"] .tab-context-menu,
+:root[data-theme="glass"] .ctx-menu,
+:root[data-theme="glass"] .terminal-history-suggest,
+:root[data-theme="glass"] .upload-queue,
+:root[data-theme="glass"] .sftp-drop-card {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(44, 52, 62, 0.58);
+  backdrop-filter: blur(38px) saturate(144%);
+  -webkit-backdrop-filter: blur(38px) saturate(144%);
+  box-shadow:
+    0 26px 76px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+:root[data-theme="glass"] .editor-sheet {
+  background:
+    linear-gradient(180deg, rgba(54, 62, 74, 0.64), rgba(44, 52, 62, 0.58) 180px),
+    rgba(44, 52, 62, 0.58);
+}
+:root[data-theme="glass"] .settings-head,
+:root[data-theme="glass"] .terminal-history-suggest-head,
+:root[data-theme="glass"] .uq-head {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+}
+:root[data-theme="glass"] .upload-queue {
+  background: rgba(44, 52, 62, 0.62);
+}
+:root[data-theme="glass"] .uq-item {
+  background: rgba(255, 255, 255, 0.055);
+}
+:root[data-theme="glass"] .file-editor-code {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(20, 24, 30, 0.34);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+:root[data-theme="glass"] .entry-rename {
+  border-color: rgba(199, 213, 255, 0.62);
+  background: rgba(24, 30, 38, 0.7);
+}
+:root[data-theme="glass"] .sftp-drop {
+  border-color: rgba(199, 213, 255, 0.5);
+  background: rgba(24, 30, 38, 0.34);
+  backdrop-filter: blur(24px) saturate(132%);
+  -webkit-backdrop-filter: blur(24px) saturate(132%);
+}
+:root[data-theme="glass"] .network-head > span,
+:root[data-theme="glass"] .metric-label {
+  color: #d6dbe2;
+}
+:root[data-theme="glass"] .metric-track,
+:root[data-theme="glass"] .mount-track,
+:root[data-theme="glass"] .uq-track {
+  background: rgba(255, 255, 255, 0.12);
+}
+:root[data-theme="glass"] .wave-grid {
+  stroke: rgba(255, 255, 255, 0.16);
+}
+:root[data-theme="glass"] .server-editor-sheet {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(44, 52, 62, 0.58);
+  box-shadow:
+    0 26px 76px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+:root[data-theme="glass"] .server-editor-sheet .editor-section,
+:root[data-theme="glass"] .server-editor-sheet .auth-switch {
+  border-color: transparent;
+  background: transparent;
+}
+:root[data-theme="glass"] .server-editor-sheet .field input,
+:root[data-theme="glass"] .server-editor-sheet .field textarea {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: transparent;
+}
+:root[data-theme="glass"] .server-editor-sheet .field input:hover,
+:root[data-theme="glass"] .server-editor-sheet .field textarea:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: transparent;
+}
+:root[data-theme="glass"] .server-editor-sheet .field input:focus,
+:root[data-theme="glass"] .server-editor-sheet .field textarea:focus {
+  border-color: rgba(199, 213, 255, 0.36);
+  background: transparent;
+}
+:root[data-theme="glass"] .server-editor-sheet .auth-switch button {
+  background: transparent;
+}
+:root[data-theme="glass"] .server-editor-sheet .auth-switch button:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+:root[data-theme="glass"] .server-editor-sheet .auth-switch button.active {
+  background: rgba(199, 213, 255, 0.075);
+}
+:root[data-theme="glass"] .server-editor-sheet .danger-button {
+  border-color: transparent;
+  background: transparent;
+}
+
+@media (max-width: 1120px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
