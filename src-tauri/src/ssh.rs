@@ -12,7 +12,10 @@ use std::{
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::{
-    models::{DiskMount, NetworkSample, ServerStatus, SftpEntry, UploadProgress},
+    models::{
+        DiskMount, NetworkSample, ServerInput, ServerRecord, ServerStatus, SftpEntry,
+        UploadProgress,
+    },
     openssh,
     pool::SshPool,
     store::{get_server, read_secret},
@@ -109,6 +112,92 @@ with os.scandir(path) as entries:
         })
 print(json.dumps(items, ensure_ascii=False, separators=(",", ":")))
 "#;
+
+pub fn test_connection(
+    app: &AppHandle,
+    input: ServerInput,
+    password: Option<String>,
+) -> Result<(), String> {
+    let saved_id = input.id.clone();
+    let id = format!("test-{}", now());
+    let server = ServerRecord {
+        id: id.clone(),
+        name: input.name.trim().to_string(),
+        host: input.host.trim().to_string(),
+        port: input.port,
+        username: input.username.trim().to_string(),
+        group: input.group.trim().to_string(),
+        tags: input.tags,
+        auth_type: input.auth_type,
+        key_path: input.key_path.filter(|path| !path.trim().is_empty()),
+        color: input.color,
+        notes: input.notes,
+        sort_order: input.sort_order.unwrap_or_else(now),
+        created_at: now(),
+        updated_at: now(),
+        last_connected_at: None,
+    };
+    let secret = password
+        .filter(|value| !value.is_empty())
+        .or_else(|| {
+            saved_id
+                .as_deref()
+                .and_then(|server_id| read_secret(app, server_id).ok())
+        })
+        .filter(|value| !value.is_empty());
+    test_connection_with_server(&server, secret.as_deref())
+}
+
+#[cfg(not(russh_backend))]
+fn test_connection_with_server(server: &ServerRecord, secret: Option<&str>) -> Result<(), String> {
+    let helper_path = if secret.is_some() {
+        Some(create_askpass_helper(&server.id)?)
+    } else {
+        None
+    };
+    let mut command = Command::new(openssh::ssh_binary());
+    if let (Some(secret), Some(path)) = (secret, helper_path.as_ref()) {
+        command.env("SSH_ASKPASS", path);
+        command.env("SSH_ASKPASS_REQUIRE", "force");
+        command.env("ISHELL_SSH_PASSWORD", secret);
+        command.env("DISPLAY", "ishell:0");
+    }
+    for arg in openssh::common_ssh_args(server) {
+        command.arg(arg);
+    }
+    for arg in openssh::auth_ssh_args(server, secret.is_some()) {
+        command.arg(arg);
+    }
+    command.arg("-o");
+    command.arg("ConnectTimeout=10");
+    if secret.is_none() {
+        command.arg("-o");
+        command.arg("BatchMode=yes");
+    }
+    command.arg(&server.host);
+    command.arg("printf ishell-test");
+    command.stdin(Stdio::null());
+    command.stdout(Stdio::piped());
+    command.stderr(Stdio::piped());
+    let output = command
+        .output()
+        .map_err(|err| format!("无法启动 OpenSSH：{err}"));
+    cleanup_askpass_helper(helper_path.as_ref());
+    let output = output?;
+    if !output.status.success() {
+        return Err(format_process_error("测试连接失败", &output.stderr));
+    }
+    Ok(())
+}
+
+#[cfg(russh_backend)]
+fn test_connection_with_server(server: &ServerRecord, secret: Option<&str>) -> Result<(), String> {
+    let result = crate::russh_transport::run_command(server, secret, "printf ishell-test", None)
+        .map_err(|err| format!("测试连接失败：{err}"))
+        .map(|_| ());
+    crate::russh_transport::invalidate(&server.id);
+    result
+}
 
 pub fn fetch_status(
     _pool: &SshPool,
@@ -293,7 +382,14 @@ pub fn download_file(
         let mut last_emit = Instant::now();
         let mut on_progress = |transferred: u64| {
             if last_emit.elapsed() >= Duration::from_millis(80) {
-                emit_progress(app, "sftp-download-progress", transfer_id, transferred, total, false);
+                emit_progress(
+                    app,
+                    "sftp-download-progress",
+                    transfer_id,
+                    transferred,
+                    total,
+                    false,
+                );
                 last_emit = Instant::now();
             }
         };
@@ -398,7 +494,14 @@ pub fn upload_file(
         let mut last_emit = Instant::now();
         let mut on_progress = |transferred: u64| {
             if last_emit.elapsed() >= Duration::from_millis(80) {
-                emit_progress(app, "sftp-upload-progress", transfer_id, transferred, total, false);
+                emit_progress(
+                    app,
+                    "sftp-upload-progress",
+                    transfer_id,
+                    transferred,
+                    total,
+                    false,
+                );
                 last_emit = Instant::now();
             }
         };

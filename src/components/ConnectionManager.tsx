@@ -5,7 +5,9 @@ import {
   Folder,
   FolderOpen,
   Pencil,
+  PencilLine,
   PlugZap,
+  Copy,
   Search,
   Server,
   Signal,
@@ -25,7 +27,10 @@ export function ConnectionManager({
   selectedServerId,
   onSelect,
   onConnect,
+  onClone,
   onEdit,
+  onRenameServer,
+  onRenameFolder,
   onNew,
   onCreateFolder,
   onExport,
@@ -39,7 +44,10 @@ export function ConnectionManager({
   selectedServerId: string | null;
   onSelect: (server: ServerRecord) => void;
   onConnect: (server: ServerRecord) => void;
+  onClone: (server: ServerRecord) => void;
   onEdit: (server: ServerRecord) => void;
+  onRenameServer: (server: ServerRecord) => void;
+  onRenameFolder: (group: string) => void;
   onNew: (group?: string) => void;
   onCreateFolder: (name: string) => void;
   onExport: (target: { serverIds: string[]; folders: string[] }) => void;
@@ -210,6 +218,24 @@ export function ConnectionManager({
   function editFromMenu() {
     if (!menu || menu.type !== "server") return;
     edit(menu.server);
+    setMenu(null);
+  }
+
+  function cloneFromMenu() {
+    if (!menu || menu.type !== "server") return;
+    onClone(menu.server);
+    setMenu(null);
+  }
+
+  function renameServerFromMenu() {
+    if (!menu || menu.type !== "server") return;
+    onRenameServer(menu.server);
+    setMenu(null);
+  }
+
+  function renameFolderFromMenu() {
+    if (!menu || menu.type !== "folder" || !menu.group) return;
+    onRenameFolder(menu.group);
     setMenu(null);
   }
 
@@ -548,6 +574,14 @@ export function ConnectionManager({
                 <Pencil size={14} />
                 <span>编辑</span>
               </button>
+              <button type="button" onClick={cloneFromMenu} role="menuitem">
+                <Copy size={14} />
+                <span>克隆</span>
+              </button>
+              <button type="button" onClick={renameServerFromMenu} role="menuitem">
+                <PencilLine size={14} />
+                <span>重命名</span>
+              </button>
               <div className="ctx-sep" />
               <button type="button" onClick={exportFromMenu} role="menuitem">
                 <Server size={14} />
@@ -573,6 +607,12 @@ export function ConnectionManager({
                 <Folder size={14} />
                 <span>新建文件夹</span>
               </button>
+              {menu.type === "folder" && (
+                <button type="button" onClick={renameFolderFromMenu} role="menuitem">
+                  <PencilLine size={14} />
+                  <span>重命名</span>
+                </button>
+              )}
               <div className="ctx-sep" />
               <button type="button" onClick={exportFromMenu} role="menuitem">
                 <Server size={14} />

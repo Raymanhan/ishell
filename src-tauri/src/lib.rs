@@ -32,6 +32,7 @@ pub fn run() {
             commands::save_command_history,
             commands::fetch_server_status,
             commands::fetch_network_sample,
+            commands::test_server_connection,
             commands::invalidate_connection,
             commands::sftp_list,
             commands::sftp_download,

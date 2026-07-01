@@ -23,7 +23,7 @@ use crate::{
     pool::SshPool,
     ssh::{
         download_file, fetch_network_sample as fetch_network, fetch_status, list_sftp, make_directory,
-        read_text_file, remove_entry, rename_entry, upload_file, write_text_file,
+        read_text_file, remove_entry, rename_entry, test_connection, upload_file, write_text_file,
     },
     store::{
         append_command_history, delete_server as remove_server, get_server,
@@ -407,6 +407,16 @@ pub async fn fetch_network_sample(
 ) -> Result<NetworkSample, String> {
     let pool = pool.inner().clone();
     run_blocking(move || fetch_network(&pool, &app, &id)).await
+}
+
+#[tauri::command]
+pub async fn test_server_connection(
+    app: AppHandle,
+    input: ServerInput,
+    password: Option<String>,
+) -> Result<(), String> {
+    validate_server(&input)?;
+    run_blocking(move || test_connection(&app, input, password)).await
 }
 
 #[tauri::command]

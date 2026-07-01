@@ -110,6 +110,39 @@ interface ConnectionImportPayload {
   servers: Array<ServerInput & { password?: string | null }>;
 }
 
+function serverInputFromForm(form: ServerForm): ServerInput {
+  return {
+    id: form.id,
+    name: form.name,
+    host: form.host,
+    port: Number(form.port),
+    username: form.username,
+    group: form.group.trim() || "Default",
+    tags: form.tagsText.split(",").map((tag) => tag.trim()).filter(Boolean),
+    authType: form.authType as AuthType,
+    keyPath: form.authType === "key" ? form.keyPath || null : null,
+    color: form.color,
+    notes: form.notes,
+  };
+}
+
+function serverInputFromRecord(server: ServerRecord): ServerInput {
+  return {
+    id: server.id,
+    name: server.name,
+    host: server.host,
+    port: server.port,
+    username: server.username,
+    group: server.group || "Default",
+    tags: server.tags,
+    authType: server.authType,
+    keyPath: server.keyPath ?? null,
+    color: server.color,
+    notes: server.notes,
+    sortOrder: server.sortOrder,
+  };
+}
+
 interface TabDropPoint {
   screenX: number;
   screenY: number;
@@ -149,6 +182,11 @@ export default function App() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<ServerForm>(defaultForm);
   const [saving, setSaving] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [connectionTestFeedback, setConnectionTestFeedback] = useState<{
+    kind: "info" | "success" | "error";
+    message: string;
+  } | null>(null);
   const [tabs, setTabs] = useState<ShellTab[]>(() => handedOffInitialTab ? [handedOffInitialTab] : []);
   const [activeTabId, setActiveTabId] = useState<string | null>(() => handedOffInitialTab?.id ?? null);
   const [filesOpen, setFilesOpen] = useState(false);
@@ -288,8 +326,9 @@ export default function App() {
     (async () => {
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
       const un = await getCurrentWindow().onCloseRequested((event) => {
+        if (nativeCloseInFlightRef.current) return;
         event.preventDefault();
-        void closeTabsAndHideApp();
+        void closeTabsAndCloseOrHideApp();
       });
       if (active) unlisten = un;
       else un();
@@ -691,6 +730,7 @@ export default function App() {
   }
 
   function newServer(group?: string) {
+    setConnectionTestFeedback(null);
     setForm({
       ...defaultForm,
       group: group?.trim() || "Default",
@@ -699,9 +739,30 @@ export default function App() {
   }
 
   function editServer(server: ServerRecord) {
+    setConnectionTestFeedback(null);
     setForm({
       id: server.id,
       name: server.name,
+      host: server.host,
+      port: server.port,
+      username: server.username,
+      group: server.group || "Default",
+      tags: server.tags,
+      tagsText: server.tags.join(", "),
+      authType: server.authType,
+      keyPath: server.keyPath ?? "",
+      color: server.color || swatches[0],
+      notes: server.notes,
+      password: "",
+    });
+    setEditing(true);
+  }
+
+  function cloneServer(server: ServerRecord) {
+    setConnectionTestFeedback(null);
+    setForm({
+      id: null,
+      name: `${server.name} 副本`,
       host: server.host,
       port: server.port,
       username: server.username,
@@ -729,6 +790,67 @@ export default function App() {
       if (existingFolders.has(name.toLowerCase())) return current;
       return ensureFolder(current, name);
     });
+  }
+
+  async function renameServer(server: ServerRecord) {
+    const name = window.prompt("输入新的服务器名称", server.name)?.trim();
+    if (!name || name === server.name) return;
+
+    const renamed = { ...server, name, updatedAt: Date.now() / 1000 };
+    setServers((current) => current.map((item) => (item.id === server.id ? renamed : item)));
+    setTabs((current) =>
+      current.map((tab) => (tab.serverId === server.id ? { ...tab, title: name } : tab)),
+    );
+
+    try {
+      if (isTauri) {
+        await command("save_server", { input: serverInputFromRecord(renamed), password: null });
+        await refreshServers();
+      }
+      showNotice("已重命名");
+    } catch (error) {
+      showNotice(String(error));
+      await refreshServers();
+    }
+  }
+
+  async function renameConnectionFolder(group: string) {
+    const nextGroup = window.prompt("输入新的目录名称", group)?.trim();
+    if (!nextGroup || nextGroup === group) return;
+    if (nextGroup === "全部") {
+      showNotice("文件夹不能命名为“全部”");
+      return;
+    }
+    if (connectionFolderNames.some((folder) => folder !== group && folder.toLowerCase() === nextGroup.toLowerCase())) {
+      showNotice("已存在同名文件夹");
+      return;
+    }
+
+    const renamedServers = servers.map((server) =>
+      (server.group || "Default") === group
+        ? { ...server, group: nextGroup, updatedAt: Date.now() / 1000 }
+        : server,
+    );
+    setServers(renamedServers);
+    setConnectionFolders((current) => {
+      const renamed = current.map((folder) => (folder === group ? nextGroup : folder));
+      return ensureFolder(renamed, nextGroup).filter((folder, index, list) =>
+        list.findIndex((item) => item.toLowerCase() === folder.toLowerCase()) === index,
+      );
+    });
+
+    try {
+      if (isTauri) {
+        for (const server of renamedServers.filter((item) => (item.group || "Default") === nextGroup)) {
+          await command("save_server", { input: serverInputFromRecord(server), password: null });
+        }
+        await refreshServers();
+      }
+      showNotice("已重命名目录");
+    } catch (error) {
+      showNotice(String(error));
+      await refreshServers();
+    }
   }
 
   async function exportConnections(target: { serverIds: string[]; folders: string[] }) {
@@ -857,19 +979,7 @@ export default function App() {
 
   async function saveServer() {
     setSaving(true);
-    const input: ServerInput = {
-      id: form.id,
-      name: form.name,
-      host: form.host,
-      port: Number(form.port),
-      username: form.username,
-      group: form.group.trim() || "Default",
-      tags: form.tagsText.split(",").map((tag) => tag.trim()).filter(Boolean),
-      authType: form.authType as AuthType,
-      keyPath: form.authType === "key" ? form.keyPath || null : null,
-      color: form.color,
-      notes: form.notes,
-    };
+    const input = serverInputFromForm(form);
 
     try {
       if (!isTauri) {
@@ -902,6 +1012,32 @@ export default function App() {
       showNotice(String(error));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function testServerConnection() {
+    if (testingConnection) return;
+    const input = serverInputFromForm(form);
+    setTestingConnection(true);
+    setConnectionTestFeedback({ kind: "info", message: "正在测试连接…" });
+    showNotice(`正在测试 ${input.host || "连接"}…`);
+    try {
+      if (!isTauri) {
+        await new Promise((resolve) => setTimeout(resolve, 420));
+      } else {
+        await command("test_server_connection", {
+          input,
+          password: form.password || null,
+        });
+      }
+      setConnectionTestFeedback({ kind: "success", message: "测试连接成功" });
+      showNotice("测试连接成功");
+    } catch (error) {
+      const message = String(error);
+      setConnectionTestFeedback({ kind: "error", message });
+      showNotice(message);
+    } finally {
+      setTestingConnection(false);
     }
   }
 
@@ -1190,7 +1326,7 @@ export default function App() {
     });
   }
 
-  async function closeTabsAndHideApp() {
+  async function closeTabsAndCloseOrHideApp() {
     if (nativeCloseInFlightRef.current) return;
     nativeCloseInFlightRef.current = true;
     try {
@@ -1201,12 +1337,17 @@ export default function App() {
       setHistoryOpen(false);
       setFileEditor(null);
       setDeleteConfirm(null);
-      const { hide } = await import("@tauri-apps/api/app");
-      await hide();
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const currentWindow = getCurrentWindow();
+      if (document.documentElement.dataset.platform === "macos") {
+        await currentWindow.hide();
+        nativeCloseInFlightRef.current = false;
+      } else {
+        await currentWindow.close();
+      }
     } catch (error) {
-      showNotice(String(error));
-    } finally {
       nativeCloseInFlightRef.current = false;
+      showNotice(String(error));
     }
   }
 
@@ -1917,7 +2058,10 @@ export default function App() {
             selectedServerId={selectedServerId}
             onSelect={(server) => setSelectedServerId(server.id)}
             onConnect={openShell}
+            onClone={cloneServer}
             onEdit={editServer}
+            onRenameServer={renameServer}
+            onRenameFolder={renameConnectionFolder}
             onNew={(group) => newServer(group)}
             onCreateFolder={createConnectionFolder}
             onExport={exportConnections}
@@ -2208,9 +2352,15 @@ export default function App() {
       {editing && (
         <ServerEditor
           form={form}
-          setForm={setForm}
+          setForm={(next) => {
+            setConnectionTestFeedback(null);
+            setForm(next);
+          }}
           saving={saving}
+          testing={testingConnection}
+          testFeedback={connectionTestFeedback}
           onSave={saveServer}
+          onTest={testServerConnection}
           onClose={() => setEditing(false)}
           onDelete={form.id ? deleteSelectedServer : undefined}
         />

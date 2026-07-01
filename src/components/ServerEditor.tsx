@@ -1,4 +1,5 @@
-import { X } from "lucide-react";
+import { useState } from "react";
+import { Eye, EyeOff, PlugZap, X } from "lucide-react";
 import { swatches } from "../constants/theme";
 import type { ServerInput } from "../types";
 
@@ -8,17 +9,24 @@ export function ServerEditor({
   form,
   setForm,
   saving,
+  testing,
+  testFeedback,
   onSave,
+  onTest,
   onClose,
   onDelete,
 }: {
   form: ServerForm;
   setForm: (form: ServerForm) => void;
   saving: boolean;
+  testing: boolean;
+  testFeedback: { kind: "info" | "success" | "error"; message: string } | null;
   onSave: () => void;
+  onTest: () => void;
   onClose: () => void;
   onDelete?: () => void;
 }) {
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const update = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => {
     setForm({ ...form, [key]: value });
   };
@@ -92,7 +100,18 @@ export function ServerEditor({
 
               <label className="field">
                 <span>{form.authType === "key" ? "私钥密码" : "密码"}</span>
-                <input type="password" value={form.password} onChange={(event) => update("password", event.target.value)} placeholder={form.id ? "留空则不修改" : ""} />
+                <div className="password-input-wrap">
+                  <input type={passwordVisible ? "text" : "password"} value={form.password} onChange={(event) => update("password", event.target.value)} placeholder={form.id ? "留空则不修改" : ""} />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setPasswordVisible((visible) => !visible)}
+                    title={passwordVisible ? "隐藏密码" : "显示密码"}
+                    aria-label={passwordVisible ? "隐藏密码" : "显示密码"}
+                  >
+                    {passwordVisible ? <Eye size={15} /> : <EyeOff size={15} />}
+                  </button>
+                </div>
               </label>
             </section>
 
@@ -124,8 +143,18 @@ export function ServerEditor({
               删除
             </button>
           )}
+          <span
+            className={`connection-test-feedback ${testFeedback ? testFeedback.kind : ""}`}
+            aria-live="polite"
+          >
+            {testFeedback?.message}
+          </span>
           <button className="btn-ghost" type="button" onClick={onClose}>
             取消
+          </button>
+          <button className="btn-ghost" type="button" onClick={onTest} disabled={saving || testing}>
+            <PlugZap size={14} />
+            {testing ? "测试中" : "测试连接"}
           </button>
           <button className="solid-button" type="submit" disabled={saving}>
             {saving ? "保存中" : "保存"}

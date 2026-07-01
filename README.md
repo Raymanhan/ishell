@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.0.6](https://github.com/Raymanhan/ishell/releases/tag/v1.0.6)**
+**[Download iShell v1.0.7](https://github.com/Raymanhan/ishell/releases/tag/v1.0.7)**
 
 Available packages:
 
@@ -65,9 +65,9 @@ Available packages:
 
 - Use the connection manager to search, select, group, edit, import, export, and
   delete server profiles.
-- Right-click a server to connect, edit, export, or delete it.
-- Right-click a folder or empty area to create folders, add servers, import, or
-  export.
+- Right-click a server to connect, clone, rename, edit, export, or delete it.
+- Right-click a folder or empty area to rename folders, create folders, add
+  servers, import, or export.
 - Multi-select supported items before running bulk export or delete actions.
 - New and edited servers keep a `sortOrder`, so the connection tree remains
   stable after restart.
@@ -81,6 +81,8 @@ Each profile includes:
 - Name, host, port, username, group, tags, color, and notes
 - Authentication type: password or private key
 - Optional private key path
+- A built-in connection test before saving
+- Password visibility toggle while editing
 
 Secrets are stored separately from profile metadata. When exporting
 connections, secret export is optional and can be passphrase-protected.
@@ -202,8 +204,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.0.6
-git push origin v1.0.6
+git tag v1.0.7
+git push origin v1.0.7
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -237,6 +239,8 @@ src-tauri/src/
 
 ## Recent Changes
 
+- `v1.0.7` restores profile-level connection testing, adds clone and rename
+  actions in the connection tree, and improves password editing controls.
 - `v1.0.6` improves connection tree drag/drop reliability, restores double-click
   connection behavior during pointer handling, and sorts grouped servers by
   saved order.

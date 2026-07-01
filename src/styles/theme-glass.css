@@ -264,6 +264,17 @@
   border-color: rgba(255, 255, 255, 0.08);
   background: transparent;
 }
+:root[data-theme="glass"] .server-editor-sheet .password-input-wrap {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+:root[data-theme="glass"] .server-editor-sheet .password-input-wrap:focus-within {
+  border-color: rgba(199, 213, 255, 0.36);
+}
+:root[data-theme="glass"] .server-editor-sheet .password-input-wrap input,
+:root[data-theme="glass"] .server-editor-sheet .password-input-wrap input:hover,
+:root[data-theme="glass"] .server-editor-sheet .password-input-wrap input:focus {
+  border-color: transparent;
+}
 :root[data-theme="glass"] .server-editor-sheet .field input:hover,
 :root[data-theme="glass"] .server-editor-sheet .field textarea:hover {
   border-color: rgba(255, 255, 255, 0.16);
@@ -273,6 +284,9 @@
 :root[data-theme="glass"] .server-editor-sheet .field textarea:focus {
   border-color: rgba(199, 213, 255, 0.36);
   background: transparent;
+}
+:root[data-theme="glass"] .server-editor-sheet .password-input-wrap input:focus {
+  border-color: transparent;
 }
 :root[data-theme="glass"] .server-editor-sheet .auth-switch button {
   background: transparent;

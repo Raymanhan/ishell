@@ -1569,6 +1569,39 @@ button.detail-row:hover {
 .server-editor-sheet .field textarea {
   background: transparent;
 }
+.server-editor-sheet .password-input-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30px;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  transition: border-color 120ms ease;
+}
+.server-editor-sheet .password-input-wrap:focus-within {
+  border-color: rgba(199, 213, 255, 0.36);
+}
+.server-editor-sheet .password-input-wrap input {
+  border-bottom: 0;
+}
+.server-editor-sheet .password-input-wrap input:hover,
+.server-editor-sheet .password-input-wrap input:focus {
+  border-color: transparent;
+}
+.server-editor-sheet .password-toggle {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+}
+.server-editor-sheet .password-toggle:hover {
+  background: rgba(255, 255, 255, 0.055);
+  color: var(--text);
+}
 .server-editor-sheet .field textarea {
   min-height: 46px;
 }
@@ -1600,6 +1633,23 @@ button.detail-row:hover {
   gap: 6px;
   min-height: 46px;
   padding: 7px 10px 10px;
+}
+.connection-test-feedback {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--faint);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.connection-test-feedback.success {
+  color: var(--ok);
+}
+.connection-test-feedback.error {
+  color: var(--danger);
 }
 .server-editor-sheet .danger-button {
   margin-right: auto;
