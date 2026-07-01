@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.0.7](https://github.com/Raymanhan/ishell/releases/tag/v1.0.7)**
+**[Download iShell v1.0.8](https://github.com/Raymanhan/ishell/releases/tag/v1.0.8)**
 
 Available packages:
 
@@ -204,8 +204,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.0.7
-git push origin v1.0.7
+git tag v1.0.8
+git push origin v1.0.8
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -239,6 +239,8 @@ src-tauri/src/
 
 ## Recent Changes
 
+- `v1.0.8` improves native window lifecycle handling: macOS Dock reopen restores
+  and focuses the main window, while non-macOS close uses window destruction.
 - `v1.0.7` restores profile-level connection testing, adds clone and rename
   actions in the connection tree, and improves password editing controls.
 - `v1.0.6` improves connection tree drag/drop reliability, restores double-click

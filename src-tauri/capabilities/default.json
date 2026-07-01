@@ -12,11 +12,15 @@
     "core:window:allow-close",
     "core:window:allow-create",
     "core:window:allow-cursor-position",
+    "core:window:allow-destroy",
+    "core:window:allow-hide",
     "core:window:allow-set-background-color",
     "core:window:allow-set-effects",
+    "core:window:allow-set-focus",
     "core:window:allow-set-ignore-cursor-events",
     "core:window:allow-set-position",
     "core:window:allow-set-shadow",
+    "core:window:allow-show",
     "core:window:allow-start-dragging",
     "dialog:default"
   ]

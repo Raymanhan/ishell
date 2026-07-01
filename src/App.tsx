@@ -1343,7 +1343,7 @@ export default function App() {
         await currentWindow.hide();
         nativeCloseInFlightRef.current = false;
       } else {
-        await currentWindow.close();
+        await currentWindow.destroy();
       }
     } catch (error) {
       nativeCloseInFlightRef.current = false;

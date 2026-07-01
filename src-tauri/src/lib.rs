@@ -11,6 +11,7 @@ mod time;
 
 use pool::SshPool;
 use std::sync::Arc;
+use tauri::Manager;
 use terminal::TerminalRegistry;
 
 pub fn run() {
@@ -50,6 +51,15 @@ pub fn run() {
             commands::terminal_snapshot,
             commands::close_terminal
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running iShell");
+        .build(tauri::generate_context!())
+        .expect("error while building iShell")
+        .run(|app, event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = event {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+        });
 }
