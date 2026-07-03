@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.1.1](https://github.com/Raymanhan/ishell/releases/tag/v1.1.1)**
+**[Download iShell v1.1.2](https://github.com/Raymanhan/ishell/releases/tag/v1.1.2)**
 
 Available packages:
 
@@ -204,8 +204,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.1.1
-git push origin v1.1.1
+git tag v1.1.2
+git push origin v1.1.2
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -239,6 +239,8 @@ src-tauri/src/
 
 ## Recent Changes
 
+- `v1.1.2` replaces the folder rename prompt with inline editing in the
+  connection tree, keeping keyboard confirm/cancel behavior inside the panel.
 - `v1.1.1` improves connection-tree selection and rename behavior, adds a
   draggable tab-bar spacer, and focuses the liquid glass theme variants.
 - `v1.1.0` expands liquid glass into multiple theme variants, improves

@@ -286,6 +286,9 @@
   border-color: rgba(91, 157, 255, 0.18);
   background: var(--focus-bg);
 }
+.connection-folder-row.renaming-folder {
+  cursor: default;
+}
 .connection-folder-row.creating-folder input {
   min-width: 0;
   height: 22px;

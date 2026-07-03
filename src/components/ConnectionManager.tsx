@@ -45,7 +45,7 @@ export function ConnectionManager({
   onClone: (server: ServerRecord) => void;
   onEdit: (server: ServerRecord) => void;
   onRenameServer: (server: ServerRecord, name: string) => void;
-  onRenameFolder: (group: string) => void;
+  onRenameFolder: (group: string, name: string) => void;
   onNew: (group?: string) => void;
   onCreateFolder: (name: string) => void;
   onExport: (target: { serverIds: string[]; folders: string[] }) => void;
@@ -87,6 +87,9 @@ export function ConnectionManager({
   const renameServerInputRef = useRef<HTMLInputElement>(null);
   const renameServerFocusedRef = useRef<string | null>(null);
   const renamingServerRef = useRef<{ id: string; name: string } | null>(null);
+  const renameFolderInputRef = useRef<HTMLInputElement>(null);
+  const renameFolderFocusedRef = useRef<string | null>(null);
+  const renamingFolderRef = useRef<{ group: string; name: string } | null>(null);
   const dragRef = useRef<{
     key: string;
     pointerId: number;
@@ -103,6 +106,7 @@ export function ConnectionManager({
   const [lastSelectedKey, setLastSelectedKey] = useState<string | null>(null);
   const [creatingFolderName, setCreatingFolderName] = useState<string | null>(null);
   const [renamingServer, setRenamingServer] = useState<{ id: string; name: string } | null>(null);
+  const [renamingFolder, setRenamingFolder] = useState<{ group: string; name: string } | null>(null);
   const [draggingKey, setDraggingKey] = useState<string | null>(null);
   const [dropHint, setDropHint] = useState<ConnectionMoveRequest | null>(null);
   const [menu, setMenu] = useState<
@@ -112,6 +116,7 @@ export function ConnectionManager({
   >(null);
 
   renamingServerRef.current = renamingServer;
+  renamingFolderRef.current = renamingFolder;
 
   useEffect(() => {
     if (!open) return;
@@ -151,6 +156,19 @@ export function ConnectionManager({
       renameServerInputRef.current?.select();
     });
   }, [renamingServer]);
+
+  useEffect(() => {
+    if (!renamingFolder) {
+      renameFolderFocusedRef.current = null;
+      return;
+    }
+    if (renameFolderFocusedRef.current === renamingFolder.group) return;
+    renameFolderFocusedRef.current = renamingFolder.group;
+    requestAnimationFrame(() => {
+      renameFolderInputRef.current?.focus();
+      renameFolderInputRef.current?.select();
+    });
+  }, [renamingFolder]);
 
   useEffect(() => {
     const known = new Set(allTreeItems.map((item) => item.key));
@@ -193,7 +211,7 @@ export function ConnectionManager({
     });
   }
 
-  function handleFolderContextMenu(event: MouseEvent<HTMLButtonElement>, group: string) {
+  function handleFolderContextMenu(event: MouseEvent<HTMLElement>, group: string) {
     event.preventDefault();
     event.stopPropagation();
     const key = folderKey(group);
@@ -253,7 +271,7 @@ export function ConnectionManager({
 
   function renameFolderFromMenu() {
     if (!menu || menu.type !== "folder" || !menu.group) return;
-    onRenameFolder(menu.group);
+    setRenamingFolder({ group: menu.group, name: menu.group });
     setMenu(null);
   }
 
@@ -366,6 +384,15 @@ export function ConnectionManager({
     const name = current.name.trim();
     setRenamingServer(null);
     if (name && name !== server.name) onRenameServer(server, name);
+  }
+
+  function commitRenameFolder(group: string) {
+    const current = renamingFolderRef.current;
+    if (current?.group !== group) return;
+    renamingFolderRef.current = null;
+    const name = current.name.trim();
+    setRenamingFolder(null);
+    if (name && name !== group) onRenameFolder(group, name);
   }
 
   function beginTreeDrag(event: ReactPointerEvent<HTMLElement>, key: string) {
@@ -522,31 +549,67 @@ export function ConnectionManager({
           ) : (
             filteredEntries.map(([group, list]) => (
               <section key={group} className="connection-folder">
-                <button
-                  type="button"
-                  className={`connection-folder-row ${selectedKeys.has(folderKey(group)) ? "on" : ""} ${
-                    draggingKey === folderKey(group) ? "dragging" : ""
-                  } ${dropClassFor(folderKey(group))}`}
-                  data-connection-key={folderKey(group)}
-                  onPointerDown={(event) => beginTreeDrag(event, folderKey(group))}
-                  onPointerMove={moveTreeDrag}
-                  onPointerUp={endTreeDrag}
-                  onPointerCancel={endTreeDrag}
-                  onClick={(event) => {
-                    if (suppressTreeClickRef.current) return;
-                    if (event.shiftKey || event.metaKey || event.ctrlKey) {
-                      selectTreeItem(event, folderKey(group));
-                    } else {
-                      toggleFolder(group);
-                    }
-                  }}
-                  onContextMenu={(event) => handleFolderContextMenu(event, group)}
-                  aria-expanded={!collapsedFolders.has(group)}
-                >
-                  <ChevronRight size={13} className="folder-caret" />
-                  {collapsedFolders.has(group) ? <Folder size={14} /> : <FolderOpen size={14} />}
-                  <span>{group}</span>
-                </button>
+                {renamingFolder?.group === group ? (
+                  <div
+                    className={`connection-folder-row renaming-folder ${selectedKeys.has(folderKey(group)) ? "on" : ""} ${
+                      draggingKey === folderKey(group) ? "dragging" : ""
+                    } ${dropClassFor(folderKey(group))}`}
+                    data-connection-key={folderKey(group)}
+                    onContextMenu={(event) => handleFolderContextMenu(event, group)}
+                    aria-expanded={!collapsedFolders.has(group)}
+                  >
+                    <ChevronRight size={13} className="folder-caret" />
+                    {collapsedFolders.has(group) ? <Folder size={14} /> : <FolderOpen size={14} />}
+                    <input
+                      ref={renameFolderInputRef}
+                      className="connection-rename-input"
+                      value={renamingFolder.name}
+                      onClick={(event) => event.stopPropagation()}
+                      onDoubleClick={(event) => event.stopPropagation()}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onChange={(event) => setRenamingFolder({ group, name: event.target.value })}
+                      onBlur={() => commitRenameFolder(group)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          commitRenameFolder(group);
+                        }
+                        if (event.key === "Escape") {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setRenamingFolder(null);
+                        }
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className={`connection-folder-row ${selectedKeys.has(folderKey(group)) ? "on" : ""} ${
+                      draggingKey === folderKey(group) ? "dragging" : ""
+                    } ${dropClassFor(folderKey(group))}`}
+                    data-connection-key={folderKey(group)}
+                    onPointerDown={(event) => beginTreeDrag(event, folderKey(group))}
+                    onPointerMove={moveTreeDrag}
+                    onPointerUp={endTreeDrag}
+                    onPointerCancel={endTreeDrag}
+                    onClick={(event) => {
+                      if (suppressTreeClickRef.current) return;
+                      if (event.shiftKey || event.metaKey || event.ctrlKey) {
+                        selectTreeItem(event, folderKey(group));
+                      } else {
+                        toggleFolder(group);
+                      }
+                    }}
+                    onContextMenu={(event) => handleFolderContextMenu(event, group)}
+                    aria-expanded={!collapsedFolders.has(group)}
+                  >
+                    <ChevronRight size={13} className="folder-caret" />
+                    {collapsedFolders.has(group) ? <Folder size={14} /> : <FolderOpen size={14} />}
+                    <span>{group}</span>
+                  </button>
+                )}
                 {!collapsedFolders.has(group) && (
                   <div className="connection-tree-children">
                     {list.map((server) => (

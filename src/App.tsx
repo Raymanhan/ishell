@@ -814,8 +814,8 @@ export default function App() {
     }
   }
 
-  async function renameConnectionFolder(group: string) {
-    const nextGroup = window.prompt("输入新的目录名称", group)?.trim();
+  async function renameConnectionFolder(group: string, rawName: string) {
+    const nextGroup = rawName.trim();
     if (!nextGroup || nextGroup === group) return;
     if (nextGroup === "全部") {
       showNotice("文件夹不能命名为“全部”");
