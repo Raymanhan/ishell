@@ -486,6 +486,7 @@ export function TabBar({
                 </button>
               </div>
             ))}
+            <div className="terminal-tabs-spacer" data-tauri-drag-region aria-hidden />
           </div>
         ) : (
           <span className="topbar-title-text">

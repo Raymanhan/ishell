@@ -1817,26 +1817,6 @@ button.detail-row:hover {
     inset 0 1px 0 rgba(255, 255, 255, 0.32),
     inset 0 -1px 0 rgba(122, 219, 255, 0.18);
 }
-.theme-preview.liquid-glass-aurora {
-  border-color: rgba(214, 255, 234, 0.32);
-  background:
-    radial-gradient(42px 30px at 22% 16%, rgba(255, 255, 255, 0.38), transparent 68%),
-    radial-gradient(48px 36px at 82% 80%, rgba(117, 247, 174, 0.32), transparent 70%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(20, 76, 63, 0.56));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.32),
-    inset 0 -1px 0 rgba(117, 247, 174, 0.18);
-}
-.theme-preview.liquid-glass-coral {
-  border-color: rgba(255, 236, 225, 0.32);
-  background:
-    radial-gradient(42px 30px at 22% 16%, rgba(255, 255, 255, 0.38), transparent 68%),
-    radial-gradient(48px 36px at 82% 80%, rgba(255, 163, 127, 0.32), transparent 70%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(90, 45, 39, 0.56));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.32),
-    inset 0 -1px 0 rgba(255, 163, 127, 0.18);
-}
 .theme-preview.liquid-glass-lagoon {
   border-color: rgba(218, 255, 251, 0.32);
   background:
@@ -1846,16 +1826,6 @@ button.detail-row:hover {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.32),
     inset 0 -1px 0 rgba(73, 223, 208, 0.18);
-}
-.theme-preview.liquid-glass-amethyst {
-  border-color: rgba(244, 231, 255, 0.32);
-  background:
-    radial-gradient(42px 30px at 22% 16%, rgba(255, 255, 255, 0.38), transparent 68%),
-    radial-gradient(48px 36px at 82% 80%, rgba(212, 165, 255, 0.32), transparent 70%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(51, 35, 78, 0.56));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.32),
-    inset 0 -1px 0 rgba(212, 165, 255, 0.18);
 }
 .theme-preview.liquid-glass-onyx {
   border-color: rgba(232, 236, 238, 0.26);
@@ -1908,17 +1878,8 @@ button.detail-row:hover {
 .theme-preview.liquid-glass span:first-child {
   background: #b8f1ff;
 }
-.theme-preview.liquid-glass-aurora span:first-child {
-  background: #b9ffd6;
-}
-.theme-preview.liquid-glass-coral span:first-child {
-  background: #ffd4bf;
-}
 .theme-preview.liquid-glass-lagoon span:first-child {
   background: #9df7ef;
-}
-.theme-preview.liquid-glass-amethyst span:first-child {
-  background: #e4c7ff;
 }
 .theme-preview.liquid-glass-onyx span:first-child {
   background: #d8dcde;

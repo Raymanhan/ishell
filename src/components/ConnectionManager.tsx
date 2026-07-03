@@ -24,7 +24,6 @@ export interface ConnectionMoveRequest {
 export function ConnectionManager({
   open,
   grouped,
-  selectedServerId,
   onSelect,
   onConnect,
   onClone,
@@ -41,7 +40,6 @@ export function ConnectionManager({
 }: {
   open: boolean;
   grouped: Record<string, ServerRecord[]>;
-  selectedServerId: string | null;
   onSelect: (server: ServerRecord) => void;
   onConnect: (server: ServerRecord) => void;
   onClone: (server: ServerRecord) => void;
@@ -179,7 +177,7 @@ export function ConnectionManager({
     };
   }, [menu]);
 
-  function handleContextMenu(event: MouseEvent<HTMLButtonElement>, server: ServerRecord) {
+  function handleContextMenu(event: MouseEvent<HTMLElement>, server: ServerRecord) {
     event.preventDefault();
     event.stopPropagation();
     onSelect(server);
@@ -220,6 +218,7 @@ export function ConnectionManager({
 
   function connect(server: ServerRecord) {
     onSelect(server);
+    clearTreeSelection();
     onConnect(server);
   }
 
@@ -332,6 +331,16 @@ export function ConnectionManager({
 
     setSelectedKeys(new Set([key]));
     setLastSelectedKey(key);
+  }
+
+  function clearTreeSelection() {
+    setSelectedKeys(new Set());
+    setLastSelectedKey(null);
+  }
+
+  function handleBlankClick(event: MouseEvent<HTMLDivElement>) {
+    if ((event.target as HTMLElement).closest("[data-connection-key], .creating-folder")) return;
+    clearTreeSelection();
   }
 
   function toggleFolder(group: string) {
@@ -487,7 +496,7 @@ export function ConnectionManager({
               spellCheck={false}
             />
           </label>
-          <div className="connection-list" onContextMenu={handleBlankContextMenu}>
+          <div className="connection-list" onClick={handleBlankClick} onContextMenu={handleBlankContextMenu}>
           {creatingFolderName !== null && (
             <div className="connection-folder-row creating-folder" onContextMenu={(event) => event.stopPropagation()}>
               <span />
@@ -544,7 +553,7 @@ export function ConnectionManager({
                       <div
                         key={server.id}
                         className={`connection-node ${
-                          selectedServerId === server.id || selectedKeys.has(serverKey(server.id)) ? "on" : ""
+                          selectedKeys.has(serverKey(server.id)) ? "on" : ""
                         } ${draggingKey === serverKey(server.id) ? "dragging" : ""} ${dropClassFor(serverKey(server.id))}`}
                         data-connection-key={serverKey(server.id)}
                         onPointerDown={(event) => beginTreeDrag(event, serverKey(server.id))}
@@ -555,20 +564,15 @@ export function ConnectionManager({
                           if (!suppressTreeClickRef.current) connect(server);
                         }}
                       >
-                        <button
-                          type="button"
-                          className="connection-node-main"
-                          onClick={(event) => {
-                            if (suppressTreeClickRef.current) return;
-                            selectTreeItem(event, serverKey(server.id), server);
-                          }}
-                          onContextMenu={(event) => handleContextMenu(event, server)}
-                          title={`${server.username}@${server.host}:${server.port} · 双击连接`}
-                        >
-                          <span className="tree-branch" aria-hidden />
-                          <span className="dot" style={{ backgroundColor: server.color }} />
-                          <span className="connection-meta">
-                            {renamingServer?.id === server.id ? (
+                        {renamingServer?.id === server.id ? (
+                          <div
+                            className="connection-node-main"
+                            onContextMenu={(event) => handleContextMenu(event, server)}
+                            title={`${server.username}@${server.host}:${server.port} · 双击连接`}
+                          >
+                            <span className="tree-branch" aria-hidden />
+                            <span className="dot" style={{ backgroundColor: server.color }} />
+                            <span className="connection-meta">
                               <input
                                 ref={renameServerInputRef}
                                 className="connection-rename-input"
@@ -581,16 +585,40 @@ export function ConnectionManager({
                                 }
                                 onBlur={() => commitRenameServer(server)}
                                 onKeyDown={(event) => {
-                                  if (event.key === "Enter") commitRenameServer(server);
-                                  if (event.key === "Escape") setRenamingServer(null);
+                                  if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    commitRenameServer(server);
+                                  }
+                                  if (event.key === "Escape") {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    setRenamingServer(null);
+                                  }
                                 }}
                               />
-                            ) : (
+                            </span>
+                            <span className={`pulse ${server.lastConnectedAt ? "live" : ""}`} />
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            className="connection-node-main"
+                            onClick={(event) => {
+                              if (suppressTreeClickRef.current) return;
+                              selectTreeItem(event, serverKey(server.id), server);
+                            }}
+                            onContextMenu={(event) => handleContextMenu(event, server)}
+                            title={`${server.username}@${server.host}:${server.port} · 双击连接`}
+                          >
+                            <span className="tree-branch" aria-hidden />
+                            <span className="dot" style={{ backgroundColor: server.color }} />
+                            <span className="connection-meta">
                               <strong>{server.name}</strong>
-                            )}
-                          </span>
-                          <span className={`pulse ${server.lastConnectedAt ? "live" : ""}`} />
-                        </button>
+                            </span>
+                            <span className={`pulse ${server.lastConnectedAt ? "live" : ""}`} />
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>

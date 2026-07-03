@@ -2057,7 +2057,6 @@ export default function App() {
           <ConnectionManager
             open={connectionsOpen}
             grouped={grouped}
-            selectedServerId={selectedServerId}
             onSelect={(server) => setSelectedServerId(server.id)}
             onConnect={openShell}
             onClone={cloneServer}

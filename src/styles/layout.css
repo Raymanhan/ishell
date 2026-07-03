@@ -877,6 +877,13 @@
   pointer-events: none;
   transition: opacity 140ms ease;
 }
+.terminal-tabs-spacer {
+  flex: 1 1 auto;
+  align-self: stretch;
+  min-width: 18px;
+  height: var(--titlebar-safe, 34px);
+  cursor: default;
+}
 .workbench-bar:hover .terminal-tabs,
 .workbench-bar.tab-dragging .terminal-tabs,
 .terminal-tabs.is-sorting,

@@ -5,10 +5,7 @@ export const swatches = ["#5b9dff", "#43c98b", "#f2b45a", "#f56b6b", "#b18cff", 
 export type AppTheme =
   | "glass"
   | "liquid-glass"
-  | "liquid-glass-aurora"
-  | "liquid-glass-coral"
   | "liquid-glass-lagoon"
-  | "liquid-glass-amethyst"
   | "liquid-glass-onyx"
   | "liquid-glass-pearl";
 export type ThemeIcon = "layers" | "droplets";
@@ -40,10 +37,7 @@ export const defaultAppTheme: AppTheme = "glass";
 export const appThemeOrder = [
   "glass",
   "liquid-glass",
-  "liquid-glass-aurora",
-  "liquid-glass-coral",
   "liquid-glass-lagoon",
-  "liquid-glass-amethyst",
   "liquid-glass-onyx",
   "liquid-glass-pearl",
 ] as const satisfies readonly AppTheme[];
@@ -99,56 +93,6 @@ export const appThemeDefinitions = {
       effect: "glass",
     },
   },
-  "liquid-glass-aurora": {
-    id: "liquid-glass-aurora",
-    label: "极光玻璃",
-    icon: "droplets",
-    previewClassName: "liquid-glass liquid-glass-aurora",
-    terminal: {
-      background: "#00000000",
-      foreground: "#f3fff8",
-      cursor: "#b9ffd6",
-      selectionBackground: "rgba(127, 255, 184, 0.28)",
-      black: "#0d1715",
-      red: "#ff9fb2",
-      green: "#9df8bd",
-      yellow: "#f4ea91",
-      blue: "#8ddcff",
-      magenta: "#c9b3ff",
-      cyan: "#86f6df",
-      white: "#fbfffd",
-    },
-    native: {
-      backgroundColor: { red: 28, green: 52, blue: 45, alpha: 36 },
-      transparentChrome: true,
-      effect: "glass",
-    },
-  },
-  "liquid-glass-coral": {
-    id: "liquid-glass-coral",
-    label: "珊瑚玻璃",
-    icon: "droplets",
-    previewClassName: "liquid-glass liquid-glass-coral",
-    terminal: {
-      background: "#00000000",
-      foreground: "#fff8f5",
-      cursor: "#ffd4bf",
-      selectionBackground: "rgba(255, 163, 127, 0.28)",
-      black: "#1a1210",
-      red: "#ff9a9a",
-      green: "#b7edb3",
-      yellow: "#ffd48b",
-      blue: "#9fd8ff",
-      magenta: "#ffc2df",
-      cyan: "#91eadf",
-      white: "#fffdfb",
-    },
-    native: {
-      backgroundColor: { red: 78, green: 45, blue: 38, alpha: 36 },
-      transparentChrome: true,
-      effect: "glass",
-    },
-  },
   "liquid-glass-lagoon": {
     id: "liquid-glass-lagoon",
     label: "泻湖玻璃",
@@ -170,31 +114,6 @@ export const appThemeDefinitions = {
     },
     native: {
       backgroundColor: { red: 22, green: 58, blue: 66, alpha: 36 },
-      transparentChrome: true,
-      effect: "glass",
-    },
-  },
-  "liquid-glass-amethyst": {
-    id: "liquid-glass-amethyst",
-    label: "紫晶玻璃",
-    icon: "droplets",
-    previewClassName: "liquid-glass liquid-glass-amethyst",
-    terminal: {
-      background: "#00000000",
-      foreground: "#fbf7ff",
-      cursor: "#e4c7ff",
-      selectionBackground: "rgba(212, 165, 255, 0.28)",
-      black: "#17111d",
-      red: "#ff9fb7",
-      green: "#b6efc4",
-      yellow: "#f6df93",
-      blue: "#abbcff",
-      magenta: "#ddaaff",
-      cyan: "#92e8ee",
-      white: "#fffbff",
-    },
-    native: {
-      backgroundColor: { red: 51, green: 38, blue: 74, alpha: 36 },
       transparentChrome: true,
       effect: "glass",
     },
