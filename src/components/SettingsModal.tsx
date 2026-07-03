@@ -1,4 +1,4 @@
-import { Layers, X } from "lucide-react";
+import { Droplets, Layers, X } from "lucide-react";
 import {
   appThemeDefinitions,
   appThemeOrder,
@@ -7,6 +7,7 @@ import {
 } from "../constants/theme";
 
 const themeIcons: Record<ThemeIcon, typeof Layers> = {
+  droplets: Droplets,
   layers: Layers,
 };
 

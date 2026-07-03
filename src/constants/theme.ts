@@ -2,8 +2,8 @@ import type { ITheme } from "@xterm/xterm";
 
 export const swatches = ["#5b9dff", "#43c98b", "#f2b45a", "#f56b6b", "#b18cff", "#46c7c7"];
 
-export type AppTheme = "glass";
-export type ThemeIcon = "layers";
+export type AppTheme = "glass" | "liquid-glass";
+export type ThemeIcon = "layers" | "droplets";
 
 export interface NativeColor {
   red: number;
@@ -29,7 +29,7 @@ export interface AppThemeDefinition {
 
 export const defaultAppTheme: AppTheme = "glass";
 
-export const appThemeOrder = ["glass"] as const satisfies readonly AppTheme[];
+export const appThemeOrder = ["glass", "liquid-glass"] as const satisfies readonly AppTheme[];
 
 export const appThemeDefinitions = {
   glass: {
@@ -53,6 +53,31 @@ export const appThemeDefinitions = {
     },
     native: {
       backgroundColor: { red: 74, green: 82, blue: 93, alpha: 46 },
+      transparentChrome: true,
+      effect: "glass",
+    },
+  },
+  "liquid-glass": {
+    id: "liquid-glass",
+    label: "液态玻璃",
+    icon: "droplets",
+    previewClassName: "liquid-glass",
+    terminal: {
+      background: "#00000000",
+      foreground: "#f7fbff",
+      cursor: "#dbf7ff",
+      selectionBackground: "rgba(145, 220, 255, 0.3)",
+      black: "#10151b",
+      red: "#ff9aa7",
+      green: "#a9f0c5",
+      yellow: "#ffe08a",
+      blue: "#9edcff",
+      magenta: "#dac1ff",
+      cyan: "#8ff5ee",
+      white: "#fbfdff",
+    },
+    native: {
+      backgroundColor: { red: 35, green: 47, blue: 58, alpha: 34 },
       transparentChrome: true,
       effect: "glass",
     },
