@@ -116,8 +116,8 @@ body.tab-ghost-body {
 }
 :root[data-theme="glass"] body,
 :root[data-theme="glass"] #root,
-:root[data-theme="liquid-glass"] body,
-:root[data-theme="liquid-glass"] #root {
+:root[data-theme^="liquid-glass"] body,
+:root[data-theme^="liquid-glass"] #root {
   background: transparent;
 }
 body.tab-ghost-body #root {
@@ -161,12 +161,12 @@ textarea {
   background-clip: padding-box;
 }
 :root[data-theme="glass"] ::-webkit-scrollbar-thumb,
-:root[data-theme="liquid-glass"] ::-webkit-scrollbar-thumb {
+:root[data-theme^="liquid-glass"] ::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.16);
   background-clip: padding-box;
 }
 :root[data-theme="glass"] ::-webkit-scrollbar-thumb:hover,
-:root[data-theme="liquid-glass"] ::-webkit-scrollbar-thumb:hover {
+:root[data-theme^="liquid-glass"] ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.26);
   background-clip: padding-box;
 }

@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.0.10](https://github.com/Raymanhan/ishell/releases/tag/v1.0.10)**
+**[Download iShell v1.1.0](https://github.com/Raymanhan/ishell/releases/tag/v1.1.0)**
 
 Available packages:
 
@@ -204,8 +204,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.0.10
-git push origin v1.0.10
+git tag v1.1.0
+git push origin v1.1.0
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -239,6 +239,9 @@ src-tauri/src/
 
 ## Recent Changes
 
+- `v1.1.0` expands liquid glass into multiple theme variants, improves
+  connection rename handling, and tightens glass layout behavior around panels
+  and tabs.
 - `v1.0.10` adds a liquid glass app theme and refines the server editor layout
   with clearer grouped sections, tighter controls, and polished form states.
 - `v1.0.9` stabilizes release packaging by generating macOS DMG files directly
