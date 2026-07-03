@@ -125,7 +125,9 @@
 .sftp-stage {
   display: grid;
   grid-template-columns: minmax(190px, 24%) minmax(0, 1fr) max-content;
+  align-items: stretch;
   gap: 8px;
+  height: 100%;
   min-height: 0;
   padding: 8px;
   overflow: hidden;
@@ -167,6 +169,8 @@
   flex-direction: column;
   align-items: center;
   gap: 4px;
+  width: 30px;
+  min-height: min-content;
   margin-left: 0;
 }
 .tool {
@@ -428,8 +432,12 @@
   display: flex;
   align-items: flex-start;
   justify-content: center;
+  width: 44px;
+  height: 100%;
   padding: 6px;
-  overflow: visible;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background: color-mix(in srgb, var(--panel) 88%, var(--bg));
 }
 .sftp-detail .detail-header {
@@ -446,11 +454,11 @@
 .detail-row {
   display: grid;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
-  min-width: 680px;
+  min-width: 624px;
   height: 30px;
-  padding: 0 12px;
+  padding: 0 10px;
   border: 0;
   border-radius: 0;
   background: transparent;

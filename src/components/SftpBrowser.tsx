@@ -50,10 +50,10 @@ type SftpViewMode = "tree" | "columns";
 type SortKey = "name" | "type" | "size" | "modifiedAt";
 type SortDirection = "asc" | "desc";
 
-const DETAIL_COLUMN_WIDTHS = [240, 96, 188, 116, 128];
-const DETAIL_COLUMN_MIN_WIDTHS = [180, 80, 156, 96, 96];
-const DETAIL_COLUMN_GAP = 12;
-const DETAIL_ROW_X_PADDING = 24;
+const DETAIL_COLUMN_WIDTHS = [170, 86, 164, 88, 96];
+const DETAIL_COLUMN_MIN_WIDTHS = [120, 70, 144, 74, 84];
+const DETAIL_COLUMN_GAP = 10;
+const DETAIL_ROW_X_PADDING = 20;
 
 interface DetailResizeState {
   dividerIndex: number;
