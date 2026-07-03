@@ -392,6 +392,23 @@
   font-size: 11.5px;
   font-weight: 620;
 }
+.connection-rename-input {
+  width: 100%;
+  min-width: 0;
+  height: 20px;
+  padding: 0 4px;
+  border: 1px solid rgba(91, 157, 255, 0.34);
+  border-radius: 5px;
+  outline: 0;
+  background: var(--input-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+}
+.connection-rename-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(91, 157, 255, 0.16);
+}
 .connection-meta small {
   flex: 1 1 auto;
   min-width: 0;
@@ -468,7 +485,8 @@
 .workbench-bar:hover .connection-trigger,
 .workbench-bar:hover .topbar-title,
 .workbench-bar:hover .dock-switcher,
-.workbench-bar:hover .topbar-new {
+.workbench-bar:hover .topbar-new,
+.workbench-bar.tab-dragging .topbar-title {
   opacity: 1;
 }
 .workbench-bar:hover .connection-trigger,
@@ -860,10 +878,13 @@
   transition: opacity 140ms ease;
 }
 .workbench-bar:hover .terminal-tabs,
+.workbench-bar.tab-dragging .terminal-tabs,
+.terminal-tabs.is-sorting,
 .terminal-tabs.visible,
 .terminal-tabs:hover,
 .terminal-tabs:focus-within {
   opacity: 1;
+  pointer-events: auto;
 }
 :root[data-platform="windows"] .terminal-tabs {
   padding-left: 0;
@@ -956,6 +977,8 @@
   cursor: grabbing;
 }
 .workbench-bar:hover .terminal-tabs .terminal-tab,
+.workbench-bar.tab-dragging .terminal-tab,
+.terminal-tabs.is-sorting .terminal-tab,
 .terminal-tabs.visible .terminal-tab,
 .terminal-tabs:hover .terminal-tab,
 .terminal-tabs:focus-within .terminal-tab {
@@ -1057,6 +1080,18 @@
    into a 24px gap, twice the 12px gap on the left. */
 .workbench-body.has-status-panel .files-region.open {
   margin-right: 0;
+}
+.workbench-body.files-open.has-status-panel .files-region.open {
+  border-top-right-radius: 10px;
+  border-bottom-right-radius: 8px;
+}
+.workbench-body.files-open.has-status-panel .status-panel.open {
+  border-bottom-left-radius: 8px;
+  box-shadow:
+    12px 14px 38px rgba(0, 0, 0, 0.22),
+    inset -1px 0 0 rgba(255, 255, 255, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04);
 }
 .files-region::before {
   content: none;

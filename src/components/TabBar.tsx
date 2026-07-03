@@ -403,7 +403,11 @@ export function TabBar({
   }
 
   return (
-    <header className={`workbench-bar ${connectionsOpen ? "connections-open" : ""} ${tabs.length > 0 ? "has-tabs" : ""}`}>
+    <header
+      className={`workbench-bar ${connectionsOpen ? "connections-open" : ""} ${tabs.length > 0 ? "has-tabs" : ""} ${
+        draggingTabId ? "tab-dragging" : ""
+      }`}
+    >
       <div className="topbar-drag-strip" data-tauri-drag-region aria-hidden />
 
       <div className="topbar-left">

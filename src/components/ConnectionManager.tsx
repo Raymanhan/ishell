@@ -46,7 +46,7 @@ export function ConnectionManager({
   onConnect: (server: ServerRecord) => void;
   onClone: (server: ServerRecord) => void;
   onEdit: (server: ServerRecord) => void;
-  onRenameServer: (server: ServerRecord) => void;
+  onRenameServer: (server: ServerRecord, name: string) => void;
   onRenameFolder: (group: string) => void;
   onNew: (group?: string) => void;
   onCreateFolder: (name: string) => void;
@@ -86,6 +86,9 @@ export function ConnectionManager({
     [entries],
   );
   const menuRef = useRef<HTMLDivElement>(null);
+  const renameServerInputRef = useRef<HTMLInputElement>(null);
+  const renameServerFocusedRef = useRef<string | null>(null);
+  const renamingServerRef = useRef<{ id: string; name: string } | null>(null);
   const dragRef = useRef<{
     key: string;
     pointerId: number;
@@ -101,6 +104,7 @@ export function ConnectionManager({
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set());
   const [lastSelectedKey, setLastSelectedKey] = useState<string | null>(null);
   const [creatingFolderName, setCreatingFolderName] = useState<string | null>(null);
+  const [renamingServer, setRenamingServer] = useState<{ id: string; name: string } | null>(null);
   const [draggingKey, setDraggingKey] = useState<string | null>(null);
   const [dropHint, setDropHint] = useState<ConnectionMoveRequest | null>(null);
   const [menu, setMenu] = useState<
@@ -108,6 +112,8 @@ export function ConnectionManager({
     | { type: "folder" | "blank"; group?: string; x: number; y: number }
     | null
   >(null);
+
+  renamingServerRef.current = renamingServer;
 
   useEffect(() => {
     if (!open) return;
@@ -134,6 +140,19 @@ export function ConnectionManager({
       createFolderInputRef.current?.select();
     });
   }, [creatingFolderName]);
+
+  useEffect(() => {
+    if (!renamingServer) {
+      renameServerFocusedRef.current = null;
+      return;
+    }
+    if (renameServerFocusedRef.current === renamingServer.id) return;
+    renameServerFocusedRef.current = renamingServer.id;
+    requestAnimationFrame(() => {
+      renameServerInputRef.current?.focus();
+      renameServerInputRef.current?.select();
+    });
+  }, [renamingServer]);
 
   useEffect(() => {
     const known = new Set(allTreeItems.map((item) => item.key));
@@ -229,7 +248,7 @@ export function ConnectionManager({
 
   function renameServerFromMenu() {
     if (!menu || menu.type !== "server") return;
-    onRenameServer(menu.server);
+    setRenamingServer({ id: menu.server.id, name: menu.server.name });
     setMenu(null);
   }
 
@@ -329,6 +348,15 @@ export function ConnectionManager({
     const name = creatingFolderName.trim();
     if (name) onCreateFolder(name);
     setCreatingFolderName(null);
+  }
+
+  function commitRenameServer(server: ServerRecord) {
+    const current = renamingServerRef.current;
+    if (current?.id !== server.id) return;
+    renamingServerRef.current = null;
+    const name = current.name.trim();
+    setRenamingServer(null);
+    if (name && name !== server.name) onRenameServer(server, name);
   }
 
   function beginTreeDrag(event: ReactPointerEvent<HTMLElement>, key: string) {
@@ -540,7 +568,26 @@ export function ConnectionManager({
                           <span className="tree-branch" aria-hidden />
                           <span className="dot" style={{ backgroundColor: server.color }} />
                           <span className="connection-meta">
-                            <strong>{server.name}</strong>
+                            {renamingServer?.id === server.id ? (
+                              <input
+                                ref={renameServerInputRef}
+                                className="connection-rename-input"
+                                value={renamingServer.name}
+                                onClick={(event) => event.stopPropagation()}
+                                onDoubleClick={(event) => event.stopPropagation()}
+                                onPointerDown={(event) => event.stopPropagation()}
+                                onChange={(event) =>
+                                  setRenamingServer({ id: server.id, name: event.target.value })
+                                }
+                                onBlur={() => commitRenameServer(server)}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter") commitRenameServer(server);
+                                  if (event.key === "Escape") setRenamingServer(null);
+                                }}
+                              />
+                            ) : (
+                              <strong>{server.name}</strong>
+                            )}
                           </span>
                           <span className={`pulse ${server.lastConnectedAt ? "live" : ""}`} />
                         </button>

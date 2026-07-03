@@ -792,8 +792,8 @@ export default function App() {
     });
   }
 
-  async function renameServer(server: ServerRecord) {
-    const name = window.prompt("输入新的服务器名称", server.name)?.trim();
+  async function renameServer(server: ServerRecord, rawName: string) {
+    const name = rawName.trim();
     if (!name || name === server.name) return;
 
     const renamed = { ...server, name, updatedAt: Date.now() / 1000 };
@@ -2045,6 +2045,8 @@ export default function App() {
         <div
           ref={workbenchBodyRef}
           className={`workbench-body ${connectionsOpen ? "connections-open" : ""} ${
+            filesOpen && activeTab ? "files-open" : ""
+          } ${
             (statusOpen || historyOpen) && activeTab ? "has-status-panel" : ""
           }`}
           style={{

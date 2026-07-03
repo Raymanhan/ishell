@@ -69,6 +69,12 @@
 :root[data-theme="glass"] .status-panel.open {
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
+:root[data-theme="glass"] .workbench-body.files-open.has-status-panel .status-panel.open {
+  box-shadow:
+    inset -1px 0 0 rgba(255, 255, 255, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.035);
+}
 :root[data-theme="glass"] .status-panel-content {
   border-left: 0;
 }
@@ -304,11 +310,11 @@
 
 /* ===== Liquid glass theme ===== */
 :root[data-theme="liquid-glass"] {
-  --bg: rgba(8, 13, 18, 0.18);
-  --titlebar: rgba(11, 18, 26, 0.24);
-  --panel: rgba(18, 28, 38, 0.38);
-  --panel-2: rgba(30, 46, 58, 0.28);
-  --inset: rgba(9, 16, 23, 0.3);
+  --bg: rgba(116, 137, 140, 0.22);
+  --titlebar: rgba(96, 116, 121, 0.3);
+  --panel: rgba(76, 96, 102, 0.5);
+  --panel-2: rgba(94, 116, 121, 0.4);
+  --inset: rgba(72, 91, 96, 0.34);
   --card: rgba(255, 255, 255, 0.07);
   --card-hover: rgba(255, 255, 255, 0.15);
   --hairline: rgba(255, 255, 255, 0.18);
@@ -339,13 +345,13 @@
   --danger-hover-bg: rgba(255, 126, 146, 0.16);
   --violet: #ddc4ff;
   --shadow: 0 30px 90px rgba(0, 0, 0, 0.42);
-  --ctx-menu-bg: rgba(18, 28, 38, 0.78);
+  --ctx-menu-bg: rgba(58, 76, 82, 0.86);
   --ctx-menu-hover: rgba(122, 219, 255, 0.15);
   --ctx-menu-danger-hover: rgba(255, 126, 146, 0.14);
   --ctx-menu-shadow: 0 18px 44px rgba(0, 0, 0, 0.36);
   --glass-blur: blur(52px) saturate(190%);
-  --liquid-surface: rgba(23, 38, 49, 0.34);
-  --liquid-surface-strong: rgba(30, 48, 60, 0.56);
+  --liquid-surface: rgba(76, 96, 102, 0.54);
+  --liquid-surface-strong: rgba(54, 72, 78, 0.74);
   --liquid-edge: rgba(221, 251, 255, 0.44);
   --liquid-edge-soft: rgba(153, 224, 255, 0.2);
   --liquid-shadow: 0 24px 74px rgba(0, 0, 0, 0.32);
@@ -353,10 +359,10 @@
 
 :root[data-theme="liquid-glass"] .app {
   background:
-    radial-gradient(560px 320px at 18% 0%, rgba(142, 236, 255, 0.16), transparent 62%),
-    radial-gradient(560px 360px at 88% 12%, rgba(219, 196, 255, 0.12), transparent 64%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 32%, rgba(255, 255, 255, 0.04)),
-    rgba(8, 13, 18, 0.08);
+    radial-gradient(560px 320px at 18% 0%, rgba(170, 197, 201, 0.2), transparent 62%),
+    radial-gradient(560px 360px at 88% 12%, rgba(126, 151, 158, 0.18), transparent 64%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent 32%, rgba(255, 255, 255, 0.05)),
+    rgba(116, 137, 140, 0.2);
   box-shadow:
     inset 0 0 0 1px rgba(232, 252, 255, 0.17),
     inset 0 1px 0 rgba(255, 255, 255, 0.18);
@@ -386,9 +392,16 @@
   isolation: isolate;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 150px),
-    rgba(43, 61, 70, 0.34);
+    rgba(116, 137, 140, 0.38);
   backdrop-filter: blur(34px) saturate(176%);
   -webkit-backdrop-filter: blur(34px) saturate(176%);
+}
+
+:root[data-theme="liquid-glass"] .workbench-body.files-open.has-status-panel {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 150px),
+    linear-gradient(0deg, rgba(126, 147, 151, 0.22), transparent 36px),
+    rgba(116, 137, 140, 0.38);
 }
 
 :root[data-theme="liquid-glass"] .workbench-body::before {
@@ -401,8 +414,8 @@
   opacity: 0.52;
   background:
     repeating-linear-gradient(112deg, rgba(255, 255, 255, 0.11) 0 1px, transparent 1px 18px),
-    radial-gradient(380px 180px at 24% 10%, rgba(143, 245, 238, 0.16), transparent 64%),
-    radial-gradient(420px 210px at 82% 82%, rgba(158, 220, 255, 0.13), transparent 70%);
+    radial-gradient(380px 180px at 24% 10%, rgba(181, 205, 207, 0.18), transparent 64%),
+    radial-gradient(420px 210px at 82% 82%, rgba(133, 160, 166, 0.16), transparent 70%);
   filter: blur(18px);
 }
 
@@ -410,7 +423,7 @@
 :root[data-theme="liquid-glass"] .status-panel,
 :root[data-theme="liquid-glass"] .files-region {
   background:
-    linear-gradient(140deg, rgba(255, 255, 255, 0.16), transparent 24%, rgba(255, 255, 255, 0.055) 72%),
+    linear-gradient(140deg, rgba(255, 255, 255, 0.13), transparent 24%, rgba(255, 255, 255, 0.045) 72%),
     var(--liquid-surface);
   border-color: rgba(255, 255, 255, 0.14);
   backdrop-filter: blur(46px) saturate(186%);
@@ -421,20 +434,6 @@
     inset 0 -1px 0 rgba(117, 211, 255, 0.08);
 }
 
-:root[data-theme="liquid-glass"] .connection-manager.open {
-  width: calc(var(--connection-panel-width, 240px) + var(--rail-gap, 12px));
-}
-
-:root[data-theme="liquid-glass"] .connection-manager.open .connection-panel-content {
-  width: var(--connection-panel-width, 240px);
-  max-width: calc(100% - var(--rail-gap, 12px));
-}
-
-:root[data-theme="liquid-glass"] .connection-search {
-  margin-left: calc(10px + (var(--rail-gap, 12px) * 0.5));
-  margin-right: calc(10px - (var(--rail-gap, 12px) * 0.5));
-}
-
 :root[data-theme="liquid-glass"] .connection-manager,
 :root[data-theme="liquid-glass"] .status-panel,
 :root[data-theme="liquid-glass"] .settings-modal,
@@ -442,10 +441,6 @@
 :root[data-theme="liquid-glass"] .server-editor-sheet,
 :root[data-theme="liquid-glass"] .delete-confirm,
 :root[data-theme="liquid-glass"] .file-editor,
-:root[data-theme="liquid-glass"] .server-context-menu,
-:root[data-theme="liquid-glass"] .tab-context-menu,
-:root[data-theme="liquid-glass"] .ctx-menu,
-:root[data-theme="liquid-glass"] .terminal-history-suggest,
 :root[data-theme="liquid-glass"] .upload-queue,
 :root[data-theme="liquid-glass"] .sftp-drop-card,
 :root[data-theme="liquid-glass"] .recent-card,
@@ -539,7 +534,7 @@
 :root[data-theme="liquid-glass"] .editor-backdrop,
 :root[data-theme="liquid-glass"] .delete-confirm-backdrop,
 :root[data-theme="liquid-glass"] .file-editor-backdrop {
-  background: rgba(4, 10, 16, 0.22);
+  background: rgba(64, 82, 88, 0.24);
   backdrop-filter: blur(24px) saturate(148%);
   -webkit-backdrop-filter: blur(24px) saturate(148%);
 }
@@ -557,7 +552,7 @@
 :root[data-theme="liquid-glass"] .sftp-drop-card {
   border-color: rgba(230, 252, 255, 0.24);
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.18), transparent 28%, rgba(151, 230, 255, 0.075)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.15), transparent 28%, rgba(151, 230, 255, 0.06)),
     var(--liquid-surface-strong);
   backdrop-filter: blur(54px) saturate(190%);
   -webkit-backdrop-filter: blur(54px) saturate(190%);
@@ -565,6 +560,24 @@
     0 28px 86px rgba(0, 0, 0, 0.38),
     inset 0 1px 0 rgba(255, 255, 255, 0.24),
     inset 0 -1px 0 rgba(122, 219, 255, 0.12);
+}
+
+:root[data-theme="liquid-glass"] .workbench-body.files-open.has-status-panel .files-region.open {
+  border-top-right-radius: 10px;
+  border-bottom-right-radius: 8px;
+  box-shadow:
+    0 4px 18px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(117, 211, 255, 0.08);
+}
+
+:root[data-theme="liquid-glass"] .workbench-body.files-open.has-status-panel .status-panel.open {
+  border-bottom-left-radius: 8px;
+  box-shadow:
+    0 4px 18px rgba(0, 0, 0, 0.12),
+    inset -1px 0 0 rgba(230, 252, 255, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(117, 211, 255, 0.08);
 }
 
 :root[data-theme="liquid-glass"] .sftp-tree,
@@ -590,6 +603,7 @@
 :root[data-theme="liquid-glass"] .editor-section,
 :root[data-theme="liquid-glass"] .field input,
 :root[data-theme="liquid-glass"] .field textarea,
+:root[data-theme="liquid-glass"] .connection-rename-input,
 :root[data-theme="liquid-glass"] .auth-switch {
   border-color: rgba(230, 252, 255, 0.17);
   background: rgba(255, 255, 255, 0.07);
@@ -636,7 +650,8 @@
 :root[data-theme="liquid-glass"] .history-search:focus-within,
 :root[data-theme="liquid-glass"] .pathbar:focus-within,
 :root[data-theme="liquid-glass"] .field input:focus,
-:root[data-theme="liquid-glass"] .field textarea:focus {
+:root[data-theme="liquid-glass"] .field textarea:focus,
+:root[data-theme="liquid-glass"] .connection-rename-input:focus {
   border-color: rgba(170, 239, 255, 0.68);
   background: rgba(122, 219, 255, 0.13);
   box-shadow:
@@ -672,13 +687,13 @@
 :root[data-theme="liquid-glass"] .file-editor-code,
 :root[data-theme="liquid-glass"] .entry-rename {
   border-color: rgba(230, 252, 255, 0.14);
-  background: rgba(7, 14, 21, 0.34);
+  background: rgba(74, 94, 100, 0.38);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 :root[data-theme="liquid-glass"] .sftp-drop {
   border-color: rgba(184, 241, 255, 0.54);
-  background: rgba(12, 24, 32, 0.34);
+  background: rgba(84, 105, 110, 0.36);
   backdrop-filter: blur(28px) saturate(160%);
   -webkit-backdrop-filter: blur(28px) saturate(160%);
 }
