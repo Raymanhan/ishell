@@ -426,7 +426,7 @@
 .sftp-detail {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
-  background: var(--bg);
+  background: transparent;
 }
 .sftp-tool-rail {
   display: flex;
@@ -441,14 +441,15 @@
   background: color-mix(in srgb, var(--panel) 88%, var(--bg));
 }
 .sftp-detail .detail-header {
-  border-top-left-radius: 10px;
-  border-top-right-radius: 10px;
+  border-radius: 8px;
 }
 .detail-table {
   display: grid;
   grid-template-rows: 30px minmax(0, 1fr);
+  gap: 8px;
   min-width: 0;
   min-height: 0;
+  padding: 8px;
   overflow: hidden;
 }
 .detail-row {
@@ -487,11 +488,12 @@ button.detail-row:hover {
   background: var(--row-active-bg);
 }
 .detail-header {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 1;
   height: 30px;
-  border-bottom: 1px solid var(--hairline);
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
   background: color-mix(in srgb, var(--panel) 86%, var(--bg));
   color: var(--faint);
   font-size: 11px;
@@ -583,6 +585,9 @@ button.detail-row:hover {
 .detail-body {
   min-width: 0;
   min-height: 0;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
   overflow: auto;
 }
 .detail-body .sftp-empty {
