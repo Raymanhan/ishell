@@ -2823,14 +2823,23 @@ const SQL_KEYWORDS = new Set([
 
 function renderHighlightedCode(fileName: string, content: string): ReactNode {
   if (!content) return " ";
-  if (new TextEncoder().encode(content).length > HIGHLIGHT_MAX_BYTES) return content;
+  // A <textarea> renders a phantom empty line for a trailing newline while a <pre>
+  // swallows it, making this highlight overlay one line shorter than the textarea.
+  // That height mismatch clamps the synced scrollTop and shifts the highlighted text
+  // one line away from the textarea's selection. Append a trailing <br> to keep the
+  // two scroll heights in sync so selections line up with the code they cover.
+  const eol = <br key="__eol" />;
+  if (new TextEncoder().encode(content).length > HIGHLIGHT_MAX_BYTES) return [content, eol];
   const language = languageForFile(fileName);
   const tokens = tokenizeForLanguage(content, language);
-  return tokens.map((token, index) =>
-    token.kind
-      ? <span key={index} className={`syntax-${token.kind}`}>{token.text}</span>
-      : token.text,
-  );
+  return [
+    ...tokens.map((token, index) =>
+      token.kind
+        ? <span key={index} className={`syntax-${token.kind}`}>{token.text}</span>
+        : token.text,
+    ),
+    eol,
+  ];
 }
 
 function languageForFile(fileName: string) {
