@@ -3,6 +3,7 @@ import {
   lazy,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -215,6 +216,7 @@ export default function App() {
   const filesRegionRef = useRef<HTMLDivElement>(null);
   const statusPanelRef = useRef<HTMLElement>(null);
   const fileEditorHighlightRef = useRef<HTMLPreElement>(null);
+  const fileEditorTextareaRef = useRef<HTMLTextAreaElement>(null);
   const dockDragCleanupRef = useRef<(() => void) | null>(null);
   const statusDragCleanupRef = useRef<(() => void) | null>(null);
   // Latest values for the once-registered native drag-drop listener.
@@ -258,6 +260,14 @@ export default function App() {
   downloadsRef.current = downloads;
   statusOpenRef.current = statusOpen;
   tabsRef.current = tabs;
+
+  useLayoutEffect(() => {
+    const highlight = fileEditorHighlightRef.current;
+    const textarea = fileEditorTextareaRef.current;
+    if (!highlight || !textarea) return;
+    highlight.scrollTop = textarea.scrollTop;
+    highlight.scrollLeft = textarea.scrollLeft;
+  }, [fileEditor?.entry.path, fileEditor?.content]);
 
   async function refreshServers() {
     if (!isTauri) {
@@ -2305,6 +2315,7 @@ export default function App() {
             <div className="file-editor-code">
               <pre ref={fileEditorHighlightRef} className="file-editor-highlight" aria-hidden="true">{renderHighlightedCode(fileEditor.entry.name, fileEditor.content)}</pre>
               <textarea
+                ref={fileEditorTextareaRef}
                 className="file-editor-textarea"
                 value={fileEditor.content}
                 disabled={fileEditor.loading || fileEditor.saving}

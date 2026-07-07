@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.1.4](https://github.com/Raymanhan/ishell/releases/tag/v1.1.4)**
+**[Download iShell v1.1.5](https://github.com/Raymanhan/ishell/releases/tag/v1.1.5)**
 
 Available packages:
 
@@ -204,8 +204,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.1.4
-git push origin v1.1.4
+git tag v1.1.5
+git push origin v1.1.5
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -239,6 +239,8 @@ src-tauri/src/
 
 ## Recent Changes
 
+- `v1.1.5` keeps the remote file editor highlight layer aligned with the
+  textarea while tightening monospace rendering for more predictable editing.
 - `v1.1.4` compacts the connection tree spacing and gives the SFTP detail
   view clearer panel boundaries with steadier scrolling in tight layouts.
 - `v1.1.3` tightens the SFTP detail layout with more compact columns and

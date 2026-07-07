@@ -1276,11 +1276,16 @@ button.detail-row:hover {
   padding: 14px 16px;
   border: 0;
   outline: 0;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 1.55;
+  font: 400 13px/20px var(--font-mono);
+  font-kerning: none;
+  font-synthesis: none;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+  letter-spacing: 0;
   tab-size: 2;
   white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
   overflow: auto;
 }
 .file-editor-highlight {
@@ -1290,6 +1295,9 @@ button.detail-row:hover {
 }
 .file-editor-textarea {
   z-index: 1;
+  display: block;
+  appearance: none;
+  -webkit-appearance: none;
   resize: none;
   background: transparent;
   color: transparent;
