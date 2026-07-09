@@ -37,6 +37,7 @@ pub fn run() {
             commands::invalidate_connection,
             commands::sftp_list,
             commands::sftp_download,
+            commands::sftp_download_folder,
             commands::sftp_upload,
             commands::cancel_upload,
             commands::cancel_download,

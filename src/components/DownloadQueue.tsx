@@ -75,7 +75,7 @@ export function DownloadQueue({
                           : item.status === "done"
                           ? formatBytes(item.total)
                           : item.status === "downloading"
-                              ? `${percent}%`
+                              ? item.total > 0 ? `${percent}%` : "传输中"
                               : "等待"}
                     </span>
                   </div>

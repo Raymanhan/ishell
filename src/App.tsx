@@ -36,6 +36,7 @@ import type {
   DownloadItem,
   DownloadProgressPayload,
   FileColumn,
+  FolderDownloadMode,
   NetworkSample,
   ServerInput,
   ServerRecord,
@@ -1718,6 +1719,29 @@ export default function App() {
     enqueueDownloads(files);
   }
 
+  function downloadFolder(entry: SftpEntry, mode: FolderDownloadMode) {
+    if (!activeTab || !entry.isDir) return;
+    const tabId = activeTab.id;
+    const serverId = activeTab.serverId;
+    const item: DownloadItem = {
+      id: crypto.randomUUID(),
+      tabId,
+      name: mode === "archive" ? `${entry.name}.tar.gz` : entry.name,
+      remotePath: entry.path,
+      serverId,
+      transferred: 0,
+      total: 0,
+      status: "pending",
+      folderMode: mode,
+    };
+    setDownloads((current) => [...current, item]);
+    showNotice(`已加入下载队列：${entry.name}`);
+
+    downloadChainRef.current = downloadChainRef.current.then(async () => {
+      await runDownload(item);
+    });
+  }
+
   function enqueueDownloads(entries: SftpEntry[]) {
     if (!activeTab) return;
     const tabId = activeTab.id;
@@ -1759,11 +1783,18 @@ export default function App() {
     beginSftpBusy();
     try {
       const saved = isTauri
-        ? await command<string>("sftp_download", {
-            id: item.serverId,
-            path: item.remotePath,
-            transferId: item.id,
-          })
+        ? item.folderMode
+          ? await command<string>("sftp_download_folder", {
+              id: item.serverId,
+              path: item.remotePath,
+              transferId: item.id,
+              mode: item.folderMode,
+            })
+          : await command<string>("sftp_download", {
+              id: item.serverId,
+              path: item.remotePath,
+              transferId: item.id,
+            })
         : await simulateDemoDownload(item, (transferred, total) => {
             setDownloads((current) =>
               current.map((download) =>
@@ -2139,6 +2170,7 @@ export default function App() {
                           onRefresh={refreshFiles}
                           onUpload={uploadFile}
                           onDownload={downloadFiles}
+                          onDownloadFolder={downloadFolder}
                           onEdit={openFileEditor}
                           onTerminalJump={jumpTerminalToDir}
                           onMkdir={makeDir}

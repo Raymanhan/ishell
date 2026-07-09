@@ -1,12 +1,11 @@
 use std::{
     fs,
-    path::Path,
+    path::{Path, PathBuf},
     time::{Duration, Instant},
 };
 #[cfg(not(russh_backend))]
 use std::{
     io::{self, Read, Write},
-    path::PathBuf,
     process::{Command, Stdio},
 };
 use tauri::{AppHandle, Emitter, Manager};
@@ -295,48 +294,21 @@ pub fn list_sftp(
     Ok(mapped)
 }
 
-pub fn download_file(
-    _pool: &SshPool,
+/// Stream the stdout of `remote_command` into `local`, emitting throttled
+/// progress events keyed by `transfer_id`. Shared by single-file downloads
+/// and the folder download modes below, across both transport backends.
+fn stream_remote_to_file(
     app: &AppHandle,
     id: &str,
-    remote_path: &str,
+    remote_command: &str,
+    total: u64,
     transfer_id: &str,
+    local: &mut fs::File,
     is_canceled: &dyn Fn() -> bool,
-) -> Result<String, String> {
-    let file_name = Path::new(remote_path)
-        .file_name()
-        .map(|name| name.to_string_lossy().to_string())
-        .unwrap_or_else(|| "download".to_string());
-    let total = remote_file_size(app, id, remote_path).unwrap_or(0);
-
-    let download_dir = app
-        .path()
-        .download_dir()
-        .map_err(|err| format!("无法定位下载目录：{err}"))?;
-    fs::create_dir_all(&download_dir).ok();
-
-    let mut local_path = download_dir.join(&file_name);
-    let mut counter = 1;
-    while local_path.exists() {
-        let stem = Path::new(&file_name)
-            .file_stem()
-            .map(|value| value.to_string_lossy().to_string())
-            .unwrap_or_else(|| "download".to_string());
-        let ext = Path::new(&file_name)
-            .extension()
-            .map(|value| format!(".{}", value.to_string_lossy()))
-            .unwrap_or_default();
-        local_path = download_dir.join(format!("{stem} ({counter}){ext}"));
-        counter += 1;
-    }
-
-    let mut local =
-        fs::File::create(&local_path).map_err(|err| format!("无法创建本地文件：{err}"))?;
-    let remote_command = format!("cat -- {}", openssh::shell_quote(remote_path));
-
+) -> Result<(), String> {
     #[cfg(not(russh_backend))]
     {
-        let (mut child, helper_path) = spawn_remote(app, id, &remote_command, false, true, false)?;
+        let (mut child, helper_path) = spawn_remote(app, id, remote_command, false, true, false)?;
         let mut stdout = child
             .stdout
             .take()
@@ -349,7 +321,7 @@ pub fn download_file(
             "下载已停止",
             is_canceled,
         );
-        let copy_result = copy_with_progress(&mut stdout, &mut local, progress);
+        let copy_result = copy_with_progress(&mut stdout, local, progress);
         if copy_result.is_err() {
             let _ = child.kill();
         }
@@ -360,18 +332,15 @@ pub fn download_file(
         match copy_result {
             Ok(()) => {}
             Err(err) if err.kind() == io::ErrorKind::Interrupted => {
-                drop(local);
-                let _ = fs::remove_file(&local_path);
                 return Err("下载已停止".to_string());
             }
             Err(err) => return Err(format!("下载失败：{err}")),
         }
         let output = output?;
         if !output.status.success() {
-            drop(local);
-            let _ = fs::remove_file(&local_path);
             return Err(format_process_error("下载失败", &output.stderr));
         }
+        Ok(())
     }
 
     #[cfg(russh_backend)]
@@ -396,21 +365,81 @@ pub fn download_file(
         let result = crate::russh_transport::download(
             &server,
             secret.as_deref(),
-            &remote_command,
-            &mut local,
+            remote_command,
+            local,
             is_canceled,
             &mut on_progress,
         );
-        if let Err(err) = result {
-            drop(local);
-            let _ = fs::remove_file(&local_path);
-            return match err {
-                crate::russh_transport::TransferError::Canceled => Err("下载已停止".to_string()),
-                crate::russh_transport::TransferError::Failed(msg) => {
-                    Err(format!("下载失败：{msg}"))
-                }
-            };
-        }
+        result.map_err(|err| match err {
+            crate::russh_transport::TransferError::Canceled => "下载已停止".to_string(),
+            crate::russh_transport::TransferError::Failed(msg) => format!("下载失败：{msg}"),
+        })
+    }
+}
+
+/// Pick a local file path under `dir` that doesn't collide with an existing
+/// entry, appending " (n)" before the extension as needed.
+fn unique_file_path(dir: &Path, file_name: &str) -> PathBuf {
+    let mut candidate = dir.join(file_name);
+    let mut counter = 1;
+    while candidate.exists() {
+        let stem = Path::new(file_name)
+            .file_stem()
+            .map(|value| value.to_string_lossy().to_string())
+            .unwrap_or_else(|| "download".to_string());
+        let ext = Path::new(file_name)
+            .extension()
+            .map(|value| format!(".{}", value.to_string_lossy()))
+            .unwrap_or_default();
+        candidate = dir.join(format!("{stem} ({counter}){ext}"));
+        counter += 1;
+    }
+    candidate
+}
+
+/// Pick a local directory path under `dir` that doesn't collide with an
+/// existing entry, appending " (n)" as needed.
+fn unique_dir_path(dir: &Path, name: &str) -> PathBuf {
+    let mut candidate = dir.join(name);
+    let mut counter = 1;
+    while candidate.exists() {
+        candidate = dir.join(format!("{name} ({counter})"));
+        counter += 1;
+    }
+    candidate
+}
+
+pub fn download_file(
+    _pool: &SshPool,
+    app: &AppHandle,
+    id: &str,
+    remote_path: &str,
+    transfer_id: &str,
+    is_canceled: &dyn Fn() -> bool,
+) -> Result<String, String> {
+    let file_name = Path::new(remote_path)
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_else(|| "download".to_string());
+    let total = remote_file_size(app, id, remote_path).unwrap_or(0);
+
+    let download_dir = app
+        .path()
+        .download_dir()
+        .map_err(|err| format!("无法定位下载目录：{err}"))?;
+    fs::create_dir_all(&download_dir).ok();
+
+    let local_path = unique_file_path(&download_dir, &file_name);
+    let mut local =
+        fs::File::create(&local_path).map_err(|err| format!("无法创建本地文件：{err}"))?;
+    let remote_command = format!("cat -- {}", openssh::shell_quote(remote_path));
+
+    if let Err(err) =
+        stream_remote_to_file(app, id, &remote_command, total, transfer_id, &mut local, is_canceled)
+    {
+        drop(local);
+        let _ = fs::remove_file(&local_path);
+        return Err(err);
     }
 
     emit_progress(
@@ -422,6 +451,116 @@ pub fn download_file(
         true,
     );
     Ok(local_path.to_string_lossy().to_string())
+}
+
+/// Download a remote directory either as a compressed archive (`mode ==
+/// "archive"`, saved as `<name>.tar.gz`) or "as-is" (`mode == "raw"`,
+/// streamed as an uncompressed tar and unpacked locally to preserve the
+/// original folder structure).
+pub fn download_folder(
+    _pool: &SshPool,
+    app: &AppHandle,
+    id: &str,
+    remote_path: &str,
+    transfer_id: &str,
+    mode: &str,
+    is_canceled: &dyn Fn() -> bool,
+) -> Result<String, String> {
+    let trimmed = remote_path.trim_end_matches('/');
+    let remote = if trimmed.is_empty() { "/" } else { trimmed };
+    let parent = Path::new(remote)
+        .parent()
+        .map(|value| {
+            let text = value.to_string_lossy().to_string();
+            if text.is_empty() { "/".to_string() } else { text }
+        })
+        .unwrap_or_else(|| "/".to_string());
+    let base_name = Path::new(remote)
+        .file_name()
+        .map(|value| value.to_string_lossy().to_string())
+        .ok_or_else(|| "无效的远程路径".to_string())?;
+
+    let download_dir = app
+        .path()
+        .download_dir()
+        .map_err(|err| format!("无法定位下载目录：{err}"))?;
+    fs::create_dir_all(&download_dir).ok();
+
+    match mode {
+        "archive" => {
+            let local_path = unique_file_path(&download_dir, &format!("{base_name}.tar.gz"));
+            let mut local =
+                fs::File::create(&local_path).map_err(|err| format!("无法创建本地文件：{err}"))?;
+            let remote_command = format!(
+                "tar czf - -C {} -- {}",
+                openssh::shell_quote(&parent),
+                openssh::shell_quote(&base_name)
+            );
+            if let Err(err) =
+                stream_remote_to_file(app, id, &remote_command, 0, transfer_id, &mut local, is_canceled)
+            {
+                drop(local);
+                let _ = fs::remove_file(&local_path);
+                return Err(err);
+            }
+            let total = local.metadata().map(|meta| meta.len()).unwrap_or(0);
+            emit_progress(app, "sftp-download-progress", transfer_id, total, total, true);
+            Ok(local_path.to_string_lossy().to_string())
+        }
+        "raw" => {
+            let tmp_path = download_dir.join(format!(".{base_name}-{transfer_id}.tar.tmp"));
+            let mut tmp_file =
+                fs::File::create(&tmp_path).map_err(|err| format!("无法创建临时文件：{err}"))?;
+            let remote_command = format!(
+                "tar cf - -C {} -- {}",
+                openssh::shell_quote(&parent),
+                openssh::shell_quote(&base_name)
+            );
+            if let Err(err) = stream_remote_to_file(
+                app,
+                id,
+                &remote_command,
+                0,
+                transfer_id,
+                &mut tmp_file,
+                is_canceled,
+            ) {
+                drop(tmp_file);
+                let _ = fs::remove_file(&tmp_path);
+                return Err(err);
+            }
+            let total = tmp_file.metadata().map(|meta| meta.len()).unwrap_or(0);
+            drop(tmp_file);
+
+            // The tar stream already contains `<base_name>/...` as its top-level
+            // entry, so unpack into a scratch root first and then move that
+            // extracted folder into its final, collision-free destination name.
+            let extract_root = download_dir.join(format!(".ishell-extract-{transfer_id}"));
+            let extract_result = fs::File::open(&tmp_path)
+                .map_err(|err| format!("无法打开临时归档：{err}"))
+                .and_then(|tar_file| {
+                    tar::Archive::new(tar_file)
+                        .unpack(&extract_root)
+                        .map_err(|err| format!("解压失败：{err}"))
+                });
+            let _ = fs::remove_file(&tmp_path);
+            if let Err(err) = extract_result {
+                let _ = fs::remove_dir_all(&extract_root);
+                return Err(err);
+            }
+
+            let extracted = extract_root.join(&base_name);
+            let dest_dir = unique_dir_path(&download_dir, &base_name);
+            let move_result = fs::rename(&extracted, &dest_dir)
+                .map_err(|err| format!("无法移动解压结果：{err}"));
+            let _ = fs::remove_dir_all(&extract_root);
+            move_result?;
+
+            emit_progress(app, "sftp-download-progress", transfer_id, total, total, true);
+            Ok(dest_dir.to_string_lossy().to_string())
+        }
+        other => Err(format!("未知的下载模式：{other}")),
+    }
 }
 
 pub fn upload_file(

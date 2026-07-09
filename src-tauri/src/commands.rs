@@ -22,8 +22,9 @@ use crate::{
     },
     pool::SshPool,
     ssh::{
-        download_file, fetch_network_sample as fetch_network, fetch_status, list_sftp, make_directory,
-        read_text_file, remove_entry, rename_entry, test_connection, upload_file, write_text_file,
+        download_file, download_folder, fetch_network_sample as fetch_network, fetch_status, list_sftp,
+        make_directory, read_text_file, remove_entry, rename_entry, test_connection, upload_file,
+        write_text_file,
     },
     store::{
         append_command_history, delete_server as remove_server, get_server,
@@ -450,6 +451,28 @@ pub async fn sftp_download(
     run_blocking(move || {
         let is_canceled = || cancels.is_canceled(&transfer_id);
         let result = download_file(&pool, &app, &id, &path, &transfer_id, &is_canceled);
+        cancels.clear(&transfer_id);
+        result
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn sftp_download_folder(
+    app: AppHandle,
+    pool: State<'_, Arc<SshPool>>,
+    cancels: State<'_, Arc<DownloadCancelRegistry>>,
+    id: String,
+    path: String,
+    transfer_id: String,
+    mode: String,
+) -> Result<String, String> {
+    let pool = pool.inner().clone();
+    let cancels = cancels.inner().clone();
+    cancels.clear(&transfer_id);
+    run_blocking(move || {
+        let is_canceled = || cancels.is_canceled(&transfer_id);
+        let result = download_folder(&pool, &app, &id, &path, &transfer_id, &mode, &is_canceled);
         cancels.clear(&transfer_id);
         result
     })

@@ -7,6 +7,7 @@ import {
   Eye,
   EyeOff,
   File,
+  FileArchive,
   FilePenLine,
   FileSymlink,
   Folder,
@@ -24,7 +25,7 @@ import {
   X,
 } from "lucide-react";
 import type { ShellTab } from "../features/shell/types";
-import type { SftpEntry } from "../types";
+import type { FolderDownloadMode, SftpEntry } from "../types";
 import { formatBytes } from "../utils/format";
 import type { CSSProperties } from "react";
 
@@ -80,6 +81,7 @@ function SftpBrowserBase({
   onRefresh,
   onUpload,
   onDownload,
+  onDownloadFolder,
   onEdit,
   onTerminalJump,
   onMkdir,
@@ -96,6 +98,7 @@ function SftpBrowserBase({
   onRefresh: () => void;
   onUpload: (targetDir?: string) => void;
   onDownload: (entries: SftpEntry[]) => void;
+  onDownloadFolder: (entry: SftpEntry, mode: FolderDownloadMode) => void;
   onEdit: (entry: SftpEntry) => void;
   onTerminalJump: (targetDir: string) => void;
   onMkdir: (name: string, targetDir?: string) => void;
@@ -146,6 +149,7 @@ function SftpBrowserBase({
   const [viewMode, setViewMode] = useState<SftpViewMode>("tree");
   const [pathValue, setPathValue] = useState(currentDir);
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
+  const [downloadSubmenuOpen, setDownloadSubmenuOpen] = useState(false);
   const [renaming, setRenaming] = useState<RenameState | null>(null);
   const [creatingDir, setCreatingDir] = useState<CreateDirState | null>(null);
   const [detailColumnWidths, setDetailColumnWidths] = useState(() => DETAIL_COLUMN_WIDTHS);
@@ -298,6 +302,7 @@ function SftpBrowserBase({
     event.preventDefault();
     event.stopPropagation();
     if (entry && !selectedPathSet.has(entry.path)) onSelect(entry.path, [entry.path]);
+    setDownloadSubmenuOpen(false);
     setMenu({
       x: event.clientX,
       y: event.clientY,
@@ -915,12 +920,49 @@ function SftpBrowserBase({
           {menu.entry ? (
             <>
               {menu.entry.isDir ? (
-                <button
-                  type="button"
-                  onClick={() => runMenu(() => menu.entry && onOpen(menu.entry, menu.columnIndex + 1))}
-                >
-                  <FolderOpen size={14} /> 打开
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => runMenu(() => menu.entry && onOpen(menu.entry, menu.columnIndex + 1))}
+                  >
+                    <FolderOpen size={14} /> 打开
+                  </button>
+                  <div
+                    className={[
+                      "ctx-menu-item",
+                      "has-submenu",
+                      downloadSubmenuOpen ? "open" : "",
+                      menu.x > window.innerWidth / 2 ? "submenu-left" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    onMouseEnter={() => setDownloadSubmenuOpen(true)}
+                    onMouseLeave={() => setDownloadSubmenuOpen(false)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setDownloadSubmenuOpen((current) => !current);
+                    }}
+                  >
+                    <span className="ctx-menu-row">
+                      <Download size={14} /> 下载
+                      <ChevronRight size={12} className="ctx-submenu-caret" />
+                    </span>
+                    <div className="ctx-submenu">
+                      <button
+                        type="button"
+                        onClick={() => runMenu(() => menu.entry && onDownloadFolder(menu.entry, "archive"))}
+                      >
+                        <FileArchive size={14} /> 打包下载（.tar.gz）
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => runMenu(() => menu.entry && onDownloadFolder(menu.entry, "raw"))}
+                      >
+                        <Download size={14} /> 直接下载
+                      </button>
+                    </div>
+                  </div>
+                </>
               ) : null}
               {!menu.entry.isDir && (
                 <>
@@ -1000,6 +1042,7 @@ export const SftpBrowser = memo(SftpBrowserBase, (previous, next) => (
   previous.onRefresh === next.onRefresh &&
   previous.onUpload === next.onUpload &&
   previous.onDownload === next.onDownload &&
+  previous.onDownloadFolder === next.onDownloadFolder &&
   previous.onEdit === next.onEdit &&
   previous.onTerminalJump === next.onTerminalJump &&
   previous.onMkdir === next.onMkdir &&

@@ -113,6 +113,8 @@ export interface UploadItem {
   error?: string;
 }
 
+export type FolderDownloadMode = "archive" | "raw";
+
 export interface DownloadItem {
   id: string;
   tabId: string;
@@ -124,6 +126,8 @@ export interface DownloadItem {
   status: DownloadStatus;
   savedPath?: string;
   error?: string;
+  /** Set for folder downloads; absent for regular single-file downloads. */
+  folderMode?: FolderDownloadMode;
 }
 
 export interface UploadProgressPayload {

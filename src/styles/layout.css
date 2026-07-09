@@ -109,6 +109,81 @@
   background: var(--hairline);
 }
 
+.ctx-menu-item {
+  position: relative;
+}
+.ctx-menu-item.has-submenu {
+  border-radius: 5px;
+  cursor: pointer;
+}
+.ctx-menu-item.has-submenu:hover,
+.ctx-menu-item.has-submenu.open {
+  background: var(--ctx-menu-hover);
+}
+.ctx-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 30px;
+  padding: 0 9px;
+  color: var(--dim);
+}
+.ctx-menu-item.has-submenu:hover .ctx-menu-row,
+.ctx-menu-item.has-submenu.open .ctx-menu-row {
+  color: var(--text);
+}
+.ctx-submenu-caret {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+.ctx-submenu {
+  display: none;
+  position: absolute;
+  top: -5px;
+  left: 100%;
+  z-index: 1001;
+  min-width: 168px;
+  padding: 5px;
+  border: 1px solid var(--hairline-3);
+  border-radius: var(--r-sm);
+  background: var(--ctx-menu-bg);
+  box-shadow: var(--ctx-menu-shadow);
+}
+.ctx-menu-item.submenu-left .ctx-submenu {
+  left: auto;
+  right: 100%;
+}
+.ctx-menu-item.has-submenu.open .ctx-submenu {
+  display: block;
+}
+.ctx-submenu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 30px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+.ctx-submenu button:hover {
+  background: var(--ctx-menu-hover);
+  color: var(--text);
+}
+.ctx-submenu button svg {
+  flex: 0 0 auto;
+}
+
 /* ===== Connection manager ===== */
 .connection-manager {
   position: absolute;
