@@ -105,6 +105,22 @@ async fn session_channel(
     Ok((handle, channel))
 }
 
+/// Open a brand-new connection and channel that is *not* added to the
+/// session pool, so bulk transfer traffic (downloads) doesn't share a TCP
+/// connection with the terminal or other pooled commands — mirroring the
+/// `ControlMaster=no` isolation used on the Unix (system ssh) transport.
+async fn isolated_channel(
+    server: &ServerRecord,
+    secret: Option<&str>,
+) -> Result<(Session, russh::Channel<client::Msg>), String> {
+    let handle = connect(server, secret).await?;
+    let channel = handle
+        .channel_open_session()
+        .await
+        .map_err(|err| format!("无法打开通道：{err}"))?;
+    Ok((handle, channel))
+}
+
 async fn connect(
     server: &ServerRecord,
     secret: Option<&str>,
@@ -213,7 +229,7 @@ pub fn download(
 ) -> Result<(), TransferError> {
     let rt = runtime().map_err(TransferError::Failed)?;
     rt.block_on(async {
-        let (_handle, mut channel) = session_channel(server, secret)
+        let (_handle, mut channel) = isolated_channel(server, secret)
             .await
             .map_err(TransferError::Failed)?;
         channel

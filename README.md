@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.1.7](https://github.com/Raymanhan/ishell/releases/tag/v1.1.7)**
+**[Download iShell v1.1.8](https://github.com/Raymanhan/ishell/releases/tag/v1.1.8)**
 
 Available packages:
 
@@ -204,8 +204,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.1.7
-git push origin v1.1.7
+git tag v1.1.8
+git push origin v1.1.8
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -239,6 +239,8 @@ src-tauri/src/
 
 ## Recent Changes
 
+- `v1.1.8` isolates bulk SFTP downloads on dedicated SSH connections so
+  large transfers do not compete with interactive terminal traffic.
 - `v1.1.7` adds remote folder downloads from the SFTP context menu, with
   archive (`.tar.gz`) and direct-download modes plus clearer queue progress.
 - `v1.1.6` preserves the remote file editor highlight overlay height for

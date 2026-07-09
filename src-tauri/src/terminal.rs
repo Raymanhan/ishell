@@ -407,7 +407,7 @@ fn build_ssh_command(
     let mut command = CommandBuilder::new(openssh::ssh_binary());
     command.env("TERM", "xterm-256color");
     command.arg("-tt");
-    for arg in openssh::common_ssh_args(server) {
+    for arg in openssh::common_ssh_args(server, true) {
         command.arg(arg);
     }
     command.arg("-o");

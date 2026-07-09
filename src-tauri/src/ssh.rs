@@ -161,7 +161,7 @@ fn test_connection_with_server(server: &ServerRecord, secret: Option<&str>) -> R
         command.env("ISHELL_SSH_PASSWORD", secret);
         command.env("DISPLAY", "ishell:0");
     }
-    for arg in openssh::common_ssh_args(server) {
+    for arg in openssh::common_ssh_args(server, true) {
         command.arg(arg);
     }
     for arg in openssh::auth_ssh_args(server, secret.is_some()) {
@@ -308,7 +308,8 @@ fn stream_remote_to_file(
 ) -> Result<(), String> {
     #[cfg(not(russh_backend))]
     {
-        let (mut child, helper_path) = spawn_remote(app, id, remote_command, false, true, false)?;
+        let (mut child, helper_path) =
+            spawn_remote_ex(app, id, remote_command, false, true, false, false)?;
         let mut stdout = child
             .stdout
             .take()
@@ -962,6 +963,22 @@ fn spawn_remote(
     stdout_piped: bool,
     stderr_piped: bool,
 ) -> Result<(std::process::Child, Option<PathBuf>), String> {
+    spawn_remote_ex(app, id, remote_command, stdin_piped, stdout_piped, stderr_piped, true)
+}
+
+/// Like `spawn_remote`, but lets the caller opt out of `ControlMaster` reuse
+/// (`multiplex = false`) so the connection doesn't share a socket with the
+/// terminal or other commands. Used for bulk downloads.
+#[cfg(not(russh_backend))]
+fn spawn_remote_ex(
+    app: &AppHandle,
+    id: &str,
+    remote_command: &str,
+    stdin_piped: bool,
+    stdout_piped: bool,
+    stderr_piped: bool,
+    multiplex: bool,
+) -> Result<(std::process::Child, Option<PathBuf>), String> {
     let server = get_server(app, id)?;
     let saved_secret = read_secret(app, id).ok().filter(|value| !value.is_empty());
     let helper_path = if saved_secret.is_some() {
@@ -976,7 +993,7 @@ fn spawn_remote(
         command.env("ISHELL_SSH_PASSWORD", secret);
         command.env("DISPLAY", "ishell:0");
     }
-    for arg in openssh::common_ssh_args(&server) {
+    for arg in openssh::common_ssh_args(&server, multiplex) {
         command.arg(arg);
     }
     for arg in openssh::auth_ssh_args(&server, saved_secret.is_some()) {
