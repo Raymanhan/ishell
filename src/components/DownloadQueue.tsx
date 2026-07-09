@@ -51,6 +51,10 @@ export function DownloadQueue({
                 : item.total > 0
                   ? Math.min(100, Math.round((item.transferred / item.total) * 100))
                   : 0;
+            // Folder downloads don't know their final size up front (an archive's
+            // compressed size isn't known until it's done), so fall back to a
+            // live transferred-bytes readout instead of a stalled "0%".
+            const indeterminate = item.status === "downloading" && item.total === 0;
             return (
               <li key={item.id} className={`uq-item ${item.status}`}>
                 <span className="uq-icon">
@@ -75,7 +79,7 @@ export function DownloadQueue({
                           : item.status === "done"
                           ? formatBytes(item.total)
                           : item.status === "downloading"
-                              ? item.total > 0 ? `${percent}%` : "传输中"
+                              ? indeterminate ? formatBytes(item.transferred) : `${percent}%`
                               : "等待"}
                     </span>
                   </div>
@@ -88,8 +92,8 @@ export function DownloadQueue({
                       {item.savedPath}
                     </div>
                   ) : (
-                    <div className="uq-track">
-                      <div className="uq-fill" style={{ width: `${percent}%` }} />
+                    <div className={`uq-track ${indeterminate ? "indeterminate" : ""}`}>
+                      <div className="uq-fill" style={indeterminate ? undefined : { width: `${percent}%` }} />
                     </div>
                   )}
                 </div>
