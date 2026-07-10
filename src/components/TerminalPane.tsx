@@ -15,6 +15,7 @@ import type {
 
 const passwordPromptPattern = /(?:password|passphrase|密码|口令)[^:\n\r]*[:：]\s*$/i;
 const platformSource = `${navigator.userAgent} ${navigator.platform}`.toLowerCase();
+const isWindowsPlatform = platformSource.includes("win");
 const terminalFontFamily = platformSource.includes("win")
   ? '"Cascadia Mono", "Cascadia Code", Consolas, "Microsoft YaHei Mono", "Microsoft YaHei", monospace'
   : '"SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace';
@@ -396,6 +397,36 @@ function TerminalPaneBase({
     fit.fit();
     terminal.writeln(`iShell · ${tab.title}`);
     terminal.writeln("");
+
+    terminal.attachCustomKeyEventHandler((event) => {
+      if (!isWindowsPlatform || event.type !== "keydown" || !event.metaKey || event.ctrlKey || event.altKey) {
+        return true;
+      }
+
+      if (event.key.toLowerCase() === "c") {
+        const selection = terminal.getSelection();
+        if (selection) {
+          navigator.clipboard.writeText(selection).catch((error) => setNotice(`复制失败：${String(error)}`));
+        }
+        event.preventDefault();
+        return false;
+      }
+
+      if (event.key.toLowerCase() === "v") {
+        navigator.clipboard
+          .readText()
+          .then((text) => {
+            if (!text) return;
+            closeHistorySuggest();
+            rawSendTerminalInput(text);
+          })
+          .catch((error) => setNotice(`粘贴失败：${String(error)}`));
+        event.preventDefault();
+        return false;
+      }
+
+      return true;
+    });
 
     terminal.onData((data) => sendTerminalInput(data));
 
