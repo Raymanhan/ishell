@@ -330,15 +330,6 @@ function TerminalPaneBase({
 
   function sendTerminalInput(data: string) {
     if (handleHistorySuggestInput(data)) return;
-    if (
-      !sensitiveInputRef.current &&
-      commandDraftRef.current.length === 0 &&
-      data === "@" &&
-      isAtShellPromptCommandStart()
-    ) {
-      openHistorySuggest();
-      return;
-    }
     rawSendTerminalInput(data);
   }
 
@@ -399,6 +390,23 @@ function TerminalPaneBase({
     terminal.writeln("");
 
     terminal.attachCustomKeyEventHandler((event) => {
+      if (
+        event.type === "keydown" &&
+        event.key === "Alt" &&
+        event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.shiftKey &&
+        !historySuggestRef.current.active &&
+        !sensitiveInputRef.current &&
+        commandDraftRef.current.length === 0 &&
+        isAtShellPromptCommandStart()
+      ) {
+        openHistorySuggest();
+        event.preventDefault();
+        return false;
+      }
+
       if (!isWindowsPlatform || event.type !== "keydown" || !event.metaKey || event.ctrlKey || event.altKey) {
         return true;
       }
@@ -639,7 +647,7 @@ function TerminalPaneBase({
             aria-label="历史命令候选"
           >
             <div className="terminal-history-suggest-head">
-              <span>@{historySuggest.query}</span>
+              <span>{historySuggest.query || "历史命令"}</span>
               <kbd>Enter</kbd>
             </div>
             <div
