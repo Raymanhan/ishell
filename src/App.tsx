@@ -233,6 +233,8 @@ export default function App() {
   const sftpBusyTimer = useRef<number | null>(null);
   const noticeTimer = useRef<number | null>(null);
   const statusOpenRef = useRef(false);
+  const statusRefreshInFlightRef = useRef<Set<string>>(new Set());
+  const networkRefreshInFlightRef = useRef<Set<string>>(new Set());
   const tabsRef = useRef<ShellTab[]>([]);
   const nativeCloseInFlightRef = useRef(false);
   const terminalReadyTabs = useRef<Set<string>>(new Set());
@@ -1370,6 +1372,9 @@ export default function App() {
   ) {
     if (!tabId || !serverId) return;
     if (!statusOpenRef.current) return;
+    const requestKey = `${tabId}:${includeDisk ? "disk" : "metrics"}`;
+    if (statusRefreshInFlightRef.current.has(requestKey)) return;
+    statusRefreshInFlightRef.current.add(requestKey);
     try {
       if (!isTauri) {
         if (!silent) await new Promise((resolve) => setTimeout(resolve, 260));
@@ -1395,6 +1400,8 @@ export default function App() {
       );
     } catch (error) {
       if (!silent) showNotice(String(error));
+    } finally {
+      statusRefreshInFlightRef.current.delete(requestKey);
     }
   }
 
@@ -1405,6 +1412,8 @@ export default function App() {
   ) {
     if (!tabId || !serverId) return;
     if (!statusOpenRef.current) return;
+    if (networkRefreshInFlightRef.current.has(tabId)) return;
+    networkRefreshInFlightRef.current.add(tabId);
     try {
       if (!isTauri) {
         const sampledAt = Date.now() / 1000;
@@ -1438,6 +1447,8 @@ export default function App() {
       );
     } catch (error) {
       if (!silent) showNotice(String(error));
+    } finally {
+      networkRefreshInFlightRef.current.delete(tabId);
     }
   }
 

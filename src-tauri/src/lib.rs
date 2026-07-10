@@ -19,7 +19,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(Arc::new(TerminalRegistry::default()))
-        .manage(Arc::new(SshPool::default()))
+        .manage(Arc::new(SshPool))
         .manage(Arc::new(commands::UploadCancelRegistry::default()))
         .manage(Arc::new(commands::DownloadCancelRegistry::default()))
         .invoke_handler(tauri::generate_handler![

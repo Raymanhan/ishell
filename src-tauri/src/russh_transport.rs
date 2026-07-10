@@ -4,8 +4,9 @@
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use russh::{client, ChannelMsg};
 use tokio::runtime::Runtime;
@@ -15,6 +16,13 @@ use crate::terminal::TerminalControl;
 
 type Session = client::Handle<ClientHandler>;
 
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+const AUTH_TIMEOUT: Duration = Duration::from_secs(20);
+const COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
+const TRANSFER_POLL_INTERVAL: Duration = Duration::from_millis(250);
+const TRANSFER_IDLE_TIMEOUT: Duration = Duration::from_secs(120);
+const TRANSFER_WRITE_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// Result of a streaming transfer: a clean finish, a user cancellation, or a
 /// hard failure (carrying a message for the UI).
 pub enum TransferError {
@@ -22,17 +30,32 @@ pub enum TransferError {
     Failed(String),
 }
 
-struct ClientHandler;
+struct ClientHandler {
+    host: String,
+    port: u16,
+}
 
 impl client::Handler for ClientHandler {
     type Error = russh::Error;
 
     async fn check_server_key(
         &mut self,
-        _server_public_key: &russh::keys::ssh_key::PublicKey,
+        server_public_key: &russh::keys::ssh_key::PublicKey,
     ) -> Result<bool, Self::Error> {
-        // Match the Unix path's `StrictHostKeyChecking=accept-new` behaviour.
-        Ok(true)
+        // Match OpenSSH's `StrictHostKeyChecking=accept-new`: trust and persist
+        // the first key, accept matching known keys, and reject changed keys.
+        match russh::keys::check_known_hosts(&self.host, self.port, server_public_key) {
+            Ok(true) => Ok(true),
+            Ok(false) => {
+                russh::keys::known_hosts::learn_known_hosts(
+                    &self.host,
+                    self.port,
+                    server_public_key,
+                )?;
+                Ok(true)
+            }
+            Err(err) => Err(err.into()),
+        }
     }
 }
 
@@ -106,7 +129,7 @@ async fn session_channel(
 }
 
 /// Open a brand-new connection and channel that is *not* added to the
-/// session pool, so bulk transfer traffic (downloads) doesn't share a TCP
+/// session pool, so bulk transfer traffic (uploads/downloads) doesn't share a TCP
 /// connection with the terminal or other pooled commands — mirroring the
 /// `ControlMaster=no` isolation used on the Unix (system ssh) transport.
 async fn isolated_channel(
@@ -127,11 +150,27 @@ async fn connect(
 ) -> Result<client::Handle<ClientHandler>, String> {
     let config = Arc::new(client::Config {
         keepalive_interval: Some(Duration::from_secs(30)),
+        nodelay: true,
         ..client::Config::default()
     });
-    let mut handle = client::connect(config, (server.host.as_str(), server.port), ClientHandler)
-        .await
-        .map_err(|err| format!("无法连接 {}:{}：{err}", server.host, server.port))?;
+    let handler = ClientHandler {
+        host: server.host.clone(),
+        port: server.port,
+    };
+    let mut handle = tokio::time::timeout(
+        CONNECT_TIMEOUT,
+        client::connect(config, (server.host.as_str(), server.port), handler),
+    )
+    .await
+    .map_err(|_| {
+        format!(
+            "连接 {}:{} 超时（{} 秒）",
+            server.host,
+            server.port,
+            CONNECT_TIMEOUT.as_secs()
+        )
+    })?
+    .map_err(|err| format!("无法连接 {}:{}：{err}", server.host, server.port))?;
 
     if server.auth_type == "key" {
         let key_path = server
@@ -139,30 +178,88 @@ async fn connect(
             .as_deref()
             .filter(|path| !path.is_empty())
             .ok_or_else(|| "密钥认证需要私钥路径".to_string())?;
-        let key = russh::keys::load_secret_key(key_path, None)
+        let key_path = expand_key_path(key_path)?;
+        let key = russh::keys::load_secret_key(&key_path, secret.filter(|value| !value.is_empty()))
             .map_err(|err| format!("无法加载私钥：{err}"))?;
-        let result = handle
-            .authenticate_publickey(
+        let result = tokio::time::timeout(
+            AUTH_TIMEOUT,
+            handle.authenticate_publickey(
                 &server.username,
                 russh::keys::PrivateKeyWithHashAlg::new(Arc::new(key), None),
-            )
-            .await
-            .map_err(|err| format!("密钥认证失败：{err}"))?;
+            ),
+        )
+        .await
+        .map_err(|_| format!("密钥认证超时（{} 秒）", AUTH_TIMEOUT.as_secs()))?
+        .map_err(|err| format!("密钥认证失败：{err}"))?;
         if !result.success() {
             return Err("密钥认证被拒绝".into());
         }
     } else {
         let secret = secret.ok_or_else(|| "尚未保存该主机的密码".to_string())?;
-        let result = handle
-            .authenticate_password(&server.username, secret)
-            .await
-            .map_err(|err| format!("密码认证失败：{err}"))?;
+        let result = tokio::time::timeout(
+            AUTH_TIMEOUT,
+            handle.authenticate_password(&server.username, secret),
+        )
+        .await
+        .map_err(|_| format!("密码认证超时（{} 秒）", AUTH_TIMEOUT.as_secs()))?
+        .map_err(|err| format!("密码认证失败：{err}"))?;
         if !result.success() {
             return Err("密码认证被拒绝（用户名或密码错误）".into());
         }
     }
 
     Ok(handle)
+}
+
+fn expand_key_path(value: &str) -> Result<PathBuf, String> {
+    let value = value.trim();
+    let home = std::env::var_os("USERPROFILE")
+        .or_else(|| std::env::var_os("HOME"))
+        .map(PathBuf::from);
+
+    if value == "~" || value.eq_ignore_ascii_case("%USERPROFILE%") || value == "$HOME" {
+        return home.ok_or_else(|| "无法定位当前用户主目录".to_string());
+    }
+
+    for prefix in [
+        "~/",
+        "~\\",
+        "%USERPROFILE%/",
+        "%USERPROFILE%\\",
+        "$HOME/",
+        "$HOME\\",
+    ] {
+        if let Some(rest) = value.strip_prefix(prefix) {
+            return home
+                .map(|path| path.join(rest))
+                .ok_or_else(|| "无法定位当前用户主目录".to_string());
+        }
+    }
+
+    Ok(PathBuf::from(value))
+}
+
+fn ensure_successful_exit(
+    action: &str,
+    exit_code: Option<u32>,
+    exit_signal: Option<String>,
+    stderr: &[u8],
+) -> Result<(), String> {
+    let stderr = String::from_utf8_lossy(stderr).trim().to_string();
+    if let Some(signal) = exit_signal {
+        return Err(if stderr.is_empty() {
+            format!("{action}被远程信号 {signal} 终止")
+        } else {
+            stderr
+        });
+    }
+
+    match exit_code {
+        Some(0) => Ok(()),
+        Some(code) if stderr.is_empty() => Err(format!("{action}退出码 {code}")),
+        Some(_) => Err(stderr),
+        None => Err(format!("{action}未返回退出状态，SSH 连接可能已中断")),
+    }
 }
 
 /// Run a remote command, optionally feeding `stdin`, returning captured stdout.
@@ -175,44 +272,52 @@ pub fn run_command(
     stdin: Option<&[u8]>,
 ) -> Result<Vec<u8>, String> {
     runtime()?.block_on(async {
-        let (_handle, mut channel) = session_channel(server, secret).await?;
-        channel
-            .exec(true, remote_command)
-            .await
-            .map_err(|err| format!("无法执行远程命令：{err}"))?;
-
-        if let Some(input) = stdin {
+        tokio::time::timeout(COMMAND_TIMEOUT, async {
+            let (_handle, mut channel) = session_channel(server, secret).await?;
             channel
-                .data(input)
+                .exec(true, remote_command)
                 .await
-                .map_err(|err| format!("写入远程输入失败：{err}"))?;
-            channel
-                .eof()
-                .await
-                .map_err(|err| format!("关闭远程输入失败：{err}"))?;
-        }
+                .map_err(|err| format!("无法执行远程命令：{err}"))?;
 
-        let mut stdout = Vec::new();
-        let mut stderr = Vec::new();
-        let mut exit_code: u32 = 0;
-        while let Some(msg) = channel.wait().await {
-            match msg {
-                ChannelMsg::Data { ref data } => stdout.extend_from_slice(data),
-                ChannelMsg::ExtendedData { ref data, .. } => stderr.extend_from_slice(data),
-                ChannelMsg::ExitStatus { exit_status } => exit_code = exit_status,
-                _ => {}
+            if let Some(input) = stdin {
+                channel
+                    .data(input)
+                    .await
+                    .map_err(|err| format!("写入远程输入失败：{err}"))?;
+                channel
+                    .eof()
+                    .await
+                    .map_err(|err| format!("关闭远程输入失败：{err}"))?;
             }
-        }
 
-        if exit_code != 0 {
-            let message = String::from_utf8_lossy(&stderr).trim().to_string();
-            return Err(if message.is_empty() {
-                format!("远程命令退出码 {exit_code}")
-            } else {
-                message
-            });
-        }
-        Ok(stdout)
+            let mut stdout = Vec::new();
+            let mut stderr = Vec::new();
+            let mut exit_code = None;
+            let mut exit_signal = None;
+            while let Some(msg) = channel.wait().await {
+                match msg {
+                    ChannelMsg::Data { ref data } => stdout.extend_from_slice(data),
+                    ChannelMsg::ExtendedData { ref data, .. } => stderr.extend_from_slice(data),
+                    ChannelMsg::ExitStatus { exit_status } => exit_code = Some(exit_status),
+                    ChannelMsg::ExitSignal {
+                        signal_name,
+                        error_message,
+                        ..
+                    } => {
+                        exit_signal = Some(format!("{signal_name:?}"));
+                        if !error_message.is_empty() {
+                            stderr.extend_from_slice(error_message.as_bytes());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            ensure_successful_exit("远程命令", exit_code, exit_signal, &stderr)?;
+            Ok(stdout)
+        })
+        .await
+        .map_err(|_| format!("远程命令执行超时（{} 秒）", COMMAND_TIMEOUT.as_secs()))?
     })
 }
 
@@ -239,11 +344,27 @@ pub fn download(
 
         let mut transferred: u64 = 0;
         let mut stderr = Vec::new();
-        let mut exit_code: u32 = 0;
-        while let Some(msg) = channel.wait().await {
+        let mut exit_code = None;
+        let mut exit_signal = None;
+        let mut last_activity = Instant::now();
+        loop {
             if is_canceled() {
+                let _ = channel.close().await;
                 return Err(TransferError::Canceled);
             }
+            if last_activity.elapsed() >= TRANSFER_IDLE_TIMEOUT {
+                let _ = channel.close().await;
+                return Err(TransferError::Failed(format!(
+                    "下载超过 {} 秒没有收到数据",
+                    TRANSFER_IDLE_TIMEOUT.as_secs()
+                )));
+            }
+            let msg = match tokio::time::timeout(TRANSFER_POLL_INTERVAL, channel.wait()).await {
+                Ok(Some(msg)) => msg,
+                Ok(None) => break,
+                Err(_) => continue,
+            };
+            last_activity = Instant::now();
             match msg {
                 ChannelMsg::Data { ref data } => {
                     sink.write_all(data)
@@ -252,19 +373,23 @@ pub fn download(
                     on_progress(transferred);
                 }
                 ChannelMsg::ExtendedData { ref data, .. } => stderr.extend_from_slice(data),
-                ChannelMsg::ExitStatus { exit_status } => exit_code = exit_status,
+                ChannelMsg::ExitStatus { exit_status } => exit_code = Some(exit_status),
+                ChannelMsg::ExitSignal {
+                    signal_name,
+                    error_message,
+                    ..
+                } => {
+                    exit_signal = Some(format!("{signal_name:?}"));
+                    if !error_message.is_empty() {
+                        stderr.extend_from_slice(error_message.as_bytes());
+                    }
+                }
                 _ => {}
             }
         }
 
-        if exit_code != 0 {
-            let message = String::from_utf8_lossy(&stderr).trim().to_string();
-            return Err(TransferError::Failed(if message.is_empty() {
-                format!("下载失败，退出码 {exit_code}")
-            } else {
-                message
-            }));
-        }
+        ensure_successful_exit("下载", exit_code, exit_signal, &stderr)
+            .map_err(TransferError::Failed)?;
         Ok(())
     })
 }
@@ -282,7 +407,7 @@ pub fn upload(
 ) -> Result<(), TransferError> {
     let rt = runtime().map_err(TransferError::Failed)?;
     rt.block_on(async {
-        let (_handle, mut channel) = session_channel(server, secret)
+        let (_handle, mut channel) = isolated_channel(server, secret)
             .await
             .map_err(TransferError::Failed)?;
         channel
@@ -302,9 +427,14 @@ pub fn upload(
             if read == 0 {
                 break;
             }
-            channel
-                .data(&buffer[..read])
+            tokio::time::timeout(TRANSFER_WRITE_TIMEOUT, channel.data(&buffer[..read]))
                 .await
+                .map_err(|_| {
+                    TransferError::Failed(format!(
+                        "上传数据超过 {} 秒没有进展",
+                        TRANSFER_WRITE_TIMEOUT.as_secs()
+                    ))
+                })?
                 .map_err(|err| TransferError::Failed(format!("上传数据失败：{err}")))?;
             transferred += read as u64;
             on_progress(transferred);
@@ -315,22 +445,45 @@ pub fn upload(
             .map_err(|err| TransferError::Failed(format!("结束上传失败：{err}")))?;
 
         let mut stderr = Vec::new();
-        let mut exit_code: u32 = 0;
-        while let Some(msg) = channel.wait().await {
+        let mut exit_code = None;
+        let mut exit_signal = None;
+        let mut last_activity = Instant::now();
+        loop {
+            if is_canceled() {
+                let _ = channel.close().await;
+                return Err(TransferError::Canceled);
+            }
+            if last_activity.elapsed() >= TRANSFER_IDLE_TIMEOUT {
+                let _ = channel.close().await;
+                return Err(TransferError::Failed(format!(
+                    "上传完成后超过 {} 秒没有收到远程确认",
+                    TRANSFER_IDLE_TIMEOUT.as_secs()
+                )));
+            }
+            let msg = match tokio::time::timeout(TRANSFER_POLL_INTERVAL, channel.wait()).await {
+                Ok(Some(msg)) => msg,
+                Ok(None) => break,
+                Err(_) => continue,
+            };
+            last_activity = Instant::now();
             match msg {
                 ChannelMsg::ExtendedData { ref data, .. } => stderr.extend_from_slice(data),
-                ChannelMsg::ExitStatus { exit_status } => exit_code = exit_status,
+                ChannelMsg::ExitStatus { exit_status } => exit_code = Some(exit_status),
+                ChannelMsg::ExitSignal {
+                    signal_name,
+                    error_message,
+                    ..
+                } => {
+                    exit_signal = Some(format!("{signal_name:?}"));
+                    if !error_message.is_empty() {
+                        stderr.extend_from_slice(error_message.as_bytes());
+                    }
+                }
                 _ => {}
             }
         }
-        if exit_code != 0 {
-            let message = String::from_utf8_lossy(&stderr).trim().to_string();
-            return Err(TransferError::Failed(if message.is_empty() {
-                format!("上传失败，退出码 {exit_code}")
-            } else {
-                message
-            }));
-        }
+        ensure_successful_exit("上传", exit_code, exit_signal, &stderr)
+            .map_err(TransferError::Failed)?;
         Ok(())
     })
 }
@@ -353,15 +506,7 @@ pub fn run_terminal(
     rt.block_on(async move {
         let (_handle, mut channel) = session_channel(server, secret).await?;
         channel
-            .request_pty(
-                false,
-                "xterm-256color",
-                cols as u32,
-                rows as u32,
-                0,
-                0,
-                &[],
-            )
+            .request_pty(false, "xterm-256color", cols as u32, rows as u32, 0, 0, &[])
             .await
             .map_err(|err| format!("无法申请 PTY：{err}"))?;
         channel
@@ -409,4 +554,30 @@ pub fn run_terminal(
             }
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::{ensure_successful_exit, expand_key_path};
+
+    #[test]
+    fn missing_exit_status_is_an_error() {
+        let error = ensure_successful_exit("下载", None, None, &[]).unwrap_err();
+        assert!(error.contains("未返回退出状态"));
+    }
+
+    #[test]
+    fn non_zero_exit_prefers_stderr() {
+        let error =
+            ensure_successful_exit("命令", Some(1), None, b"permission denied").unwrap_err();
+        assert_eq!(error, "permission denied");
+    }
+
+    #[test]
+    fn absolute_key_path_is_unchanged() {
+        let path = expand_key_path("/tmp/id_ed25519").unwrap();
+        assert_eq!(path, PathBuf::from("/tmp/id_ed25519"));
+    }
 }

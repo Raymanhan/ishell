@@ -91,6 +91,7 @@ export function TabBar({
     token: number;
     windowRef: WebviewWindow | null;
     timer: number | null;
+    moving: boolean;
   } | null>(null);
   const nativeGhostTokenRef = useRef(0);
   const tabDragCleanupRef = useRef<(() => void) | null>(null);
@@ -235,7 +236,7 @@ export function TabBar({
   function startNativeDragGhost(preview: TabDragPreview) {
     if (!canUseNativeGhost() || nativeGhostRef.current) return;
     const token = ++nativeGhostTokenRef.current;
-    nativeGhostRef.current = { token, windowRef: null, timer: null };
+    nativeGhostRef.current = { token, windowRef: null, timer: null, moving: false };
 
     void (async () => {
       const [{ WebviewWindow }, { PhysicalPosition }, { cursorPosition }] = await Promise.all([
@@ -288,17 +289,24 @@ export function TabBar({
         void windowRef.setIgnoreCursorEvents(true);
         void windowRef.setShadow(false).catch(() => undefined);
       });
+      const intervalMs = document.documentElement.dataset.platform === "windows" ? 33 : 16;
       nativeGhostRef.current.timer = window.setInterval(async () => {
-        if (nativeGhostRef.current?.token !== token) return;
-        const nextCursor = await cursorPosition().catch(() => null);
-        if (!nextCursor) return;
-        await windowRef
-          .setPosition(new PhysicalPosition(
-            Math.round(nextCursor.x - preview.offsetX),
-            Math.round(nextCursor.y - preview.offsetY - 6),
-          ))
-          .catch(() => undefined);
-      }, 16);
+        const ghost = nativeGhostRef.current;
+        if (!ghost || ghost.token !== token || ghost.moving) return;
+        ghost.moving = true;
+        try {
+          const nextCursor = await cursorPosition().catch(() => null);
+          if (!nextCursor || nativeGhostRef.current?.token !== token) return;
+          await windowRef
+            .setPosition(new PhysicalPosition(
+              Math.round(nextCursor.x - preview.offsetX),
+              Math.round(nextCursor.y - preview.offsetY - 6),
+            ))
+            .catch(() => undefined);
+        } finally {
+          if (nativeGhostRef.current?.token === token) nativeGhostRef.current.moving = false;
+        }
+      }, intervalMs);
     })().catch(() => stopNativeDragGhost());
   }
 

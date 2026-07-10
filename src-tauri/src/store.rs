@@ -130,7 +130,10 @@ pub fn delete_server(app: &AppHandle, id: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub fn reorder_servers(app: &AppHandle, items: &[crate::models::ServerOrderInput]) -> Result<(), String> {
+pub fn reorder_servers(
+    app: &AppHandle,
+    items: &[crate::models::ServerOrderInput],
+) -> Result<(), String> {
     let mut conn = open_db(app)?;
     let tx = conn.transaction().map_err(db_err)?;
     let stamp = now() as i64;
@@ -394,7 +397,7 @@ fn master_key(app: &AppHandle) -> Result<[u8; 32], String> {
 
     let mut key = [0u8; 32];
     getrandom::getrandom(&mut key).map_err(|err| format!("无法生成本地主密钥：{err}"))?;
-    fs::write(&path, &key).map_err(|err| format!("无法写入本地主密钥：{err}"))?;
+    fs::write(&path, key).map_err(|err| format!("无法写入本地主密钥：{err}"))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

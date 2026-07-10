@@ -46,6 +46,54 @@ pub(crate) enum TerminalControl {
     Close,
 }
 
+#[derive(Default)]
+struct Utf8StreamDecoder {
+    pending: Vec<u8>,
+}
+
+impl Utf8StreamDecoder {
+    fn push(&mut self, bytes: &[u8]) -> String {
+        self.pending.extend_from_slice(bytes);
+        let mut output = String::new();
+
+        loop {
+            match std::str::from_utf8(&self.pending) {
+                Ok(text) => {
+                    output.push_str(text);
+                    self.pending.clear();
+                    break;
+                }
+                Err(error) => {
+                    let valid_up_to = error.valid_up_to();
+                    if valid_up_to > 0 {
+                        let valid = std::str::from_utf8(&self.pending[..valid_up_to])
+                            .expect("validated UTF-8 prefix");
+                        output.push_str(valid);
+                        self.pending.drain(..valid_up_to);
+                    }
+
+                    match error.error_len() {
+                        Some(length) => {
+                            output.push('\u{fffd}');
+                            self.pending.drain(..length);
+                        }
+                        None => break,
+                    }
+                }
+            }
+        }
+
+        output
+    }
+
+    #[cfg(any(not(russh_backend), test))]
+    fn finish(&mut self) -> String {
+        let output = String::from_utf8_lossy(&self.pending).to_string();
+        self.pending.clear();
+        output
+    }
+}
+
 #[cfg(not(russh_backend))]
 const CONNECTED_MARKER: &str = "[iShell] connected";
 
@@ -250,8 +298,11 @@ fn emit_terminal_data(
         let buffer = buffers.entry(session_id.to_string()).or_default();
         buffer.push_str(&data);
         const MAX_BUFFER_BYTES: usize = 256 * 1024;
+        const TARGET_BUFFER_BYTES: usize = 192 * 1024;
         if buffer.len() > MAX_BUFFER_BYTES {
-            let keep_from = buffer.len() - MAX_BUFFER_BYTES;
+            // Trim in larger batches instead of shifting a nearly 256 KiB String
+            // on every small terminal chunk after the buffer reaches its cap.
+            let keep_from = buffer.len() - TARGET_BUFFER_BYTES;
             let trim_from = buffer
                 .char_indices()
                 .find(|(index, _)| *index >= keep_from)
@@ -401,7 +452,7 @@ fn looks_like_shell_ready(output_tail: &str) -> bool {
 #[cfg(not(russh_backend))]
 fn build_ssh_command(
     server: &ServerRecord,
-    saved_password: Option<&str>,
+    saved_secret: Option<&str>,
     askpass_path: Option<&Path>,
 ) -> CommandBuilder {
     let mut command = CommandBuilder::new(openssh::ssh_binary());
@@ -415,23 +466,16 @@ fn build_ssh_command(
     command.arg("-o");
     command.arg("LocalCommand=printf '\\r\\n[iShell] connected via OpenSSH\\r\\n'");
 
-    if let (Some(password), Some(path)) = (saved_password, askpass_path) {
+    if let (Some(secret), Some(path)) = (saved_secret, askpass_path) {
         command.env("SSH_ASKPASS", path);
         command.env("SSH_ASKPASS_REQUIRE", "force");
-        command.env("ISHELL_SSH_PASSWORD", password);
+        command.env("ISHELL_SSH_PASSWORD", secret);
         if command.get_env("DISPLAY").is_none() {
             command.env("DISPLAY", "ishell:0");
         }
-        command.arg("-o");
-        command.arg("PubkeyAuthentication=no");
-        command.arg("-o");
-        command.arg("PasswordAuthentication=yes");
-        command.arg("-o");
-        command.arg("KbdInteractiveAuthentication=yes");
-    } else {
-        for arg in openssh::auth_ssh_args(server, false) {
-            command.arg(arg);
-        }
+    }
+    for arg in openssh::auth_ssh_args(server, saved_secret.is_some()) {
+        command.arg(arg);
     }
 
     command.arg(&server.host);
@@ -447,14 +491,10 @@ fn run_terminal_thread(
     receiver: mpsc::Receiver<TerminalControl>,
 ) -> Result<(), String> {
     let server = get_server(&app, &server_id)?;
-    let saved_password = if server.auth_type == "password" {
-        read_secret(&app, &server_id)
-            .ok()
-            .filter(|password| !password.is_empty())
-    } else {
-        None
-    };
-    let askpass_path = if saved_password.is_some() {
+    let saved_secret = read_secret(&app, &server_id)
+        .ok()
+        .filter(|secret| !secret.is_empty());
+    let askpass_path = if saved_secret.is_some() {
         Some(create_askpass_helper(&session_id)?)
     } else {
         None
@@ -469,7 +509,7 @@ fn run_terminal_thread(
         })
         .map_err(|err| format!("无法创建本地 PTY：{err}"))?;
 
-    let command = build_ssh_command(&server, saved_password.as_deref(), askpass_path.as_deref());
+    let command = build_ssh_command(&server, saved_secret.as_deref(), askpass_path.as_deref());
     let mut child = match pair.slave.spawn_command(command) {
         Ok(child) => child,
         Err(err) => {
@@ -494,9 +534,10 @@ fn run_terminal_thread(
     let read_registry = registry.clone();
     let read_session_id = session_id.clone();
     let read_server_id = server_id.clone();
-    let should_autofill_password = saved_password.is_some();
+    let should_autofill_password = saved_secret.is_some();
     thread::spawn(move || {
         let mut buffer = [0_u8; 8192];
+        let mut decoder = Utf8StreamDecoder::default();
         let mut output_tail = String::new();
         let mut connection_tail = String::new();
         let mut password_prompt_seen = false;
@@ -504,11 +545,18 @@ fn run_terminal_thread(
         loop {
             match reader.read(&mut buffer) {
                 Ok(0) => {
+                    let tail = decoder.finish();
+                    if !tail.is_empty() {
+                        emit_terminal_data(&read_app, &read_registry, &read_session_id, tail);
+                    }
                     let _ = read_done_sender.send("远程终端已关闭".to_string());
                     break;
                 }
                 Ok(size) => {
-                    let data = String::from_utf8_lossy(&buffer[..size]).to_string();
+                    let data = decoder.push(&buffer[..size]);
+                    if data.is_empty() {
+                        continue;
+                    }
                     if !connected_seen {
                         connection_tail.push_str(&data);
                         keep_recent_tail(&mut connection_tail, 1024);
@@ -528,7 +576,10 @@ fn run_terminal_thread(
                             );
                         }
                     }
-                    if should_autofill_password && !password_prompt_seen {
+                    // Only answer authentication prompts while the SSH session is
+                    // still connecting. Never inject a saved account password or
+                    // key passphrase into later remote prompts such as sudo.
+                    if should_autofill_password && !password_prompt_seen && !connected_seen {
                         output_tail.push_str(&data);
                         keep_recent_tail(&mut output_tail, 1024);
                         if looks_like_password_prompt(&output_tail) {
@@ -556,8 +607,8 @@ fn run_terminal_thread(
 
     loop {
         if password_prompt_receiver.try_recv().is_ok() {
-            if let Some(password) = saved_password.as_deref() {
-                if let Err(err) = writer.write_all(password.as_bytes()) {
+            if let Some(secret) = saved_secret.as_deref() {
+                if let Err(err) = writer.write_all(secret.as_bytes()) {
                     cleanup_askpass_helper(askpass_path.as_ref());
                     return Err(format!("终端写入失败：{err}"));
                 }
@@ -623,13 +674,11 @@ fn run_terminal_thread(
     receiver: mpsc::Receiver<TerminalControl>,
 ) -> Result<(), String> {
     let server = get_server(&app, &server_id)?;
-    let secret = if server.auth_type == "password" {
-        read_secret(&app, &server_id)
-            .ok()
-            .filter(|password| !password.is_empty())
-    } else {
-        None
-    };
+    // For password authentication this is the account password; for key
+    // authentication it is the optional private-key passphrase.
+    let secret = read_secret(&app, &server_id)
+        .ok()
+        .filter(|password| !password.is_empty());
 
     emit_terminal_data(
         &app,
@@ -656,9 +705,12 @@ fn run_terminal_thread(
     let data_app = app.clone();
     let data_registry = registry.clone();
     let data_session_id = session_id.clone();
+    let mut decoder = Utf8StreamDecoder::default();
     let on_data = move |data: &[u8]| {
-        let text = String::from_utf8_lossy(data).to_string();
-        emit_terminal_data(&data_app, &data_registry, &data_session_id, text);
+        let text = decoder.push(data);
+        if !text.is_empty() {
+            emit_terminal_data(&data_app, &data_registry, &data_session_id, text);
+        }
     };
 
     crate::russh_transport::run_terminal(
@@ -670,4 +722,26 @@ fn run_terminal_thread(
         on_ready,
         on_data,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Utf8StreamDecoder;
+
+    #[test]
+    fn decodes_multibyte_text_split_across_chunks() {
+        let mut decoder = Utf8StreamDecoder::default();
+        let bytes = "中文".as_bytes();
+
+        assert_eq!(decoder.push(&bytes[..2]), "");
+        assert_eq!(decoder.push(&bytes[2..4]), "中");
+        assert_eq!(decoder.push(&bytes[4..]), "文");
+        assert_eq!(decoder.finish(), "");
+    }
+
+    #[test]
+    fn replaces_invalid_utf8_without_losing_following_text() {
+        let mut decoder = Utf8StreamDecoder::default();
+        assert_eq!(decoder.push(&[0xff, b'o', b'k']), "\u{fffd}ok");
+    }
 }

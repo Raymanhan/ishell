@@ -28,9 +28,9 @@ pub fn control_path(server_id: &str) -> PathBuf {
 /// and every other command for the host (matches OpenSSH's default reuse
 /// behaviour). `multiplex = false` explicitly disables it (`ControlMaster=no`,
 /// `ControlPath=none`, overriding any user `~/.ssh/config` default) so the
-/// invocation gets its own dedicated TCP connection — used for bulk transfers
-/// (downloads) so they don't crowd out the terminal's interactive traffic on
-/// a shared socket.
+/// invocation gets its own dedicated TCP connection — used for bulk uploads
+/// and downloads so they don't crowd out the terminal's interactive traffic
+/// on a shared socket.
 #[cfg(not(russh_backend))]
 pub fn common_ssh_args(server: &ServerRecord, multiplex: bool) -> Vec<String> {
     let mut args = if multiplex {
@@ -58,6 +58,10 @@ pub fn common_ssh_args(server: &ServerRecord, multiplex: bool) -> Vec<String> {
         "ServerAliveCountMax=3".into(),
         "-o".into(),
         "TCPKeepAlive=yes".into(),
+        "-o".into(),
+        "ConnectTimeout=15".into(),
+        "-o".into(),
+        "ConnectionAttempts=1".into(),
         "-o".into(),
         "StrictHostKeyChecking=accept-new".into(),
         "-o".into(),

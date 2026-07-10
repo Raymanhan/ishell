@@ -1,9 +1,3 @@
-use std::{
-    collections::HashSet,
-    fs,
-    io::{Cursor, Read, Write},
-    sync::{Arc, Mutex},
-};
 use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm, Key, Nonce,
@@ -11,25 +5,31 @@ use aes_gcm::{
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use pbkdf2::pbkdf2_hmac;
 use sha2::Sha256;
+use std::{
+    collections::HashSet,
+    fs,
+    io::{Cursor, Read, Write},
+    sync::{Arc, Mutex},
+};
 use tauri::{AppHandle, State};
 use uuid::Uuid;
 
 use crate::{
     models::{
         ConnectionExport, ConnectionExportServer, ConnectionImport, ConnectionImportServer,
-        EncryptedExportSecret, NetworkSample, ServerInput, ServerOrderInput, ServerRecord, ServerStatus,
-        SftpEntry, TerminalSnapshotPayload,
+        EncryptedExportSecret, NetworkSample, ServerInput, ServerOrderInput, ServerRecord,
+        ServerStatus, SftpEntry, TerminalSnapshotPayload,
     },
     pool::SshPool,
     ssh::{
-        download_file, download_folder, fetch_network_sample as fetch_network, fetch_status, list_sftp,
-        make_directory, read_text_file, remove_entry, rename_entry, test_connection, upload_file,
-        write_text_file,
+        download_file, download_folder, fetch_network_sample as fetch_network, fetch_status,
+        list_sftp, make_directory, read_text_file, remove_entry, rename_entry, test_connection,
+        upload_file, write_text_file,
     },
     store::{
         append_command_history, delete_server as remove_server, get_server,
-        list_command_history as load_command_history, list_servers as load_servers, normalize_tags, read_secret,
-        reorder_servers as save_server_order, upsert_server, validate_server,
+        list_command_history as load_command_history, list_servers as load_servers, normalize_tags,
+        read_secret, reorder_servers as save_server_order, upsert_server, validate_server,
     },
     terminal::{self, TerminalRegistry},
     time::now,
@@ -99,7 +99,9 @@ async fn run_blocking<T: Send + 'static>(
 }
 
 fn is_zip_bytes(bytes: &[u8]) -> bool {
-    bytes.starts_with(b"PK\x03\x04") || bytes.starts_with(b"PK\x05\x06") || bytes.starts_with(b"PK\x07\x08")
+    bytes.starts_with(b"PK\x03\x04")
+        || bytes.starts_with(b"PK\x05\x06")
+        || bytes.starts_with(b"PK\x07\x08")
 }
 
 fn read_connection_export_from_zip(bytes: &[u8]) -> Result<ConnectionExport, String> {
@@ -169,7 +171,10 @@ fn server_record_to_input(server: ServerRecord) -> ServerInput {
     }
 }
 
-fn encrypt_export_secret(passphrase: &str, plaintext: &str) -> Result<EncryptedExportSecret, String> {
+fn encrypt_export_secret(
+    passphrase: &str,
+    plaintext: &str,
+) -> Result<EncryptedExportSecret, String> {
     let mut salt = [0u8; 16];
     let mut nonce_bytes = [0u8; 12];
     getrandom::getrandom(&mut salt).map_err(|err| format!("无法生成导出 salt：{err}"))?;
@@ -188,7 +193,10 @@ fn encrypt_export_secret(passphrase: &str, plaintext: &str) -> Result<EncryptedE
     })
 }
 
-fn decrypt_export_secret(passphrase: &str, encrypted: &EncryptedExportSecret) -> Result<String, String> {
+fn decrypt_export_secret(
+    passphrase: &str,
+    encrypted: &EncryptedExportSecret,
+) -> Result<String, String> {
     if encrypted.kdf != "PBKDF2-HMAC-SHA256" || encrypted.iterations != EXPORT_SECRET_ITERATIONS {
         return Err("不支持的导出密码加密格式".to_string());
     }
@@ -231,6 +239,7 @@ pub fn list_servers(app: AppHandle) -> Result<Vec<ServerRecord>, String> {
 #[tauri::command]
 pub fn save_server(
     app: AppHandle,
+    pool: State<'_, Arc<SshPool>>,
     input: ServerInput,
     password: Option<String>,
 ) -> Result<ServerRecord, String> {
@@ -270,6 +279,7 @@ pub fn save_server(
 
     let secret = password.as_deref().filter(|value| !value.is_empty());
     upsert_server(&app, &record, secret)?;
+    pool.invalidate(&record.id);
 
     Ok(record)
 }
@@ -304,7 +314,8 @@ pub fn export_connections(
                 if let Some(passphrase) = passphrase.as_deref() {
                     if let Ok(secret) = read_secret(&app, &item.server.id) {
                         if !secret.is_empty() {
-                            item.encrypted_secret = Some(encrypt_export_secret(passphrase, &secret)?);
+                            item.encrypted_secret =
+                                Some(encrypt_export_secret(passphrase, &secret)?);
                         }
                     }
                 }
@@ -312,7 +323,8 @@ pub fn export_connections(
             })
             .collect::<Result<Vec<_>, String>>()?,
     };
-    let json = serde_json::to_vec_pretty(&export).map_err(|err| format!("无法序列化连接：{err}"))?;
+    let json =
+        serde_json::to_vec_pretty(&export).map_err(|err| format!("无法序列化连接：{err}"))?;
     if !as_zip {
         fs::write(&path, json).map_err(|err| format!("无法写入导出文件：{err}"))?;
         return Ok(());
@@ -336,7 +348,10 @@ pub fn export_connections(
 }
 
 #[tauri::command]
-pub fn import_connections(path: String, passphrase: Option<String>) -> Result<ConnectionImport, String> {
+pub fn import_connections(
+    path: String,
+    passphrase: Option<String>,
+) -> Result<ConnectionImport, String> {
     let bytes = fs::read(&path).map_err(|err| format!("无法读取导入文件：{err}"))?;
     let export = if is_zip_bytes(&bytes) {
         read_connection_export_from_zip(&bytes)?

@@ -407,6 +407,8 @@ function TerminalPaneBase({
         return false;
       }
 
+      // Product shortcut on Windows is intentionally Win+C / Win+V. Keep
+      // Ctrl+C available for sending SIGINT to the remote shell.
       if (!isWindowsPlatform || event.type !== "keydown" || !event.metaKey || event.ctrlKey || event.altKey) {
         return true;
       }
