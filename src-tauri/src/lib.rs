@@ -11,6 +11,7 @@ mod time;
 
 use pool::SshPool;
 use std::sync::Arc;
+#[cfg(target_os = "macos")]
 use tauri::Manager;
 use terminal::TerminalRegistry;
 
@@ -62,5 +63,8 @@ pub fn run() {
                     let _ = window.set_focus();
                 }
             }
+
+            #[cfg(not(target_os = "macos"))]
+            let _ = (app, event);
         });
 }

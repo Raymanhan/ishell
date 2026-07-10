@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.1.13](https://github.com/Raymanhan/ishell/releases/tag/v1.1.13)**
+**[Download iShell v1.1.14](https://github.com/Raymanhan/ishell/releases/tag/v1.1.14)**
 
 Available packages:
 
@@ -204,8 +204,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.1.13
-git push origin v1.1.13
+git tag v1.1.14
+git push origin v1.1.14
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -239,6 +239,7 @@ src-tauri/src/
 
 ## Recent Changes
 
+- `v1.1.14` fixes Linux CI linting for the macOS-only window reopen handler.
 - `v1.1.13` strengthens SSH/SFTP reliability with connection timeouts, host-key
   persistence, isolated uploads, transfer safeguards, and CI Rust lint/test
   coverage.
