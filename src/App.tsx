@@ -80,6 +80,7 @@ const CONNECTION_FOLDERS_KEY = "ishell.connectionFolders";
 const MAX_EDITABLE_TEXT_BYTES = 1024 * 1024;
 const FILES_PANEL_RATIO = 0.4;
 const STATUS_PANEL_WIDTH = 300;
+const FOLDER_UPLOAD_CONFLICT_MARKER = "__ISHELL_UPLOAD_FOLDER_CONFLICT__";
 interface DeleteConfirmState {
   entries: SftpEntry[];
   columnIndex: number;
@@ -106,6 +107,23 @@ interface FileEditorState {
   saving: boolean;
   error?: string;
 }
+
+interface UploadTargetContext {
+  tabId: string;
+  serverId: string;
+  remoteDir: string;
+}
+
+interface FolderUploadReplaceConfirmState {
+  item: UploadItem;
+}
+
+interface PendingFolderUploadReplaceConfirmation {
+  item: UploadItem;
+  resolve: (replace: boolean) => void;
+}
+
+type UploadPickerKind = "files" | "folder";
 
 interface ConnectionImportPayload {
   folders: string[];
@@ -211,6 +229,8 @@ export default function App() {
   const [dragOver, setDragOver] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null);
   const [connectionDeleteConfirm, setConnectionDeleteConfirm] = useState<ConnectionDeleteConfirmState | null>(null);
+  const [folderUploadReplaceConfirm, setFolderUploadReplaceConfirm] =
+    useState<FolderUploadReplaceConfirmState | null>(null);
   const [fileEditor, setFileEditor] = useState<FileEditorState | null>(null);
   const workbenchBodyRef = useRef<HTMLDivElement>(null);
   const terminalDockRef = useRef<HTMLDivElement>(null);
@@ -223,9 +243,13 @@ export default function App() {
   // Latest values for the once-registered native drag-drop listener.
   const dropEnabledRef = useRef(false);
   const enqueueUploadsRef = useRef<(paths: string[], remoteDir?: string) => void>(() => {});
+  const uploadPickerOpenRef = useRef(false);
+  const pendingFolderUploadReplaceRef = useRef<PendingFolderUploadReplaceConfirmation | null>(null);
   const uploadChainRef = useRef<Promise<void>>(Promise.resolve());
   const downloadChainRef = useRef<Promise<void>>(Promise.resolve());
-  const uploadsRef = useRef<UploadItem[]>([]);
+  const scheduledUploadIdsRef = useRef<Set<string>>(new Set());
+  const canceledUploadIdsRef = useRef<Set<string>>(new Set());
+  const inFlightUploadIdsRef = useRef<Set<string>>(new Set());
   const downloadsRef = useRef<DownloadItem[]>([]);
   const [sftpBusy, setSftpBusy] = useState(false);
   const sftpBusyCount = useRef(0);
@@ -236,6 +260,7 @@ export default function App() {
   const statusRefreshInFlightRef = useRef<Set<string>>(new Set());
   const networkRefreshInFlightRef = useRef<Set<string>>(new Set());
   const tabsRef = useRef<ShellTab[]>([]);
+  const activeTabIdRef = useRef<string | null>(null);
   const nativeCloseInFlightRef = useRef(false);
   const terminalReadyTabs = useRef<Set<string>>(new Set());
 
@@ -259,10 +284,10 @@ export default function App() {
   // Keep the native drag-drop listener (registered once) reading fresh state.
   dropEnabledRef.current = filesOpen && Boolean(activeTab);
   enqueueUploadsRef.current = enqueueUploads;
-  uploadsRef.current = uploads;
   downloadsRef.current = downloads;
   statusOpenRef.current = statusOpen;
   tabsRef.current = tabs;
+  activeTabIdRef.current = activeTabId;
 
   useLayoutEffect(() => {
     const highlight = fileEditorHighlightRef.current;
@@ -366,6 +391,9 @@ export default function App() {
       statusDragCleanupRef.current?.();
       if (sftpBusyTimer.current !== null) window.clearTimeout(sftpBusyTimer.current);
       if (noticeTimer.current !== null) window.clearTimeout(noticeTimer.current);
+      const pendingConfirmation = pendingFolderUploadReplaceRef.current;
+      pendingFolderUploadReplaceRef.current = null;
+      pendingConfirmation?.resolve(false);
     };
   }, []);
 
@@ -424,8 +452,8 @@ export default function App() {
     };
   }, []);
 
-  // Native OS file drop onto the docked file panel → enqueue uploads. Tauri
-  // delivers the absolute local paths, which we hand straight to sftp_upload.
+  // Native OS file/folder drop onto the docked file panel → enqueue uploads.
+  // Tauri delivers absolute local paths; the backend identifies each path type.
   useEffect(() => {
     if (!isTauri) return;
     let unlisten: (() => void) | undefined;
@@ -1316,6 +1344,10 @@ export default function App() {
   async function closeShells(tabIds: string[]) {
     const ids = new Set(tabIds);
     if (ids.size === 0) return;
+    const pendingFolderReplace = pendingFolderUploadReplaceRef.current;
+    if (pendingFolderReplace && ids.has(pendingFolderReplace.item.tabId)) {
+      resolveFolderUploadReplacement(false);
+    }
     const closingTabs = tabsRef.current.filter((tab) => ids.has(tab.id));
     if (isTauri) {
       await Promise.all(
@@ -1343,6 +1375,7 @@ export default function App() {
     if (nativeCloseInFlightRef.current) return;
     nativeCloseInFlightRef.current = true;
     try {
+      if (pendingFolderUploadReplaceRef.current) resolveFolderUploadReplacement(false);
       const tabIds = tabsRef.current.map((tab) => tab.id);
       if (tabIds.length > 0) await closeShells(tabIds);
       setFilesOpen(false);
@@ -1608,38 +1641,106 @@ export default function App() {
     );
   }
 
-  async function uploadFile(targetDir = currentDir()) {
-    if (!activeTab) return;
+  function uploadFile(targetDir?: string) {
+    return pickUploadPaths("files", targetDir);
+  }
+
+  function uploadFolder(targetDir?: string) {
+    return pickUploadPaths("folder", targetDir);
+  }
+
+  async function pickUploadPaths(kind: UploadPickerKind, targetDir?: string) {
+    const sourceLabel = kind === "folder" ? "文件夹" : "文件";
     if (!isTauri) {
-      showNotice(`演示模式不支持真实上传：${targetDir}`);
+      showNotice(`演示模式不支持上传${sourceLabel}：${targetDir ?? currentDir()}`);
       return;
     }
+
+    if (uploadPickerOpenRef.current) {
+      showNotice("上传选择器已打开，请先完成或关闭当前选择窗口");
+      return;
+    }
+
+    const openingTabId = activeTabIdRef.current;
+    const openingTab = tabsRef.current.find((tab) => tab.id === openingTabId);
+    if (!openingTab) {
+      showNotice("当前上传连接已失效，请重新打开文件面板后再试");
+      return;
+    }
+    const pickerContext: UploadTargetContext = {
+      tabId: openingTab.id,
+      serverId: openingTab.serverId,
+      remoteDir: targetDir ?? currentDirForTab(openingTab),
+    };
+
+    uploadPickerOpenRef.current = true;
     try {
-      const picked = await open({ multiple: true, directory: false, title: "选择要上传的文件" });
+      const picked = await open({
+        multiple: kind === "files",
+        directory: kind === "folder",
+        title: kind === "folder" ? "选择要上传的文件夹" : "选择要上传的文件",
+      });
       const paths = Array.isArray(picked) ? picked : typeof picked === "string" ? [picked] : [];
-      if (paths.length) enqueueUploads(paths, targetDir);
+      if (!paths.length) return;
+
+      const latestActiveTabId = activeTabIdRef.current;
+      const latestTab = tabsRef.current.find((tab) => tab.id === latestActiveTabId);
+      if (!latestTab || latestTab.id !== pickerContext.tabId) {
+        showNotice(`选择${sourceLabel}期间活动连接已切换或关闭，请重新选择上传${sourceLabel}`);
+        return;
+      }
+      if (latestTab.serverId !== pickerContext.serverId) {
+        showNotice("原上传连接已失效，请重新打开文件面板后再试");
+        return;
+      }
+      const remoteDir = resolveKnownUploadDirectory(latestTab, pickerContext.remoteDir);
+      if (!remoteDir) {
+        showNotice("原上传目录已失效，请刷新文件列表后重新选择上传位置");
+        return;
+      }
+
+      enqueueUploadsForTarget(paths, {
+        tabId: latestTab.id,
+        serverId: latestTab.serverId,
+        remoteDir,
+      });
     } catch (error) {
       showNotice(String(error));
+    } finally {
+      uploadPickerOpenRef.current = false;
     }
   }
 
-  // Queue one or more local files for upload to the requested remote directory,
-  // processed one at a time so they share the single pooled SFTP channel.
-  function enqueueUploads(localPaths: string[], remoteDir = currentDir()) {
-    if (!activeTab || !isTauri) return;
-    const tabId = activeTab.id;
-    const serverId = activeTab.serverId;
+  // Queue one or more local files or folders for the requested remote directory,
+  // processed one at a time so bulk transfers do not compete with each other.
+  function enqueueUploads(localPaths: string[], remoteDir?: string) {
+    if (!isTauri) return;
+    const latestActiveTabId = activeTabIdRef.current;
+    const latestTab = tabsRef.current.find((tab) => tab.id === latestActiveTabId);
+    if (!latestTab) {
+      showNotice("当前上传连接已失效，请重新打开文件面板后再试");
+      return;
+    }
+    enqueueUploadsForTarget(localPaths, {
+      tabId: latestTab.id,
+      serverId: latestTab.serverId,
+      remoteDir: remoteDir ?? currentDirForTab(latestTab),
+    });
+  }
+
+  function enqueueUploadsForTarget(localPaths: string[], target: UploadTargetContext) {
     const items: UploadItem[] = localPaths.map((localPath) => ({
       id: crypto.randomUUID(),
-      tabId,
+      tabId: target.tabId,
       name: basename(localPath),
       localPath,
-      remoteDir,
-      serverId,
+      remoteDir: target.remoteDir,
+      serverId: target.serverId,
       transferred: 0,
       total: 0,
       status: "pending",
     }));
+    items.forEach((item) => scheduledUploadIdsRef.current.add(item.id));
     setUploads((current) => [...current, ...items]);
 
     uploadChainRef.current = uploadChainRef.current.then(async () => {
@@ -1649,27 +1750,34 @@ export default function App() {
     });
   }
 
-  async function runUpload(item: UploadItem) {
-    let skip = false;
+  async function runUpload(item: UploadItem, replaceExistingFolder = false) {
+    if (canceledUploadIdsRef.current.has(item.id)) {
+      scheduledUploadIdsRef.current.delete(item.id);
+      canceledUploadIdsRef.current.delete(item.id);
+      return;
+    }
     setUploads((current) =>
-      current.map((upload) => {
-        if (upload.id !== item.id) return upload;
-        if (upload.status === "canceled") {
-          skip = true;
-          return upload;
-        }
-        return { ...upload, status: "uploading" };
-      }),
+      current.map((upload) =>
+        upload.id === item.id
+          ? { ...upload, status: "uploading", transferred: 0, error: undefined }
+          : upload,
+      ),
     );
-    if (skip || uploadsRef.current.find((upload) => upload.id === item.id)?.status === "canceled") return;
     beginSftpBusy();
+    inFlightUploadIdsRef.current.add(item.id);
     try {
+      if (canceledUploadIdsRef.current.has(item.id)) return;
       await command<string>("sftp_upload", {
         id: item.serverId,
         localPath: item.localPath,
         remoteDir: item.remoteDir,
         transferId: item.id,
+        replaceExistingFolder,
       });
+      inFlightUploadIdsRef.current.delete(item.id);
+      // A successful command result is authoritative: cancellation may have
+      // raced with the remote commit after it was already too late to stop.
+      canceledUploadIdsRef.current.delete(item.id);
       setUploads((current) =>
         current.map((upload) =>
           upload.id === item.id
@@ -1679,11 +1787,48 @@ export default function App() {
       );
       refreshVisibleFiles(item.tabId, item.serverId, item.remoteDir);
     } catch (error) {
+      inFlightUploadIdsRef.current.delete(item.id);
       const message = String(error);
       if (message.includes("上传已停止")) {
         setUploads((current) =>
           current.map((upload) =>
             upload.id === item.id ? { ...upload, status: "canceled", error: undefined } : upload,
+          ),
+        );
+        return;
+      }
+      if (!replaceExistingFolder && isFolderUploadConflict(message)) {
+        if (canceledUploadIdsRef.current.has(item.id)) {
+          setUploads((current) =>
+            current.map((upload) =>
+              upload.id === item.id ? { ...upload, status: "canceled", error: undefined } : upload,
+            ),
+          );
+          return;
+        }
+        setUploads((current) =>
+          current.map((upload) =>
+            upload.id === item.id
+              ? { ...upload, status: "pending", transferred: 0, error: undefined }
+              : upload,
+          ),
+        );
+        const replace = await requestFolderUploadReplacement(item);
+        if (canceledUploadIdsRef.current.has(item.id)) return;
+        // Keep this attempt's finally block pending until the replacement
+        // attempt finishes, otherwise it would clear the shared in-flight
+        // cancellation guards while the retry is still running.
+        if (replace) return await runUpload(item, true);
+        setUploads((current) =>
+          current.map((upload) =>
+            upload.id === item.id
+              ? {
+                  ...upload,
+                  status: "canceled",
+                  transferred: 0,
+                  error: "已取消完整替换，远端文件夹未更改",
+                }
+              : upload,
           ),
         );
         return;
@@ -1695,12 +1840,36 @@ export default function App() {
       );
       showNotice(message);
     } finally {
+      inFlightUploadIdsRef.current.delete(item.id);
+      scheduledUploadIdsRef.current.delete(item.id);
+      canceledUploadIdsRef.current.delete(item.id);
       endSftpBusy();
     }
   }
 
+  function requestFolderUploadReplacement(item: UploadItem) {
+    if (pendingFolderUploadReplaceRef.current) return Promise.resolve(false);
+    return new Promise<boolean>((resolve) => {
+      pendingFolderUploadReplaceRef.current = { item, resolve };
+      setFolderUploadReplaceConfirm({ item });
+    });
+  }
+
+  function resolveFolderUploadReplacement(replace: boolean, expectedItemId?: string) {
+    const pendingConfirmation = pendingFolderUploadReplaceRef.current;
+    if (!pendingConfirmation || (expectedItemId && pendingConfirmation.item.id !== expectedItemId)) return;
+    pendingFolderUploadReplaceRef.current = null;
+    setFolderUploadReplaceConfirm(null);
+    pendingConfirmation.resolve(replace);
+  }
+
   async function stopUpload(id: string) {
-    const target = uploadsRef.current.find((item) => item.id === id);
+    const isScheduled = scheduledUploadIdsRef.current.has(id);
+    const isInFlight = inFlightUploadIdsRef.current.has(id);
+    if (isScheduled) canceledUploadIdsRef.current.add(id);
+    if (pendingFolderUploadReplaceRef.current?.item.id === id) {
+      resolveFolderUploadReplacement(false);
+    }
     setUploads((current) =>
       current.map((item) =>
         item.id === id && (item.status === "pending" || item.status === "uploading")
@@ -1708,7 +1877,7 @@ export default function App() {
           : item,
       ),
     );
-    if (target?.status === "uploading" && isTauri) {
+    if (isInFlight && isTauri) {
       await command("cancel_upload", { transferId: id }).catch(() => undefined);
     }
   }
@@ -2180,6 +2349,7 @@ export default function App() {
                           }
                           onRefresh={refreshFiles}
                           onUpload={uploadFile}
+                          onUploadFolder={uploadFolder}
                           onDownload={downloadFiles}
                           onDownloadFolder={downloadFolder}
                           onEdit={openFileEditor}
@@ -2260,6 +2430,62 @@ export default function App() {
           onTerminalFontSizeChange={setTerminalFontSize}
           onClose={() => setSettingsOpen(false)}
         />
+      )}
+
+      {folderUploadReplaceConfirm && (
+        <div
+          className="delete-confirm-backdrop"
+          role="presentation"
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget) {
+              resolveFolderUploadReplacement(false, folderUploadReplaceConfirm.item.id);
+            }
+          }}
+        >
+          <div
+            className="delete-confirm folder-upload-replace-confirm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="folder-upload-replace-title"
+            aria-describedby="folder-upload-replace-description"
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                resolveFolderUploadReplacement(false, folderUploadReplaceConfirm.item.id);
+              }
+            }}
+          >
+            <h2 id="folder-upload-replace-title">完整替换远端文件夹？</h2>
+            <p id="folder-upload-replace-description">
+              远端已存在同名文件夹。继续会用本地文件夹完整替换它，不会合并内容，远端独有的文件和子目录都会被删除。
+            </p>
+            <div className="delete-target folder-upload-replace-target">
+              <span>远端目标</span>
+              <code>{uploadRemotePath(folderUploadReplaceConfirm.item)}</code>
+            </div>
+            <div className="delete-actions">
+              <button
+                type="button"
+                className="btn-ghost"
+                autoFocus
+                onClick={() =>
+                  resolveFolderUploadReplacement(false, folderUploadReplaceConfirm.item.id)
+                }
+              >
+                取消上传
+              </button>
+              <button
+                type="button"
+                className="danger-button"
+                onClick={() =>
+                  resolveFolderUploadReplacement(true, folderUploadReplaceConfirm.item.id)
+                }
+              >
+                完整替换
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {connectionDeleteConfirm && (
@@ -2534,6 +2760,29 @@ function waitForNextPaint() {
 
 function basename(path: string) {
   return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+}
+
+function currentDirForTab(tab: ShellTab) {
+  return tab.files.length ? tab.files[tab.files.length - 1].path : "/";
+}
+
+function resolveKnownUploadDirectory(tab: ShellTab, requestedPath: string) {
+  if (requestedPath === "/" || currentDirForTab(tab) === requestedPath) return requestedPath;
+  if (Object.prototype.hasOwnProperty.call(tab.cache, requestedPath)) return requestedPath;
+  return tab.files.some((column) =>
+    column.entries.some((entry) => entry.isDir && entry.path === requestedPath)
+  )
+    ? requestedPath
+    : null;
+}
+
+function isFolderUploadConflict(message: string) {
+  return message.includes(FOLDER_UPLOAD_CONFLICT_MARKER);
+}
+
+function uploadRemotePath(item: UploadItem) {
+  const remoteDir = item.remoteDir.replace(/\/+$/, "") || "/";
+  return remoteDir === "/" ? `/${item.name}` : `${remoteDir}/${item.name}`;
 }
 
 function ensureFolder(current: string[], folder: string) {

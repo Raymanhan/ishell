@@ -1203,6 +1203,21 @@ button.detail-row:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.folder-upload-replace-target {
+  display: grid;
+  gap: 5px;
+  white-space: normal;
+}
+.folder-upload-replace-target span {
+  color: var(--faint);
+  font-family: var(--font-sans);
+  font-size: 11px;
+}
+.folder-upload-replace-target code {
+  color: var(--dim);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
 .delete-error {
   margin: -4px 0 14px;
   color: var(--danger);

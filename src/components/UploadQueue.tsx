@@ -51,6 +51,8 @@ export function UploadQueue({
                 : item.total > 0
                   ? Math.min(100, Math.round((item.transferred / item.total) * 100))
                   : 0;
+            const finalizing =
+              item.status === "uploading" && item.total > 0 && item.transferred >= item.total;
             return (
               <li key={item.id} className={`uq-item ${item.status}`}>
                 <span className="uq-icon">
@@ -71,15 +73,17 @@ export function UploadQueue({
                       {item.status === "error"
                         ? "失败"
                         : item.status === "canceled"
-                          ? "已停止"
-                        : item.status === "done"
-                          ? formatBytes(item.total)
-                          : `${percent}%`}
+                          ? (item.error ? "已取消" : "已停止")
+                          : item.status === "done"
+                            ? formatBytes(item.total)
+                            : finalizing
+                              ? "正在提交"
+                              : `${percent}%`}
                     </span>
                   </div>
                   {item.status === "error" || item.status === "canceled" ? (
                     <div className="uq-error" title={item.error}>
-                      {item.status === "canceled" ? "已停止上传" : item.error}
+                      {item.status === "canceled" ? item.error ?? "已停止上传" : item.error}
                     </div>
                   ) : (
                     <div className="uq-track">
@@ -87,7 +91,7 @@ export function UploadQueue({
                     </div>
                   )}
                 </div>
-                {(item.status === "pending" || item.status === "uploading") && (
+                {(item.status === "pending" || (item.status === "uploading" && !finalizing)) && (
                   <button type="button" className="uq-x" onClick={() => onStop(item.id)} title="停止上传">
                     <OctagonX size={12} />
                   </button>

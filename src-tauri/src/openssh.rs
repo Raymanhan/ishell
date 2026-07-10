@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 #[cfg(not(russh_backend))]
 use crate::models::ServerRecord;
 
+pub const UPLOAD_SIZE_MISMATCH_MARKER: &str = "__ISHELL_UPLOAD_SIZE_MISMATCH__";
+
 #[cfg(not(russh_backend))]
 pub fn ssh_binary() -> String {
     if Path::new("/usr/bin/ssh").exists() {

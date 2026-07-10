@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.1.14](https://github.com/Raymanhan/ishell/releases/tag/v1.1.14)**
+**[Download iShell v1.1.15](https://github.com/Raymanhan/ishell/releases/tag/v1.1.15)**
 
 Available packages:
 
@@ -105,7 +105,7 @@ Open the file panel for the active terminal tab to browse the remote filesystem.
 Supported operations:
 
 - Switch between tree/detail and multi-column browsing.
-- Upload files to the current directory.
+- Upload files or folders to the current directory, including folder drag and drop. If a same-named remote folder exists, iShell asks before replacing it in full; replacement does not merge and removes remote-only entries.
 - Download selected files.
 - Create folders, rename entries, and delete one or more entries.
 - Symlinks are shown with link icons and safer delete messaging.
@@ -204,8 +204,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.1.14
-git push origin v1.1.14
+git tag v1.1.15
+git push origin v1.1.15
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -239,6 +239,9 @@ src-tauri/src/
 
 ## Recent Changes
 
+- `v1.1.15` adds transactional folder uploads with drag and drop, explicit
+  full-replacement confirmation, atomic commits, rollback safeguards, and
+  hardened cancellation/retry behavior across both SSH backends.
 - `v1.1.14` fixes Linux CI linting for the macOS-only window reopen handler.
 - `v1.1.13` strengthens SSH/SFTP reliability with connection timeouts, host-key
   persistence, isolated uploads, transfer safeguards, and CI Rust lint/test

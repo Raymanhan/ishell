@@ -14,6 +14,7 @@ import {
   FolderOpen,
   FolderPlus,
   FolderSymlink,
+  FolderUp,
   HardDrive,
   Pencil,
   RefreshCw,
@@ -80,6 +81,7 @@ function SftpBrowserBase({
   onSelect,
   onRefresh,
   onUpload,
+  onUploadFolder,
   onDownload,
   onDownloadFolder,
   onEdit,
@@ -97,6 +99,7 @@ function SftpBrowserBase({
   onSelect: (path: string | null, paths?: string[]) => void;
   onRefresh: () => void;
   onUpload: (targetDir?: string) => void;
+  onUploadFolder: (targetDir?: string) => void;
   onDownload: (entries: SftpEntry[]) => void;
   onDownloadFolder: (entry: SftpEntry, mode: FolderDownloadMode) => void;
   onEdit: (entry: SftpEntry) => void;
@@ -495,8 +498,11 @@ function SftpBrowserBase({
         {showHidden ? <Eye size={15} /> : <EyeOff size={15} />}
       </button>
       <span className="tool-sep" />
-      <button type="button" className="tool" onClick={() => onUpload(currentDir)} title="上传到当前目录">
+      <button type="button" className="tool" onClick={() => onUpload(currentDir)} title="上传文件到当前目录">
         <Upload size={15} />
+      </button>
+      <button type="button" className="tool" onClick={() => onUploadFolder(currentDir)} title="上传文件夹到当前目录">
+        <FolderUp size={15} />
       </button>
       <button
         type="button"
@@ -985,7 +991,10 @@ function SftpBrowserBase({
                 </>
               )}
               <button type="button" onClick={() => runMenu(() => onUpload(targetDirFor(menu.entry, menu.columnIndex)))}>
-                <Upload size={14} /> 上传到此处
+                <Upload size={14} /> 上传文件到此处
+              </button>
+              <button type="button" onClick={() => runMenu(() => onUploadFolder(targetDirFor(menu.entry, menu.columnIndex)))}>
+                <FolderUp size={14} /> 上传文件夹到此处
               </button>
               <button type="button" onClick={() => runMenu(() => onTerminalJump(targetDirFor(menu.entry, menu.columnIndex)))}>
                 <SquareTerminal size={14} /> 跳转到此处
@@ -1009,6 +1018,9 @@ function SftpBrowserBase({
             <>
               <button type="button" onClick={() => runMenu(() => onUpload(targetDirFor(null, menu.columnIndex)))}>
                 <Upload size={14} /> 上传文件
+              </button>
+              <button type="button" onClick={() => runMenu(() => onUploadFolder(targetDirFor(null, menu.columnIndex)))}>
+                <FolderUp size={14} /> 上传文件夹
               </button>
               <button type="button" onClick={() => runMenu(() => onTerminalJump(targetDirFor(null, menu.columnIndex)))}>
                 <SquareTerminal size={14} /> 跳转到此处
@@ -1041,6 +1053,7 @@ export const SftpBrowser = memo(SftpBrowserBase, (previous, next) => (
   previous.onSelect === next.onSelect &&
   previous.onRefresh === next.onRefresh &&
   previous.onUpload === next.onUpload &&
+  previous.onUploadFolder === next.onUploadFolder &&
   previous.onDownload === next.onDownload &&
   previous.onDownloadFolder === next.onDownloadFolder &&
   previous.onEdit === next.onEdit &&

@@ -1,14 +1,12 @@
 #[cfg(any(windows, test))]
 use sha2::{Digest, Sha256};
+#[cfg(not(russh_backend))]
+use std::process::{Command, Stdio};
 use std::{
     fs,
-    path::{Path, PathBuf},
+    io::{self, Read, Seek, SeekFrom, Write},
+    path::{Component, Path, PathBuf},
     time::{Duration, Instant},
-};
-#[cfg(not(russh_backend))]
-use std::{
-    io::{self, Read, Write},
-    process::{Command, Stdio},
 };
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -765,6 +763,1735 @@ pub fn download_folder(
     }
 }
 
+const UPLOAD_TARGET_DIRECTORY_MARKER: &str = "__ISHELL_UPLOAD_TARGET_IS_DIRECTORY__";
+const UPLOAD_TARGET_UNSUPPORTED_MARKER: &str = "__ISHELL_UPLOAD_TARGET_UNSUPPORTED__";
+const UPLOAD_TARGET_CHANGED_MARKER: &str = "__ISHELL_UPLOAD_TARGET_CHANGED__";
+const UPLOAD_WRITE_FAILED_MARKER: &str = "__ISHELL_UPLOAD_WRITE_FAILED__";
+const UPLOAD_COMMIT_FAILED_MARKER: &str = "__ISHELL_UPLOAD_COMMIT_FAILED__";
+const UPLOAD_FOLDER_CONFLICT_MARKER: &str = "__ISHELL_UPLOAD_FOLDER_CONFLICT__";
+const UPLOAD_FOLDER_UNSAFE_MARKER: &str = "__ISHELL_UPLOAD_FOLDER_UNSAFE__";
+const UPLOAD_FOLDER_EXTRACT_FAILED_MARKER: &str = "__ISHELL_UPLOAD_FOLDER_EXTRACT_FAILED__";
+const UPLOAD_FOLDER_COMMIT_FAILED_MARKER: &str = "__ISHELL_UPLOAD_FOLDER_COMMIT_FAILED__";
+const UPLOAD_FOLDER_CHANGED_MARKER: &str = "__ISHELL_UPLOAD_FOLDER_CHANGED__";
+const UPLOAD_HEARTBEAT_MARKER: &str = "__ISHELL_UPLOAD_HEARTBEAT__";
+
+const FOLDER_TARGET_PROBE_SCRIPT: &str = r#"
+import hashlib
+import os
+import re
+import stat
+import sys
+import time
+
+HEARTBEAT = "__ISHELL_UPLOAD_HEARTBEAT__"
+last_heartbeat = 0.0
+
+
+class ProbeFailure(Exception):
+    pass
+
+
+def heartbeat():
+    global last_heartbeat
+    current = time.monotonic()
+    if current - last_heartbeat >= 5.0:
+        print(HEARTBEAT, file=sys.stderr, flush=True)
+        last_heartbeat = current
+
+
+def system_mount_points():
+    points = set()
+    try:
+        with open("/proc/self/mountinfo", "r", encoding="utf-8", errors="surrogateescape") as source:
+            for line in source:
+                fields = line.split(" - ", 1)[0].split()
+                if len(fields) < 5:
+                    continue
+                decoded = re.sub(
+                    r"\\([0-7]{3})",
+                    lambda match: chr(int(match.group(1), 8)),
+                    fields[4],
+                )
+                points.add(os.path.abspath(decoded))
+    except OSError:
+        pass
+    return points
+
+
+def is_mount_point(path, mount_points):
+    return os.path.abspath(path) in mount_points or os.path.ismount(path)
+
+
+def directory_snapshots(path):
+    revision = hashlib.sha256()
+    rename_stable = hashlib.sha256()
+    mount_points = system_mount_points()
+    if is_mount_point(path, mount_points):
+        raise ProbeFailure("destination-is-mount-point")
+    root_device = os.lstat(path).st_dev
+
+    def visit(current, relative):
+        heartbeat()
+        value = os.lstat(current)
+        if stat.S_ISLNK(value.st_mode):
+            raise ProbeFailure("destination-symbolic-link")
+        if not stat.S_ISDIR(value.st_mode):
+            raise ProbeFailure("destination-not-directory")
+        revision_fields = (
+            relative, value.st_dev, value.st_ino, value.st_mode, value.st_size,
+            value.st_mtime_ns, value.st_ctime_ns, value.st_nlink,
+        )
+        stable_fields = (
+            relative, value.st_dev, value.st_ino, value.st_mode, value.st_size,
+            value.st_mtime_ns, None if not relative else value.st_ctime_ns, value.st_nlink,
+        )
+        revision.update(repr(revision_fields).encode("utf-8", "surrogateescape"))
+        rename_stable.update(repr(stable_fields).encode("utf-8", "surrogateescape"))
+        with os.scandir(current) as entries:
+            ordered = sorted(entries, key=lambda entry: entry.name)
+        for entry in ordered:
+            entry_path = os.path.join(current, entry.name)
+            entry_relative = entry.name if not relative else relative + "/" + entry.name
+            entry_value = os.lstat(entry_path)
+            fields = (
+                entry_relative, entry_value.st_dev, entry_value.st_ino,
+                entry_value.st_mode, entry_value.st_size, entry_value.st_mtime_ns,
+                entry_value.st_ctime_ns, entry_value.st_nlink,
+            )
+            encoded = repr(fields).encode("utf-8", "surrogateescape")
+            revision.update(encoded)
+            rename_stable.update(encoded)
+            if stat.S_ISLNK(entry_value.st_mode):
+                link_target = os.fsencode(os.readlink(entry_path))
+                revision.update(link_target)
+                rename_stable.update(link_target)
+            elif stat.S_ISDIR(entry_value.st_mode):
+                if entry_value.st_dev != root_device or is_mount_point(entry_path, mount_points):
+                    raise ProbeFailure("destination-contains-mount-point")
+                visit(entry_path, entry_relative)
+
+    visit(path, "")
+    return revision.hexdigest(), rename_stable.hexdigest()
+
+remote_dir, folder_name, include_revision = sys.argv[1:4]
+if include_revision not in ("0", "1"):
+    print("changed invalid-probe-mode")
+    sys.exit(0)
+target = os.path.join(remote_dir, folder_name)
+try:
+    value = os.lstat(target)
+except FileNotFoundError:
+    print("missing")
+else:
+    if stat.S_ISLNK(value.st_mode):
+        print("unsupported symbolic-link")
+    elif stat.S_ISDIR(value.st_mode):
+        if include_revision == "0":
+            print("directory")
+        else:
+            try:
+                revision, rename_stable = directory_snapshots(target)
+                print("directory " + revision + " " + rename_stable)
+            except ProbeFailure as error:
+                print("unsupported " + str(error))
+            except OSError as error:
+                print("changed " + str(error))
+    else:
+        print("unsupported non-directory")
+"#;
+
+const FOLDER_UPLOAD_ARTIFACT_CLEANUP_SCRIPT: &str = r#"
+import os
+import re
+import stat
+import sys
+
+
+def lstat_optional(path):
+    try:
+        return os.lstat(path)
+    except FileNotFoundError:
+        return None
+
+
+def system_mount_points():
+    points = set()
+    try:
+        with open("/proc/self/mountinfo", "r", encoding="utf-8", errors="surrogateescape") as source:
+            for line in source:
+                fields = line.split(" - ", 1)[0].split()
+                if len(fields) < 5:
+                    continue
+                decoded = re.sub(
+                    r"\\([0-7]{3})",
+                    lambda match: chr(int(match.group(1), 8)),
+                    fields[4],
+                )
+                points.add(os.path.abspath(decoded))
+    except OSError:
+        pass
+    return points
+
+
+def is_mount_point(path, mount_points):
+    return os.path.abspath(path) in mount_points or os.path.ismount(path)
+
+
+def remove_tree(path, root_device=None, mount_points=None):
+    value = lstat_optional(path)
+    if value is None:
+        return
+    if stat.S_ISLNK(value.st_mode) or not stat.S_ISDIR(value.st_mode):
+        os.unlink(path)
+        return
+    if mount_points is None:
+        mount_points = system_mount_points()
+    if is_mount_point(path, mount_points):
+        return
+    if root_device is None:
+        root_device = value.st_dev
+    elif value.st_dev != root_device:
+        return
+    try:
+        os.chmod(path, 0o700)
+    except OSError:
+        pass
+    with os.scandir(path) as entries:
+        children = list(entries)
+    for entry in children:
+        child = os.path.join(path, entry.name)
+        child_value = os.lstat(child)
+        if stat.S_ISDIR(child_value.st_mode) and not stat.S_ISLNK(child_value.st_mode):
+            if child_value.st_dev != root_device or is_mount_point(child, mount_points):
+                continue
+            remove_tree(child, root_device, mount_points)
+        else:
+            os.unlink(child)
+    try:
+        os.rmdir(path)
+    except OSError:
+        pass
+
+
+archive_path, staging_path = sys.argv[1:3]
+archive_value = lstat_optional(archive_path)
+if archive_value is not None and not stat.S_ISDIR(archive_value.st_mode):
+    try:
+        os.unlink(archive_path)
+    except OSError:
+        pass
+try:
+    remove_tree(staging_path)
+except OSError:
+    pass
+"#;
+
+const TRANSACTIONAL_UPLOAD_SCRIPT: &str = r#"
+import os
+import shutil
+import signal
+import stat
+import sys
+
+SIZE_MISMATCH = "__ISHELL_UPLOAD_SIZE_MISMATCH__"
+TARGET_DIRECTORY = "__ISHELL_UPLOAD_TARGET_IS_DIRECTORY__"
+TARGET_UNSUPPORTED = "__ISHELL_UPLOAD_TARGET_UNSUPPORTED__"
+TARGET_CHANGED = "__ISHELL_UPLOAD_TARGET_CHANGED__"
+WRITE_FAILED = "__ISHELL_UPLOAD_WRITE_FAILED__"
+COMMIT_FAILED = "__ISHELL_UPLOAD_COMMIT_FAILED__"
+
+
+class UploadFailure(Exception):
+    def __init__(self, code):
+        self.code = code
+
+
+def fail(marker, detail="", code=1):
+    message = marker if not detail else marker + " " + detail
+    print(message, file=sys.stderr, flush=True)
+    raise UploadFailure(code)
+
+
+def target_stat(path):
+    try:
+        return os.lstat(path)
+    except FileNotFoundError:
+        return None
+
+
+def target_signature(value):
+    if value is None:
+        return None
+    return (
+        value.st_dev,
+        value.st_ino,
+        value.st_size,
+        value.st_mtime_ns,
+        value.st_ctime_ns,
+    )
+
+
+def validate_target(value):
+    if value is None:
+        return
+    if stat.S_ISDIR(value.st_mode):
+        fail(TARGET_DIRECTORY, code=73)
+    if stat.S_ISLNK(value.st_mode):
+        fail(TARGET_UNSUPPORTED, "symbolic-link", 73)
+    if not stat.S_ISREG(value.st_mode):
+        fail(TARGET_UNSUPPORTED, "non-regular-file", 73)
+    if value.st_nlink != 1:
+        fail(TARGET_UNSUPPORTED, "hard-links=" + str(value.st_nlink), 73)
+
+
+def interrupted(_signum, _frame):
+    fail(WRITE_FAILED, "interrupted", 130)
+
+
+for signal_name in ("SIGHUP", "SIGINT", "SIGTERM"):
+    signal_value = getattr(signal, signal_name, None)
+    if signal_value is not None:
+        signal.signal(signal_value, interrupted)
+
+
+final_path, temp_path, expected_text = sys.argv[1:4]
+expected = int(expected_text)
+committed = False
+temp_created = False
+
+try:
+    initial = target_stat(final_path)
+    validate_target(initial)
+    initial_signature = target_signature(initial)
+
+    try:
+        descriptor = os.open(
+            temp_path,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            0o666,
+        )
+        temp_created = True
+        with os.fdopen(descriptor, "wb", buffering=0) as output:
+            transferred = 0
+            while True:
+                chunk = sys.stdin.buffer.read(64 * 1024)
+                if not chunk:
+                    break
+                view = memoryview(chunk)
+                while view:
+                    written = output.write(view)
+                    if written is None:
+                        written = len(view)
+                    if written <= 0:
+                        raise OSError("remote temporary file accepted no data")
+                    transferred += written
+                    view = view[written:]
+    except UploadFailure:
+        raise
+    except Exception as error:
+        fail(WRITE_FAILED, str(error), 74)
+
+    if transferred != expected:
+        fail(
+            SIZE_MISMATCH,
+            "expected=" + str(expected) + " actual=" + str(transferred),
+            75,
+        )
+
+    current = target_stat(final_path)
+    validate_target(current)
+    if target_signature(current) != initial_signature:
+        fail(TARGET_CHANGED, code=76)
+
+    if initial is not None:
+        try:
+            temp_stat = os.lstat(temp_path)
+            if (temp_stat.st_uid, temp_stat.st_gid) != (initial.st_uid, initial.st_gid):
+                os.chown(temp_path, initial.st_uid, initial.st_gid)
+            shutil.copystat(final_path, temp_path, follow_symlinks=False)
+            os.utime(temp_path, None, follow_symlinks=False)
+        except Exception as error:
+            fail(COMMIT_FAILED, "metadata: " + str(error), 77)
+
+        if target_signature(target_stat(final_path)) != initial_signature:
+            fail(TARGET_CHANGED, code=76)
+    elif target_stat(final_path) is not None:
+        fail(TARGET_CHANGED, code=76)
+
+    try:
+        os.replace(temp_path, final_path)
+        committed = True
+    except Exception as error:
+        fail(COMMIT_FAILED, str(error), 77)
+except UploadFailure as error:
+    sys.exit(error.code)
+except Exception as error:
+    print(COMMIT_FAILED + " " + str(error), file=sys.stderr, flush=True)
+    sys.exit(1)
+finally:
+    if temp_created and not committed:
+        try:
+            os.unlink(temp_path)
+        except FileNotFoundError:
+            pass
+        except OSError:
+            pass
+"#;
+
+const TRANSACTIONAL_FOLDER_UPLOAD_SCRIPT: &str = r#"
+import ctypes
+import errno
+import hashlib
+import os
+import re
+import signal
+import stat
+import sys
+import tarfile
+import time
+from pathlib import PurePosixPath
+
+SIZE_MISMATCH = "__ISHELL_UPLOAD_SIZE_MISMATCH__"
+WRITE_FAILED = "__ISHELL_UPLOAD_WRITE_FAILED__"
+CONFLICT = "__ISHELL_UPLOAD_FOLDER_CONFLICT__"
+UNSAFE = "__ISHELL_UPLOAD_FOLDER_UNSAFE__"
+EXTRACT_FAILED = "__ISHELL_UPLOAD_FOLDER_EXTRACT_FAILED__"
+COMMIT_FAILED = "__ISHELL_UPLOAD_FOLDER_COMMIT_FAILED__"
+CHANGED = "__ISHELL_UPLOAD_FOLDER_CHANGED__"
+HEARTBEAT = "__ISHELL_UPLOAD_HEARTBEAT__"
+last_heartbeat = 0.0
+commit_phase = False
+pending_interrupt = False
+
+
+class UploadFailure(Exception):
+    def __init__(self, code):
+        self.code = code
+
+
+def fail(marker, detail="", code=1):
+    message = marker if not detail else marker + " " + detail
+    print(message, file=sys.stderr, flush=True)
+    raise UploadFailure(code)
+
+
+def heartbeat():
+    global last_heartbeat
+    current = time.monotonic()
+    if current - last_heartbeat >= 5.0:
+        try:
+            print(HEARTBEAT, file=sys.stderr, flush=True)
+        except BrokenPipeError:
+            if not globals().get("upload_committed", False):
+                raise
+        last_heartbeat = current
+
+
+def lstat_optional(path):
+    try:
+        return os.lstat(path)
+    except FileNotFoundError:
+        return None
+
+
+def system_mount_points():
+    points = set()
+    try:
+        with open("/proc/self/mountinfo", "r", encoding="utf-8", errors="surrogateescape") as source:
+            for line in source:
+                fields = line.split(" - ", 1)[0].split()
+                if len(fields) < 5:
+                    continue
+                decoded = re.sub(
+                    r"\\([0-7]{3})",
+                    lambda match: chr(int(match.group(1), 8)),
+                    fields[4],
+                )
+                points.add(os.path.abspath(decoded))
+    except OSError:
+        pass
+    return points
+
+
+def is_mount_point(path, mount_points):
+    return os.path.abspath(path) in mount_points or os.path.ismount(path)
+
+
+def require_safe_directory(path, label):
+    value = lstat_optional(path)
+    if value is None:
+        fail(UNSAFE, label + "-missing", 73)
+    if stat.S_ISLNK(value.st_mode):
+        fail(UNSAFE, label + "-symbolic-link", 73)
+    if not stat.S_ISDIR(value.st_mode):
+        fail(UNSAFE, label + "-not-directory", 73)
+
+
+def require_safe_ancestors(path):
+    absolute = os.path.abspath(path)
+    if not absolute.startswith(os.sep):
+        fail(UNSAFE, "remote-directory-not-absolute", 73)
+    current = os.sep
+    for component in [part for part in absolute.split(os.sep) if part]:
+        current = os.path.join(current, component)
+        value = lstat_optional(current)
+        if value is None:
+            fail(UNSAFE, "remote-directory-missing", 73)
+        if stat.S_ISLNK(value.st_mode):
+            fail(UNSAFE, "remote-directory-symbolic-link", 73)
+        if not stat.S_ISDIR(value.st_mode):
+            fail(UNSAFE, "remote-directory-component-not-directory", 73)
+
+
+def directory_snapshots(path):
+    revision = hashlib.sha256()
+    rename_stable = hashlib.sha256()
+    mount_points = system_mount_points()
+    if is_mount_point(path, mount_points):
+        fail(UNSAFE, "destination-is-mount-point", 73)
+    root_device = os.lstat(path).st_dev
+
+    def visit(current, relative):
+        heartbeat()
+        value = os.lstat(current)
+        if stat.S_ISLNK(value.st_mode):
+            fail(UNSAFE, "destination-symbolic-link", 73)
+        if not stat.S_ISDIR(value.st_mode):
+            fail(UNSAFE, "destination-not-directory", 73)
+        revision_fields = (
+            relative, value.st_dev, value.st_ino, value.st_mode, value.st_size,
+            value.st_mtime_ns, value.st_ctime_ns, value.st_nlink,
+        )
+        stable_fields = (
+            relative, value.st_dev, value.st_ino, value.st_mode, value.st_size,
+            value.st_mtime_ns, None if not relative else value.st_ctime_ns, value.st_nlink,
+        )
+        revision.update(repr(revision_fields).encode("utf-8", "surrogateescape"))
+        rename_stable.update(repr(stable_fields).encode("utf-8", "surrogateescape"))
+        with os.scandir(current) as entries:
+            ordered = sorted(entries, key=lambda entry: entry.name)
+        for entry in ordered:
+            entry_path = os.path.join(current, entry.name)
+            entry_relative = entry.name if not relative else relative + "/" + entry.name
+            entry_value = os.lstat(entry_path)
+            fields = (
+                entry_relative, entry_value.st_dev, entry_value.st_ino,
+                entry_value.st_mode, entry_value.st_size, entry_value.st_mtime_ns,
+                entry_value.st_ctime_ns, entry_value.st_nlink,
+            )
+            encoded = repr(fields).encode("utf-8", "surrogateescape")
+            revision.update(encoded)
+            rename_stable.update(encoded)
+            if stat.S_ISLNK(entry_value.st_mode):
+                link_target = os.fsencode(os.readlink(entry_path))
+                revision.update(link_target)
+                rename_stable.update(link_target)
+            elif stat.S_ISDIR(entry_value.st_mode):
+                if entry_value.st_dev != root_device or is_mount_point(entry_path, mount_points):
+                    fail(UNSAFE, "destination-contains-mount-point", 73)
+                visit(entry_path, entry_relative)
+
+    visit(path, "")
+    return revision.hexdigest(), rename_stable.hexdigest()
+
+
+def try_exchange_directories(first, second):
+    libc = ctypes.CDLL(None, use_errno=True)
+    first_bytes = os.fsencode(first)
+    second_bytes = os.fsencode(second)
+    renameat2 = getattr(libc, "renameat2", None)
+    if renameat2 is not None:
+        renameat2.argtypes = [
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_uint,
+        ]
+        renameat2.restype = ctypes.c_int
+        result = renameat2(-100, first_bytes, -100, second_bytes, 2)
+    else:
+        renamex_np = getattr(libc, "renamex_np", None)
+        if renamex_np is None:
+            return False
+        renamex_np.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+        renamex_np.restype = ctypes.c_int
+        result = renamex_np(first_bytes, second_bytes, 2)
+    if result == 0:
+        return True
+    error_number = ctypes.get_errno()
+    unsupported = {
+        errno.ENOSYS,
+        errno.EINVAL,
+        errno.EXDEV,
+        getattr(errno, "ENOTSUP", errno.EINVAL),
+        getattr(errno, "EOPNOTSUPP", errno.EINVAL),
+    }
+    if error_number in unsupported:
+        return False
+    raise OSError(error_number, os.strerror(error_number))
+
+
+def safe_member_parts(member):
+    raw = member.name
+    if not raw or raw.startswith("/"):
+        fail(UNSAFE, "archive-absolute-or-empty-path", 73)
+    parts = [part for part in PurePosixPath(raw).parts if part not in ("", ".")]
+    if not parts or any(part == ".." for part in parts):
+        fail(UNSAFE, "archive-parent-path", 73)
+    if member.issym() or member.islnk():
+        fail(UNSAFE, "archive-link", 73)
+    if not (member.isdir() or member.isfile()):
+        fail(UNSAFE, "archive-special-file", 73)
+    return parts
+
+
+def extract_archive(archive_path, staging_path):
+    try:
+        with tarfile.open(archive_path, mode="r:") as archive:
+            members = archive.getmembers()
+            seen = set()
+            prepared = []
+            for member in members:
+                heartbeat()
+                parts = safe_member_parts(member)
+                key = tuple(parts)
+                if key in seen:
+                    fail(UNSAFE, "archive-duplicate-path", 73)
+                seen.add(key)
+                prepared.append((member, parts))
+
+            directory_attributes = []
+            for member, parts in prepared:
+                heartbeat()
+                target = os.path.join(staging_path, *parts)
+                if os.path.commonpath((staging_path, target)) != staging_path:
+                    fail(UNSAFE, "archive-path-escape", 73)
+                if member.isdir():
+                    os.makedirs(target, exist_ok=True)
+                    directory_attributes.append((target, member.mode, member.mtime))
+                    continue
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+                if hasattr(os, "O_NOFOLLOW"):
+                    flags |= os.O_NOFOLLOW
+                descriptor = os.open(target, flags, member.mode & 0o777)
+                source = archive.extractfile(member)
+                if source is None:
+                    os.close(descriptor)
+                    fail(EXTRACT_FAILED, "missing-file-data", 74)
+                with source, os.fdopen(descriptor, "wb", buffering=0) as output:
+                    while True:
+                        chunk = source.read(64 * 1024)
+                        if not chunk:
+                            break
+                        view = memoryview(chunk)
+                        while view:
+                            written = output.write(view)
+                            if written is None:
+                                written = len(view)
+                            if written <= 0:
+                                fail(EXTRACT_FAILED, "short-write", 74)
+                            view = view[written:]
+                        heartbeat()
+                if os.lstat(target).st_size != member.size:
+                    fail(EXTRACT_FAILED, "member-size-mismatch", 74)
+                os.chmod(target, member.mode & 0o777)
+                os.utime(target, (member.mtime, member.mtime))
+            for target, mode, modified in reversed(directory_attributes):
+                os.chmod(target, mode & 0o777)
+                os.utime(target, (modified, modified))
+    except UploadFailure:
+        raise
+    except Exception as error:
+        fail(EXTRACT_FAILED, str(error), 74)
+
+
+def remove_staging(path, root_device=None, mount_points=None):
+    value = lstat_optional(path)
+    if value is None:
+        return
+    if mount_points is None:
+        mount_points = system_mount_points()
+    if root_device is None:
+        if is_mount_point(path, mount_points):
+            raise OSError("refusing to remove mounted directory")
+        root_device = value.st_dev
+    elif value.st_dev != root_device or is_mount_point(path, mount_points):
+        raise OSError("refusing to remove mounted directory")
+    heartbeat()
+    if stat.S_ISLNK(value.st_mode) or not stat.S_ISDIR(value.st_mode):
+        os.unlink(path)
+        return
+    try:
+        os.chmod(path, 0o700)
+    except OSError:
+        pass
+    with os.scandir(path) as entries:
+        children = list(entries)
+    for entry in children:
+        child = os.path.join(path, entry.name)
+        child_value = os.lstat(child)
+        if stat.S_ISDIR(child_value.st_mode) and not stat.S_ISLNK(child_value.st_mode):
+            if child_value.st_dev != root_device or is_mount_point(child, mount_points):
+                raise OSError("refusing to remove mounted directory")
+            remove_staging(child, root_device, mount_points)
+        else:
+            os.unlink(child)
+        heartbeat()
+    os.rmdir(path)
+
+
+def interrupted(_signum, _frame):
+    global pending_interrupt
+    if commit_phase or globals().get("upload_committed", False):
+        pending_interrupt = True
+        return
+    fail(WRITE_FAILED, "interrupted", 130)
+
+
+for signal_name in ("SIGHUP", "SIGINT", "SIGTERM"):
+    signal_value = getattr(signal, signal_name, None)
+    if signal_value is not None:
+        signal.signal(signal_value, interrupted)
+
+
+def valid_snapshot_token(value):
+    return len(value) == 64 and all(character in "0123456789abcdef" for character in value)
+
+
+(
+    remote_dir,
+    folder_name,
+    archive_path,
+    staging_path,
+    expected_text,
+    root_mode_text,
+    replace_text,
+    expected_destination_revision,
+    expected_destination_stable,
+) = sys.argv[1:10]
+expected = int(expected_text)
+root_mode = int(root_mode_text, 8)
+replace_existing = replace_text == "1"
+archive_created = False
+staging_created = False
+placeholder_created = False
+placeholder_signature = None
+staging_contains_old = False
+preserve_staging = False
+upload_committed = False
+destination = None
+
+try:
+    if replace_text not in ("0", "1"):
+        fail(UNSAFE, "invalid-replace-flag", 73)
+    if folder_name in ("", ".", "..") or "/" in folder_name or "\x00" in folder_name:
+        fail(UNSAFE, "invalid-folder-name", 73)
+    require_safe_ancestors(remote_dir)
+    require_safe_directory(remote_dir, "remote-directory")
+    remote_dir = os.path.abspath(remote_dir)
+    remote_dir_value = os.lstat(remote_dir)
+    remote_dir_signature = (remote_dir_value.st_dev, remote_dir_value.st_ino, remote_dir_value.st_mode)
+    if os.path.dirname(os.path.abspath(archive_path)) != remote_dir:
+        fail(UNSAFE, "archive-outside-remote-directory", 73)
+    if os.path.dirname(os.path.abspath(staging_path)) != remote_dir:
+        fail(UNSAFE, "staging-outside-remote-directory", 73)
+
+    destination = os.path.join(remote_dir, folder_name)
+    initial_destination = lstat_optional(destination)
+    initial_destination_identity = None
+    initial_destination_snapshot = None
+    if initial_destination is not None:
+        if stat.S_ISLNK(initial_destination.st_mode):
+            fail(UNSAFE, "destination-symbolic-link", 73)
+        if not stat.S_ISDIR(initial_destination.st_mode):
+            fail(UNSAFE, "destination-not-directory", 73)
+    if not replace_existing:
+        if initial_destination is not None:
+            fail(CONFLICT, "destination-already-exists", 73)
+    elif expected_destination_revision == "missing":
+        if expected_destination_stable != "missing":
+            fail(UNSAFE, "invalid-missing-revision", 73)
+        if initial_destination is not None:
+            fail(CHANGED, "destination-created-after-confirmation", 76)
+    else:
+        if not (
+            valid_snapshot_token(expected_destination_revision)
+            and valid_snapshot_token(expected_destination_stable)
+        ):
+            fail(UNSAFE, "invalid-destination-revision", 73)
+        if initial_destination is None:
+            fail(CHANGED, "destination-removed-after-confirmation", 76)
+        initial_destination_identity = (
+            initial_destination.st_dev,
+            initial_destination.st_ino,
+            initial_destination.st_mode,
+        )
+
+    try:
+        descriptor = os.open(archive_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        archive_created = True
+        with os.fdopen(descriptor, "wb", buffering=0) as output:
+            transferred = 0
+            while True:
+                chunk = sys.stdin.buffer.read(64 * 1024)
+                if not chunk:
+                    break
+                view = memoryview(chunk)
+                while view:
+                    written = output.write(view)
+                    if written is None:
+                        written = len(view)
+                    if written <= 0:
+                        raise OSError("remote archive accepted no data")
+                    transferred += written
+                    view = view[written:]
+    except UploadFailure:
+        raise
+    except Exception as error:
+        fail(WRITE_FAILED, str(error), 74)
+
+    if transferred != expected:
+        fail(SIZE_MISMATCH, "expected=" + str(expected) + " actual=" + str(transferred), 75)
+
+    try:
+        os.mkdir(staging_path, 0o700)
+        staging_created = True
+    except Exception as error:
+        fail(EXTRACT_FAILED, "staging: " + str(error), 74)
+
+    extract_archive(archive_path, staging_path)
+    heartbeat()
+    current_remote_dir = os.lstat(remote_dir)
+    if (current_remote_dir.st_dev, current_remote_dir.st_ino, current_remote_dir.st_mode) != remote_dir_signature:
+        fail(UNSAFE, "remote-directory-changed", 73)
+
+    current_destination = lstat_optional(destination)
+    if expected_destination_revision == "missing" or not replace_existing:
+        if current_destination is not None:
+            if stat.S_ISLNK(current_destination.st_mode):
+                fail(UNSAFE, "destination-symbolic-link", 73)
+            if not stat.S_ISDIR(current_destination.st_mode):
+                fail(UNSAFE, "destination-not-directory", 73)
+            if replace_existing:
+                fail(CHANGED, "destination-created-during-upload", 76)
+            fail(CONFLICT, "destination-already-exists", 73)
+    else:
+        if current_destination is None:
+            fail(CHANGED, "destination-removed-during-upload", 76)
+        if stat.S_ISLNK(current_destination.st_mode):
+            fail(UNSAFE, "destination-symbolic-link", 73)
+        if not stat.S_ISDIR(current_destination.st_mode):
+            fail(UNSAFE, "destination-not-directory", 73)
+        current_identity = (
+            current_destination.st_dev,
+            current_destination.st_ino,
+            current_destination.st_mode,
+        )
+        if current_identity != initial_destination_identity:
+            fail(CHANGED, "destination-replaced-during-upload", 76)
+        try:
+            current_revision, initial_destination_snapshot = directory_snapshots(destination)
+        except UploadFailure:
+            raise
+        except OSError as error:
+            fail(CHANGED, "snapshot: " + str(error), 76)
+        if (
+            current_revision != expected_destination_revision
+            or initial_destination_snapshot != expected_destination_stable
+        ):
+            fail(CHANGED, "destination-content-changed-during-upload", 76)
+
+    os.chmod(staging_path, root_mode)
+
+    commit_phase = True
+    try:
+        if expected_destination_revision == "missing" or not replace_existing:
+            try:
+                os.mkdir(destination, 0o700)
+                placeholder_created = True
+                placeholder_value = os.lstat(destination)
+                placeholder_signature = (placeholder_value.st_dev, placeholder_value.st_ino)
+            except FileExistsError:
+                raced_destination = lstat_optional(destination)
+                if (
+                    raced_destination is not None
+                    and stat.S_ISDIR(raced_destination.st_mode)
+                    and not stat.S_ISLNK(raced_destination.st_mode)
+                    and not replace_existing
+                ):
+                    fail(CONFLICT, "destination-already-exists", 73)
+                fail(CHANGED, "destination-created-during-commit", 76)
+            except UploadFailure:
+                raise
+            except Exception as error:
+                fail(COMMIT_FAILED, "reservation: " + str(error), 77)
+            try:
+                os.replace(staging_path, destination)
+            except Exception as error:
+                try:
+                    os.chmod(staging_path, 0o700)
+                except OSError:
+                    pass
+                fail(COMMIT_FAILED, str(error), 77)
+            staging_created = False
+            placeholder_created = False
+            upload_committed = True
+        else:
+            staging_value = os.lstat(staging_path)
+            staging_identity = (staging_value.st_dev, staging_value.st_ino, staging_value.st_mode)
+            try:
+                _, staging_snapshot = directory_snapshots(staging_path)
+            except UploadFailure:
+                raise
+            except OSError as error:
+                fail(COMMIT_FAILED, "staging-snapshot: " + str(error), 77)
+            if not try_exchange_directories(destination, staging_path):
+                fail(COMMIT_FAILED, "atomic-directory-exchange-unavailable", 77)
+            staging_contains_old = True
+
+            exchanged_destination = os.lstat(destination)
+            exchanged_old = os.lstat(staging_path)
+            exchanged_destination_identity = (
+                exchanged_destination.st_dev,
+                exchanged_destination.st_ino,
+                exchanged_destination.st_mode,
+            )
+            exchanged_old_identity = (
+                exchanged_old.st_dev,
+                exchanged_old.st_ino,
+                exchanged_old.st_mode,
+            )
+            old_changed = (
+                exchanged_destination_identity != staging_identity
+                or exchanged_old_identity != initial_destination_identity
+            )
+            if not old_changed:
+                try:
+                    _, exchanged_old_snapshot = directory_snapshots(staging_path)
+                    old_changed = exchanged_old_snapshot != initial_destination_snapshot
+                except (UploadFailure, OSError):
+                    old_changed = True
+            if old_changed:
+                new_changed = True
+                try:
+                    _, exchanged_new_snapshot = directory_snapshots(destination)
+                    new_changed = exchanged_new_snapshot != staging_snapshot
+                except (UploadFailure, OSError):
+                    pass
+                if try_exchange_directories(destination, staging_path):
+                    staging_contains_old = False
+                    preserve_staging = new_changed
+                    detail = "destination-content-changed-during-commit"
+                    if preserve_staging:
+                        detail += "; replacement-preserved-at=" + staging_path
+                    fail(CHANGED, detail, 76)
+                preserve_staging = True
+                fail(
+                    COMMIT_FAILED,
+                    "rollback-failed; old-directory-preserved-at=" + staging_path,
+                    77,
+                )
+            upload_committed = True
+    except UploadFailure:
+        raise
+    except Exception as error:
+        fail(COMMIT_FAILED, str(error), 77)
+    finally:
+        commit_phase = False
+
+    if upload_committed and staging_contains_old:
+        try:
+            remove_staging(staging_path)
+            staging_created = False
+            staging_contains_old = False
+        except OSError:
+            pass
+except UploadFailure as error:
+    sys.exit(error.code)
+except Exception as error:
+    print(COMMIT_FAILED + " " + str(error), file=sys.stderr, flush=True)
+    sys.exit(1)
+finally:
+    commit_phase = False
+    if placeholder_created and destination is not None:
+        try:
+            placeholder_value = os.lstat(destination)
+            if (
+                stat.S_ISDIR(placeholder_value.st_mode)
+                and not stat.S_ISLNK(placeholder_value.st_mode)
+                and (placeholder_value.st_dev, placeholder_value.st_ino) == placeholder_signature
+            ):
+                os.rmdir(destination)
+        except OSError:
+            pass
+    if staging_created and not staging_contains_old and not preserve_staging:
+        try:
+            remove_staging(staging_path)
+        except OSError:
+            pass
+    if upload_committed and staging_contains_old:
+        try:
+            remove_staging(staging_path)
+        except OSError:
+            pass
+    if archive_created:
+        try:
+            os.unlink(archive_path)
+        except OSError:
+            pass
+"#;
+
+fn remote_upload_temp_path(remote_dir: &str) -> String {
+    let name = format!(".ishell-upload-{}.tmp", uuid::Uuid::new_v4());
+    if remote_dir == "/" {
+        format!("/{name}")
+    } else {
+        format!("{}/{}", remote_dir.trim_end_matches('/'), name)
+    }
+}
+
+fn transactional_upload_command(remote_path: &str, temp_path: &str, expected_size: u64) -> String {
+    let python_command = format!(
+        "python3 -c {} {} {} {expected_size}",
+        openssh::shell_quote(TRANSACTIONAL_UPLOAD_SCRIPT),
+        openssh::shell_quote(remote_path),
+        openssh::shell_quote(temp_path),
+    );
+    format!("sh -c {}", openssh::shell_quote(&python_command))
+}
+
+fn remote_folder_upload_paths(remote_dir: &str) -> (String, String) {
+    let token = uuid::Uuid::new_v4();
+    let prefix = if remote_dir == "/" {
+        String::new()
+    } else {
+        remote_dir.trim_end_matches('/').to_string()
+    };
+    (
+        format!("{prefix}/.ishell-upload-{token}.tar.tmp"),
+        format!("{prefix}/.ishell-upload-{token}.stage"),
+    )
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct RemoteFolderRevision {
+    revision: String,
+    rename_stable: String,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum RemoteFolderTarget {
+    Missing,
+    Directory(Option<RemoteFolderRevision>),
+    Unsupported(String),
+    Changed(String),
+}
+
+fn parse_remote_folder_target(raw: &str) -> Result<RemoteFolderTarget, String> {
+    let state = raw.trim();
+    if state == "missing" {
+        Ok(RemoteFolderTarget::Missing)
+    } else if state == "directory" {
+        Ok(RemoteFolderTarget::Directory(None))
+    } else if let Some(tokens) = state.strip_prefix("directory ") {
+        let mut tokens = tokens.split_whitespace();
+        let revision = tokens.next().unwrap_or_default();
+        let rename_stable = tokens.next().unwrap_or_default();
+        let valid_digest =
+            |value: &str| value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit());
+        if tokens.next().is_some() || !valid_digest(revision) || !valid_digest(rename_stable) {
+            return Err("远程目标版本令牌无效".to_string());
+        }
+        Ok(RemoteFolderTarget::Directory(Some(RemoteFolderRevision {
+            revision: revision.to_ascii_lowercase(),
+            rename_stable: rename_stable.to_ascii_lowercase(),
+        })))
+    } else if let Some(details) = state.strip_prefix("unsupported ") {
+        Ok(RemoteFolderTarget::Unsupported(details.to_string()))
+    } else if let Some(details) = state.strip_prefix("changed ") {
+        Ok(RemoteFolderTarget::Changed(details.to_string()))
+    } else {
+        Err(format!("无法识别远程目标类型：{state}"))
+    }
+}
+
+fn probe_remote_folder_target(
+    app: &AppHandle,
+    id: &str,
+    remote_dir: &str,
+    folder_name: &str,
+    include_revision: bool,
+) -> Result<RemoteFolderTarget, String> {
+    let include_revision = if include_revision { "1" } else { "0" };
+    run_remote_python(
+        app,
+        id,
+        FOLDER_TARGET_PROBE_SCRIPT,
+        &[remote_dir, folder_name, include_revision],
+    )
+    .and_then(|raw| parse_remote_folder_target(&raw))
+}
+
+fn folder_upload_conflict_error() -> String {
+    format!("{UPLOAD_FOLDER_CONFLICT_MARKER} 目标文件夹已存在，请确认是否全量覆盖")
+}
+
+#[allow(clippy::too_many_arguments)]
+fn transactional_folder_upload_command(
+    remote_dir: &str,
+    folder_name: &str,
+    archive_path: &str,
+    staging_path: &str,
+    expected_size: u64,
+    root_mode: u32,
+    replace_existing_folder: bool,
+    expected_destination_revision: &str,
+    expected_destination_stable: &str,
+) -> String {
+    transactional_folder_upload_command_with_script(
+        TRANSACTIONAL_FOLDER_UPLOAD_SCRIPT,
+        remote_dir,
+        folder_name,
+        archive_path,
+        staging_path,
+        expected_size,
+        root_mode,
+        replace_existing_folder,
+        expected_destination_revision,
+        expected_destination_stable,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn transactional_folder_upload_command_with_script(
+    script: &str,
+    remote_dir: &str,
+    folder_name: &str,
+    archive_path: &str,
+    staging_path: &str,
+    expected_size: u64,
+    root_mode: u32,
+    replace_existing_folder: bool,
+    expected_destination_revision: &str,
+    expected_destination_stable: &str,
+) -> String {
+    let replace_existing_folder = u8::from(replace_existing_folder);
+    let python_command = format!(
+        "python3 -c {} {} {} {} {} {expected_size} {root_mode:o} {replace_existing_folder} {} {}",
+        openssh::shell_quote(script),
+        openssh::shell_quote(remote_dir),
+        openssh::shell_quote(folder_name),
+        openssh::shell_quote(archive_path),
+        openssh::shell_quote(staging_path),
+        openssh::shell_quote(expected_destination_revision),
+        openssh::shell_quote(expected_destination_stable),
+    );
+    format!("sh -c {}", openssh::shell_quote(&python_command))
+}
+
+#[derive(Debug)]
+struct PreparedFolderArchive {
+    path: PathBuf,
+    file: Option<fs::File>,
+    size: u64,
+    root_mode: u32,
+}
+
+impl PreparedFolderArchive {
+    fn file_mut(&mut self) -> &mut fs::File {
+        self.file.as_mut().expect("prepared archive file missing")
+    }
+}
+
+impl Drop for PreparedFolderArchive {
+    fn drop(&mut self) {
+        drop(self.file.take());
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
+struct CancelReader<'a> {
+    inner: fs::File,
+    is_canceled: &'a dyn Fn() -> bool,
+}
+
+impl Read for CancelReader<'_> {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        if (self.is_canceled)() {
+            return Err(io::Error::other("上传已停止"));
+        }
+        self.inner.read(buffer)
+    }
+}
+
+fn validate_archive_relative_path(path: &Path) -> Result<(), String> {
+    if path.as_os_str().is_empty() {
+        return Err("文件夹归档包含空路径".to_string());
+    }
+    for component in path.components() {
+        match component {
+            Component::Normal(value) if value.to_str().is_some() => {}
+            Component::Normal(_) => return Err("文件夹包含非 UTF-8 文件名".to_string()),
+            _ => return Err("文件夹包含不安全路径".to_string()),
+        }
+    }
+    Ok(())
+}
+
+fn same_local_file_identity(first: &fs::Metadata, second: &fs::Metadata) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        first.dev() == second.dev()
+            && first.ino() == second.ino()
+            && first.file_type() == second.file_type()
+    }
+    #[cfg(not(unix))]
+    {
+        first.file_type() == second.file_type() && first.len() == second.len()
+    }
+}
+
+fn same_local_file_snapshot(first: &fs::Metadata, second: &fs::Metadata) -> bool {
+    if !same_local_file_identity(first, second)
+        || first.len() != second.len()
+        || first.modified().ok() != second.modified().ok()
+    {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        first.mode() == second.mode()
+            && first.nlink() == second.nlink()
+            && first.mtime() == second.mtime()
+            && first.mtime_nsec() == second.mtime_nsec()
+            && first.ctime() == second.ctime()
+            && first.ctime_nsec() == second.ctime_nsec()
+    }
+    #[cfg(not(unix))]
+    {
+        first.permissions().readonly() == second.permissions().readonly()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LocalFolderEntryKind {
+    File,
+    Directory,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LocalFolderEntrySnapshot {
+    relative_path: PathBuf,
+    kind: LocalFolderEntryKind,
+    len: u64,
+    modified: Option<std::time::SystemTime>,
+    readonly: bool,
+    #[cfg(unix)]
+    device: u64,
+    #[cfg(unix)]
+    inode: u64,
+    #[cfg(unix)]
+    mode: u32,
+    #[cfg(unix)]
+    links: u64,
+    #[cfg(unix)]
+    modified_seconds: i64,
+    #[cfg(unix)]
+    modified_nanoseconds: i64,
+    #[cfg(unix)]
+    changed_seconds: i64,
+    #[cfg(unix)]
+    changed_nanoseconds: i64,
+}
+
+fn local_folder_entry_snapshot(
+    relative_path: PathBuf,
+    metadata: &fs::Metadata,
+) -> LocalFolderEntrySnapshot {
+    let kind = if metadata.is_dir() {
+        LocalFolderEntryKind::Directory
+    } else {
+        LocalFolderEntryKind::File
+    };
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        LocalFolderEntrySnapshot {
+            relative_path,
+            kind,
+            len: metadata.len(),
+            modified: metadata.modified().ok(),
+            readonly: metadata.permissions().readonly(),
+            device: metadata.dev(),
+            inode: metadata.ino(),
+            mode: metadata.mode(),
+            links: metadata.nlink(),
+            modified_seconds: metadata.mtime(),
+            modified_nanoseconds: metadata.mtime_nsec(),
+            changed_seconds: metadata.ctime(),
+            changed_nanoseconds: metadata.ctime_nsec(),
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        LocalFolderEntrySnapshot {
+            relative_path,
+            kind,
+            len: metadata.len(),
+            modified: metadata.modified().ok(),
+            readonly: metadata.permissions().readonly(),
+        }
+    }
+}
+
+fn same_local_archive_identity(first: &fs::Metadata, second: &fs::Metadata) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        first.dev() == second.dev() && first.ino() == second.ino()
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (first, second);
+        false
+    }
+}
+
+fn open_local_regular_file_no_follow(path: &Path) -> Result<fs::File, String> {
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+        options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    }
+    options
+        .open(path)
+        .map_err(|err| format!("无法安全打开本地文件：{}：{err}", path.display()))
+}
+
+fn local_directory_mode(metadata: &fs::Metadata) -> u32 {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.permissions().mode() & 0o777
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = metadata;
+        0o755
+    }
+}
+
+fn collect_local_folder_snapshot(
+    root: &Path,
+    directory: &Path,
+    archive_path: Option<&Path>,
+    archive_identity: Option<&fs::Metadata>,
+    is_canceled: &dyn Fn() -> bool,
+) -> Result<Vec<LocalFolderEntrySnapshot>, String> {
+    let mut snapshot = Vec::new();
+    collect_local_folder_snapshot_entries(
+        root,
+        directory,
+        archive_path,
+        archive_identity,
+        is_canceled,
+        &mut snapshot,
+    )?;
+    snapshot.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
+    Ok(snapshot)
+}
+
+fn collect_local_folder_snapshot_entries(
+    root: &Path,
+    directory: &Path,
+    archive_path: Option<&Path>,
+    archive_identity: Option<&fs::Metadata>,
+    is_canceled: &dyn Fn() -> bool,
+    snapshot: &mut Vec<LocalFolderEntrySnapshot>,
+) -> Result<(), String> {
+    if is_canceled() {
+        return Err("上传已停止".to_string());
+    }
+    let before =
+        fs::symlink_metadata(directory).map_err(|err| format!("无法读取本地文件夹：{err}"))?;
+    if before.file_type().is_symlink() || !before.is_dir() {
+        return Err("本地文件夹包含符号链接或目录已发生变化".to_string());
+    }
+    let mut entries = fs::read_dir(directory)
+        .map_err(|err| format!("无法读取本地文件夹：{err}"))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|err| format!("无法读取本地文件夹条目：{err}"))?;
+    entries.sort_by_key(|entry| entry.file_name());
+    for entry in entries {
+        if is_canceled() {
+            return Err("上传已停止".to_string());
+        }
+        let path = entry.path();
+        let relative = path
+            .strip_prefix(root)
+            .map_err(|_| "本地文件夹条目越界".to_string())?;
+        validate_archive_relative_path(relative)?;
+        let metadata =
+            fs::symlink_metadata(&path).map_err(|err| format!("无法读取本地文件夹条目：{err}"))?;
+        if archive_path.is_some_and(|archive_path| path == archive_path)
+            || archive_identity.is_some_and(|archive_identity| {
+                same_local_archive_identity(&metadata, archive_identity)
+            })
+        {
+            continue;
+        }
+        if metadata.file_type().is_symlink() {
+            return Err(format!("文件夹包含符号链接：{}", path.display()));
+        }
+        if metadata.is_dir() {
+            collect_local_folder_snapshot_entries(
+                root,
+                &path,
+                archive_path,
+                archive_identity,
+                is_canceled,
+                snapshot,
+            )?;
+        } else if !metadata.is_file() {
+            return Err(format!("文件夹包含特殊文件：{}", path.display()));
+        } else {
+            snapshot.push(local_folder_entry_snapshot(
+                relative.to_path_buf(),
+                &metadata,
+            ));
+        }
+    }
+    let after =
+        fs::symlink_metadata(directory).map_err(|err| format!("无法再次检查本地文件夹：{err}"))?;
+    if !same_local_file_snapshot(&before, &after) {
+        return Err(format!(
+            "本地文件夹遍历期间发生变化：{}",
+            directory.display()
+        ));
+    }
+    let relative = directory
+        .strip_prefix(root)
+        .map_err(|_| "本地文件夹条目越界".to_string())?;
+    snapshot.push(local_folder_entry_snapshot(relative.to_path_buf(), &after));
+    Ok(())
+}
+
+fn append_local_folder_entries(
+    builder: &mut tar::Builder<fs::File>,
+    root: &Path,
+    directory: &Path,
+    archive_path: &Path,
+    archive_identity: &fs::Metadata,
+    is_canceled: &dyn Fn() -> bool,
+) -> Result<(), String> {
+    if is_canceled() {
+        return Err("上传已停止".to_string());
+    }
+    let directory_metadata =
+        fs::symlink_metadata(directory).map_err(|err| format!("无法读取本地文件夹：{err}"))?;
+    if directory_metadata.file_type().is_symlink() || !directory_metadata.is_dir() {
+        return Err("本地文件夹包含符号链接或目录已发生变化".to_string());
+    }
+
+    let mut entries = fs::read_dir(directory)
+        .map_err(|err| format!("无法读取本地文件夹：{err}"))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|err| format!("无法读取本地文件夹条目：{err}"))?;
+    entries.sort_by_key(|entry| entry.file_name());
+
+    for entry in entries {
+        if is_canceled() {
+            return Err("上传已停止".to_string());
+        }
+        let path = entry.path();
+        let relative = path
+            .strip_prefix(root)
+            .map_err(|_| "本地文件夹条目越界".to_string())?;
+        validate_archive_relative_path(relative)?;
+        let metadata =
+            fs::symlink_metadata(&path).map_err(|err| format!("无法读取本地文件夹条目：{err}"))?;
+        if path == archive_path || same_local_archive_identity(&metadata, archive_identity) {
+            continue;
+        }
+        let file_type = metadata.file_type();
+        if file_type.is_symlink() {
+            return Err(format!("文件夹包含符号链接：{}", path.display()));
+        }
+        if metadata.is_dir() {
+            let mut header = tar::Header::new_gnu();
+            header.set_metadata(&metadata);
+            header.set_entry_type(tar::EntryType::Directory);
+            header.set_size(0);
+            header.set_cksum();
+            builder
+                .append_data(&mut header, relative, io::empty())
+                .map_err(|err| format!("无法写入文件夹归档：{err}"))?;
+            append_local_folder_entries(
+                builder,
+                root,
+                &path,
+                archive_path,
+                archive_identity,
+                is_canceled,
+            )?;
+        } else if metadata.is_file() {
+            let file = open_local_regular_file_no_follow(&path)?;
+            let opened_metadata = file
+                .metadata()
+                .map_err(|err| format!("无法读取本地文件信息：{err}"))?;
+            if !opened_metadata.is_file() {
+                return Err(format!("本地文件已发生变化：{}", path.display()));
+            }
+            if !same_local_file_identity(&metadata, &opened_metadata) {
+                return Err(format!("本地文件打开期间发生变化：{}", path.display()));
+            }
+            let mut header = tar::Header::new_gnu();
+            header.set_metadata(&opened_metadata);
+            header.set_entry_type(tar::EntryType::Regular);
+            header.set_size(opened_metadata.len());
+            header.set_cksum();
+            let mut reader = CancelReader {
+                inner: file,
+                is_canceled,
+            };
+            builder
+                .append_data(&mut header, relative, &mut reader)
+                .map_err(|err| {
+                    if is_canceled() {
+                        "上传已停止".to_string()
+                    } else {
+                        format!("无法写入文件夹归档：{err}")
+                    }
+                })?;
+            let after = fs::symlink_metadata(&path)
+                .map_err(|err| format!("无法再次检查本地文件：{err}"))?;
+            if !same_local_file_snapshot(&opened_metadata, &after) {
+                return Err(format!("本地文件归档期间发生变化：{}", path.display()));
+            }
+        } else {
+            return Err(format!("文件夹包含特殊文件：{}", path.display()));
+        }
+    }
+    let after =
+        fs::symlink_metadata(directory).map_err(|err| format!("无法再次检查本地文件夹：{err}"))?;
+    if !same_local_file_snapshot(&directory_metadata, &after) {
+        return Err(format!(
+            "本地文件夹归档期间发生变化：{}",
+            directory.display()
+        ));
+    }
+    Ok(())
+}
+
+fn prepare_folder_archive(
+    local_path: &Path,
+    transfer_id: &str,
+    is_canceled: &dyn Fn() -> bool,
+) -> Result<PreparedFolderArchive, String> {
+    let metadata =
+        fs::symlink_metadata(local_path).map_err(|err| format!("无法读取本地文件夹：{err}"))?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err("请选择不含符号链接的本地文件夹".to_string());
+    }
+    collect_local_folder_snapshot(local_path, local_path, None, None, is_canceled)?;
+    let root_mode = local_directory_mode(&metadata);
+    let safe_transfer_id: String = transfer_id
+        .chars()
+        .filter(|value| value.is_ascii_alphanumeric() || *value == '-' || *value == '_')
+        .take(36)
+        .collect();
+    let path = std::env::temp_dir().join(format!(
+        "ishell-folder-{}-{}.tar.tmp",
+        if safe_transfer_id.is_empty() {
+            "upload"
+        } else {
+            &safe_transfer_id
+        },
+        uuid::Uuid::new_v4()
+    ));
+    let mut options = fs::OpenOptions::new();
+    options.read(true).write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let output = options
+        .open(&path)
+        .map_err(|err| format!("无法创建本地文件夹归档：{err}"))?;
+    let archive_identity = output
+        .metadata()
+        .map_err(|err| format!("无法读取本地文件夹归档信息：{err}"))?;
+    let result = (|| -> Result<fs::File, String> {
+        let initial_snapshot = collect_local_folder_snapshot(
+            local_path,
+            local_path,
+            Some(&path),
+            Some(&archive_identity),
+            is_canceled,
+        )?;
+        let mut builder = tar::Builder::new(output);
+        builder.follow_symlinks(false);
+        append_local_folder_entries(
+            &mut builder,
+            local_path,
+            local_path,
+            &path,
+            &archive_identity,
+            is_canceled,
+        )?;
+        builder
+            .finish()
+            .map_err(|err| format!("无法完成本地文件夹归档：{err}"))?;
+        let mut output = builder
+            .into_inner()
+            .map_err(|err| format!("无法完成本地文件夹归档：{err}"))?;
+        output
+            .flush()
+            .map_err(|err| format!("无法刷新本地文件夹归档：{err}"))?;
+        if is_canceled() {
+            return Err("上传已停止".to_string());
+        }
+        let final_snapshot = collect_local_folder_snapshot(
+            local_path,
+            local_path,
+            Some(&path),
+            Some(&archive_identity),
+            is_canceled,
+        )?;
+        if final_snapshot != initial_snapshot {
+            return Err("本地文件夹在打包期间发生变化，请重试上传".to_string());
+        }
+        output
+            .seek(SeekFrom::Start(0))
+            .map_err(|err| format!("无法读取本地文件夹归档：{err}"))?;
+        Ok(output)
+    })();
+    let file = match result {
+        Ok(file) => file,
+        Err(error) => {
+            let _ = fs::remove_file(&path);
+            return Err(error);
+        }
+    };
+    let size = file
+        .metadata()
+        .map_err(|err| format!("无法读取本地文件夹归档信息：{err}"))?
+        .len();
+    Ok(PreparedFolderArchive {
+        path,
+        file: Some(file),
+        size,
+        root_mode,
+    })
+}
+
+fn humanize_upload_error_message(message: &str) -> String {
+    message
+        .lines()
+        .filter_map(|line| {
+            if line.contains(UPLOAD_HEARTBEAT_MARKER) {
+                None
+            } else if line.contains(UPLOAD_TARGET_DIRECTORY_MARKER) {
+                Some("目标路径是目录，无法覆盖".to_string())
+            } else if let Some(details) = line
+                .split_once(UPLOAD_TARGET_UNSUPPORTED_MARKER)
+                .map(|(_, details)| details.trim())
+            {
+                if details.is_empty() {
+                    Some("目标不是可安全替换的普通文件".to_string())
+                } else {
+                    Some(format!("目标不是可安全替换的普通文件（{details}）"))
+                }
+            } else if line.contains(UPLOAD_TARGET_CHANGED_MARKER) {
+                Some("上传期间目标文件发生变化，已取消覆盖".to_string())
+            } else if let Some(details) = line
+                .split_once(openssh::UPLOAD_SIZE_MISMATCH_MARKER)
+                .map(|(_, details)| details.trim())
+            {
+                if details.is_empty() {
+                    Some("上传字节数校验失败".to_string())
+                } else {
+                    Some(format!("上传字节数校验失败（{details}）"))
+                }
+            } else if let Some(details) = line
+                .split_once(UPLOAD_WRITE_FAILED_MARKER)
+                .map(|(_, details)| details.trim())
+            {
+                if details.is_empty() {
+                    Some("远程临时文件写入失败".to_string())
+                } else {
+                    Some(format!("远程临时文件写入失败（{details}）"))
+                }
+            } else if let Some(details) = line
+                .split_once(UPLOAD_COMMIT_FAILED_MARKER)
+                .map(|(_, details)| details.trim())
+            {
+                if details.is_empty() {
+                    Some("远程文件提交失败".to_string())
+                } else {
+                    Some(format!("远程文件提交失败（{details}）"))
+                }
+            } else if line.contains(UPLOAD_FOLDER_CONFLICT_MARKER) {
+                Some(folder_upload_conflict_error())
+            } else if let Some(details) = line
+                .split_once(UPLOAD_FOLDER_UNSAFE_MARKER)
+                .map(|(_, details)| details.trim())
+            {
+                Some(if details == "destination-already-exists" {
+                    "目标文件夹已存在，为避免破坏现有内容，本次上传未覆盖".to_string()
+                } else if details.is_empty() {
+                    "文件夹包含不安全条目或远程目标不安全".to_string()
+                } else {
+                    format!("文件夹包含不安全条目或远程目标不安全（{details}）")
+                })
+            } else if let Some(details) = line
+                .split_once(UPLOAD_FOLDER_EXTRACT_FAILED_MARKER)
+                .map(|(_, details)| details.trim())
+            {
+                Some(if details.is_empty() {
+                    "远程解包失败".to_string()
+                } else {
+                    format!("远程解包失败（{details}）")
+                })
+            } else if let Some(details) = line
+                .split_once(UPLOAD_FOLDER_COMMIT_FAILED_MARKER)
+                .map(|(_, details)| details.trim())
+            {
+                Some(if details.is_empty() {
+                    "远程文件夹提交失败".to_string()
+                } else {
+                    format!("远程文件夹提交失败（{details}）")
+                })
+            } else if let Some(details) = line
+                .split_once(UPLOAD_FOLDER_CHANGED_MARKER)
+                .map(|(_, details)| details.trim())
+            {
+                Some(if details.is_empty() {
+                    "上传期间目标文件夹发生变化，已取消覆盖".to_string()
+                } else {
+                    format!("上传期间目标文件夹发生变化，已取消覆盖（{details}）")
+                })
+            } else {
+                Some(line.to_string())
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 pub fn upload_file(
     _pool: &SshPool,
     app: &AppHandle,
@@ -785,46 +2512,44 @@ pub fn upload_file(
     };
 
     let mut local = fs::File::open(local_path).map_err(|err| format!("无法打开本地文件：{err}"))?;
-    let total = local.metadata().map(|meta| meta.len()).unwrap_or(0);
-    let remote_command = format!("cat > {}", openssh::shell_quote(&remote_path));
-
+    let total = local
+        .metadata()
+        .map_err(|err| format!("无法读取本地文件信息：{err}"))?
+        .len();
     #[cfg(not(russh_backend))]
     {
-        let (mut child, helper_path) =
-            spawn_remote_ex(app, id, &remote_command, true, false, false, false)?;
-        let mut stdin = child
-            .stdin
-            .take()
-            .ok_or_else(|| "无法写入 OpenSSH 上传输入".to_string())?;
-        let progress = ProgressConfig::new(
-            app,
-            total,
-            transfer_id,
-            "sftp-upload-progress",
-            "上传已停止",
-            is_canceled,
-        );
-        let copy_result = copy_with_progress(&mut local, &mut stdin, progress);
-        drop(stdin);
-        if copy_result.is_err() {
-            let _ = child.kill();
-        }
-        let output = child
-            .wait_with_output()
-            .map_err(|err| format!("等待 OpenSSH 上传结束失败：{err}"));
-        cleanup_askpass_helper(helper_path.as_ref());
-        match copy_result {
-            Ok(()) => {}
-            Err(err) if err.kind() == io::ErrorKind::Interrupted => {
-                let _ = remove_remote_file(app, id, &remote_path);
-                return Err("上传已停止".to_string());
+        let mut retries = 0;
+        loop {
+            let temp_path = remote_upload_temp_path(remote_dir);
+            let remote_command = transactional_upload_command(&remote_path, &temp_path, total);
+            let result = openssh_upload_attempt(
+                app,
+                id,
+                &remote_command,
+                &mut local,
+                total,
+                transfer_id,
+                is_canceled,
+                true,
+            );
+            match result {
+                Ok(()) => break,
+                Err(UploadAttemptError::Canceled) => {
+                    let _ = remove_remote_file(app, id, &temp_path);
+                    return Err("上传已停止".to_string());
+                }
+                Err(err) if should_retry_upload(&err, retries, is_canceled()) => {
+                    let _ = remove_remote_file(app, id, &temp_path);
+                    retries += 1;
+                    if let Err(seek_err) = local.seek(SeekFrom::Start(0)) {
+                        return Err(format!("无法重试上传：{seek_err}"));
+                    }
+                }
+                Err(UploadAttemptError::Failed { message, .. }) => {
+                    let _ = remove_remote_file(app, id, &temp_path);
+                    return Err(message);
+                }
             }
-            Err(err) => return Err(format!("上传失败：{err}")),
-        }
-        let output = output?;
-        if !output.status.success() {
-            let _ = remove_remote_file(app, id, &remote_path);
-            return Err(format_process_error("上传失败", &output.stderr));
         }
     }
 
@@ -832,51 +2557,526 @@ pub fn upload_file(
     {
         let server = get_server(app, id)?;
         let secret = read_secret(app, id).ok().filter(|value| !value.is_empty());
-        emit_progress(app, "sftp-upload-progress", transfer_id, 0, total, false);
-        let mut last_emit = Instant::now();
-        let mut on_progress = |transferred: u64| {
-            if last_emit.elapsed() >= Duration::from_millis(80) {
-                emit_progress(
-                    app,
-                    "sftp-upload-progress",
-                    transfer_id,
-                    transferred,
-                    total,
-                    false,
-                );
-                last_emit = Instant::now();
-            }
-        };
-        let result = crate::russh_transport::upload(
-            &server,
-            secret.as_deref(),
-            &remote_command,
-            &mut local,
-            is_canceled,
-            &mut on_progress,
-        );
-        if let Err(err) = result {
-            let _ = remove_remote_file(app, id, &remote_path);
-            return match err {
-                crate::russh_transport::TransferError::Canceled => Err("上传已停止".to_string()),
-                crate::russh_transport::TransferError::Failed(msg) => {
-                    Err(format!("上传失败：{msg}"))
+        let mut retries = 0;
+        loop {
+            emit_progress(app, "sftp-upload-progress", transfer_id, 0, total, false);
+            let mut last_emit = Instant::now();
+            let mut on_progress = |transferred: u64| {
+                if transferred >= total || last_emit.elapsed() >= Duration::from_millis(80) {
+                    emit_progress(
+                        app,
+                        "sftp-upload-progress",
+                        transfer_id,
+                        transferred,
+                        total,
+                        false,
+                    );
+                    last_emit = Instant::now();
                 }
             };
-        }
-    }
-
-    if let Ok(remote_size) = remote_file_size(app, id, &remote_path) {
-        if remote_size != total {
-            let _ = remove_remote_file(app, id, &remote_path);
-            return Err(format!(
-                "上传文件大小不一致：本地 {total} 字节，远程 {remote_size} 字节"
-            ));
+            let temp_path = remote_upload_temp_path(remote_dir);
+            let remote_command = transactional_upload_command(&remote_path, &temp_path, total);
+            let result = crate::russh_transport::upload(
+                &server,
+                secret.as_deref(),
+                &remote_command,
+                &mut local,
+                false,
+                is_canceled,
+                &mut on_progress,
+            );
+            match result {
+                Ok(()) => break,
+                Err(crate::russh_transport::UploadError::Canceled) => {
+                    let _ = remove_remote_file(app, id, &temp_path);
+                    return Err("上传已停止".to_string());
+                }
+                Err(crate::russh_transport::UploadError::Failed { message, retryable }) => {
+                    let err = UploadAttemptError::Failed {
+                        message: format!("上传失败：{}", humanize_upload_error_message(&message)),
+                        retryable,
+                    };
+                    if should_retry_upload(&err, retries, is_canceled()) {
+                        let _ = remove_remote_file(app, id, &temp_path);
+                        retries += 1;
+                        if let Err(seek_err) = local.seek(SeekFrom::Start(0)) {
+                            return Err(format!("无法重试上传：{seek_err}"));
+                        }
+                        continue;
+                    }
+                    let _ = remove_remote_file(app, id, &temp_path);
+                    let UploadAttemptError::Failed { message, .. } = err;
+                    return Err(message);
+                }
+            }
         }
     }
 
     emit_progress(app, "sftp-upload-progress", transfer_id, total, total, true);
     Ok(remote_path)
+}
+
+fn remove_remote_folder_upload_artifacts(
+    app: &AppHandle,
+    id: &str,
+    archive_path: &str,
+    staging_path: &str,
+    replace_existing_folder: bool,
+) {
+    if replace_existing_folder {
+        // A transport failure after an atomic directory exchange has an
+        // uncertain commit result. The staging path may then contain the old
+        // destination, so a blind rm -rf could destroy the only recoverable
+        // copy. The remote transaction cleans its own artifacts whenever it
+        // can determine the outcome.
+        return;
+    }
+    let _ = run_remote_python(
+        app,
+        id,
+        FOLDER_UPLOAD_ARTIFACT_CLEANUP_SCRIPT,
+        &[archive_path, staging_path],
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn upload_folder(
+    _pool: &SshPool,
+    app: &AppHandle,
+    id: &str,
+    local_path: &str,
+    remote_dir: &str,
+    transfer_id: &str,
+    replace_existing_folder: bool,
+    is_canceled: &dyn Fn() -> bool,
+) -> Result<String, String> {
+    let local_root = Path::new(local_path);
+    let folder_name = local_root
+        .file_name()
+        .and_then(|value| value.to_str())
+        .filter(|value| !value.is_empty() && *value != "." && *value != "..")
+        .ok_or_else(|| "无效的本地文件夹名称".to_string())?
+        .to_string();
+    let remote_path = if remote_dir == "/" {
+        format!("/{folder_name}")
+    } else {
+        format!("{}/{}", remote_dir.trim_end_matches('/'), folder_name)
+    };
+    if is_canceled() {
+        return Err("上传已停止".to_string());
+    }
+    let (expected_destination_revision, expected_destination_stable) =
+        match probe_remote_folder_target(
+            app,
+            id,
+            remote_dir,
+            &folder_name,
+            replace_existing_folder,
+        )? {
+            RemoteFolderTarget::Missing if replace_existing_folder => {
+                ("missing".to_string(), "missing".to_string())
+            }
+            RemoteFolderTarget::Missing => ("unchecked".to_string(), "unchecked".to_string()),
+            RemoteFolderTarget::Directory(_) if !replace_existing_folder => {
+                return Err(folder_upload_conflict_error());
+            }
+            RemoteFolderTarget::Directory(Some(revision)) => {
+                (revision.revision, revision.rename_stable)
+            }
+            RemoteFolderTarget::Directory(None) => {
+                return Err("远程目标版本预检未返回版本令牌，请重试上传".to_string());
+            }
+            RemoteFolderTarget::Unsupported(details) => {
+                return Err(format!("远程目标不是可安全覆盖的文件夹（{details}）"));
+            }
+            RemoteFolderTarget::Changed(details) => {
+                return Err(format!(
+                    "远程目标在覆盖预检期间发生变化，请重试（{details}）"
+                ));
+            }
+        };
+    if is_canceled() {
+        return Err("上传已停止".to_string());
+    }
+    emit_progress(app, "sftp-upload-progress", transfer_id, 0, 0, false);
+    let mut archive = prepare_folder_archive(local_root, transfer_id, is_canceled)?;
+    let total = archive.size;
+
+    #[cfg(not(russh_backend))]
+    {
+        let mut retries = 0;
+        loop {
+            let (archive_path, staging_path) = remote_folder_upload_paths(remote_dir);
+            let remote_command = transactional_folder_upload_command(
+                remote_dir,
+                &folder_name,
+                &archive_path,
+                &staging_path,
+                total,
+                archive.root_mode,
+                replace_existing_folder,
+                &expected_destination_revision,
+                &expected_destination_stable,
+            );
+            let result = openssh_upload_attempt(
+                app,
+                id,
+                &remote_command,
+                archive.file_mut(),
+                total,
+                transfer_id,
+                is_canceled,
+                !replace_existing_folder,
+            );
+            match result {
+                Ok(()) => break,
+                Err(UploadAttemptError::Canceled) => {
+                    remove_remote_folder_upload_artifacts(
+                        app,
+                        id,
+                        &archive_path,
+                        &staging_path,
+                        replace_existing_folder,
+                    );
+                    return Err("上传已停止".to_string());
+                }
+                Err(error)
+                    if !replace_existing_folder
+                        && should_retry_upload(&error, retries, is_canceled()) =>
+                {
+                    remove_remote_folder_upload_artifacts(
+                        app,
+                        id,
+                        &archive_path,
+                        &staging_path,
+                        replace_existing_folder,
+                    );
+                    retries += 1;
+                    archive
+                        .file_mut()
+                        .seek(SeekFrom::Start(0))
+                        .map_err(|err| format!("无法重试文件夹上传：{err}"))?;
+                }
+                Err(UploadAttemptError::Failed { message, .. }) => {
+                    remove_remote_folder_upload_artifacts(
+                        app,
+                        id,
+                        &archive_path,
+                        &staging_path,
+                        replace_existing_folder,
+                    );
+                    return Err(message);
+                }
+            }
+        }
+    }
+
+    #[cfg(russh_backend)]
+    {
+        let server = get_server(app, id)?;
+        let secret = read_secret(app, id).ok().filter(|value| !value.is_empty());
+        let mut retries = 0;
+        loop {
+            emit_progress(app, "sftp-upload-progress", transfer_id, 0, total, false);
+            let mut last_emit = Instant::now();
+            let mut on_progress = |transferred: u64| {
+                if transferred >= total || last_emit.elapsed() >= Duration::from_millis(80) {
+                    emit_progress(
+                        app,
+                        "sftp-upload-progress",
+                        transfer_id,
+                        transferred,
+                        total,
+                        false,
+                    );
+                    last_emit = Instant::now();
+                }
+            };
+            let (archive_path, staging_path) = remote_folder_upload_paths(remote_dir);
+            let remote_command = transactional_folder_upload_command(
+                remote_dir,
+                &folder_name,
+                &archive_path,
+                &staging_path,
+                total,
+                archive.root_mode,
+                replace_existing_folder,
+                &expected_destination_revision,
+                &expected_destination_stable,
+            );
+            let result = crate::russh_transport::upload(
+                &server,
+                secret.as_deref(),
+                &remote_command,
+                archive.file_mut(),
+                replace_existing_folder,
+                is_canceled,
+                &mut on_progress,
+            );
+            match result {
+                Ok(()) => break,
+                Err(crate::russh_transport::UploadError::Canceled) => {
+                    remove_remote_folder_upload_artifacts(
+                        app,
+                        id,
+                        &archive_path,
+                        &staging_path,
+                        replace_existing_folder,
+                    );
+                    return Err("上传已停止".to_string());
+                }
+                Err(crate::russh_transport::UploadError::Failed { message, retryable }) => {
+                    let error = UploadAttemptError::Failed {
+                        message: format!("上传失败：{}", humanize_upload_error_message(&message)),
+                        retryable,
+                    };
+                    if !replace_existing_folder
+                        && should_retry_upload(&error, retries, is_canceled())
+                    {
+                        remove_remote_folder_upload_artifacts(
+                            app,
+                            id,
+                            &archive_path,
+                            &staging_path,
+                            replace_existing_folder,
+                        );
+                        retries += 1;
+                        archive
+                            .file_mut()
+                            .seek(SeekFrom::Start(0))
+                            .map_err(|err| format!("无法重试文件夹上传：{err}"))?;
+                        continue;
+                    }
+                    remove_remote_folder_upload_artifacts(
+                        app,
+                        id,
+                        &archive_path,
+                        &staging_path,
+                        replace_existing_folder,
+                    );
+                    let UploadAttemptError::Failed { message, .. } = error;
+                    return Err(message);
+                }
+            }
+        }
+    }
+
+    emit_progress(app, "sftp-upload-progress", transfer_id, total, total, true);
+    Ok(remote_path)
+}
+
+#[derive(Debug)]
+enum UploadAttemptError {
+    #[cfg(not(russh_backend))]
+    Canceled,
+    Failed {
+        message: String,
+        retryable: bool,
+    },
+}
+
+fn should_retry_upload(error: &UploadAttemptError, retries: usize, is_canceled: bool) -> bool {
+    retries == 0
+        && !is_canceled
+        && matches!(
+            error,
+            UploadAttemptError::Failed {
+                retryable: true,
+                ..
+            }
+        )
+}
+
+#[cfg(not(russh_backend))]
+#[allow(clippy::too_many_arguments)]
+fn openssh_upload_attempt(
+    app: &AppHandle,
+    id: &str,
+    remote_command: &str,
+    local: &mut fs::File,
+    total: u64,
+    transfer_id: &str,
+    is_canceled: &dyn Fn() -> bool,
+    cancel_while_waiting: bool,
+) -> Result<(), UploadAttemptError> {
+    let (mut child, helper_path) =
+        spawn_remote_ex(app, id, remote_command, true, false, true, false).map_err(|message| {
+            UploadAttemptError::Failed {
+                message: format!("上传失败：{message}"),
+                retryable: false,
+            }
+        })?;
+
+    let stderr_reader = child.stderr.take().map(|mut stderr| {
+        std::thread::spawn(move || {
+            let mut output = Vec::new();
+            stderr.read_to_end(&mut output)?;
+            Ok::<Vec<u8>, io::Error>(output)
+        })
+    });
+
+    let mut stdin = match child.stdin.take() {
+        Some(stdin) => stdin,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = join_stderr_reader(stderr_reader);
+            cleanup_askpass_helper(helper_path.as_ref());
+            return Err(UploadAttemptError::Failed {
+                message: "上传失败：无法写入 OpenSSH 上传输入".to_string(),
+                retryable: false,
+            });
+        }
+    };
+    let progress = ProgressConfig::new(
+        app,
+        total,
+        transfer_id,
+        "sftp-upload-progress",
+        "上传已停止",
+        is_canceled,
+    );
+    let copy_result = copy_upload_with_progress(local, &mut stdin, progress);
+    drop(stdin);
+
+    if matches!(
+        &copy_result,
+        Err(UploadCopyError::Canceled | UploadCopyError::Read { .. })
+    ) {
+        let _ = child.kill();
+    }
+    let mut canceled_while_waiting = false;
+    let status = loop {
+        if cancel_while_waiting && is_canceled() {
+            canceled_while_waiting = true;
+            let _ = child.kill();
+            break child.wait();
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => break Ok(status),
+            Ok(None) => std::thread::sleep(Duration::from_millis(100)),
+            Err(error) => break Err(error),
+        }
+    };
+    if status.is_err() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    let stderr = join_stderr_reader(stderr_reader);
+    cleanup_askpass_helper(helper_path.as_ref());
+
+    let status = match status {
+        Ok(status) => status,
+        Err(wait_error) => {
+            let fallback = copy_result
+                .as_ref()
+                .err()
+                .map(UploadCopyError::description)
+                .unwrap_or_else(|| "OpenSSH 上传进程提前结束".to_string());
+            return Err(UploadAttemptError::Failed {
+                message: format!("上传失败：{fallback}；等待 OpenSSH 上传结束失败：{wait_error}"),
+                retryable: copy_result
+                    .as_ref()
+                    .err()
+                    .is_some_and(upload_copy_is_connection_error),
+            });
+        }
+    };
+    let stderr =
+        stderr.unwrap_or_else(|error| format!("无法读取 OpenSSH 错误输出：{error}").into_bytes());
+
+    if canceled_while_waiting {
+        return Err(UploadAttemptError::Canceled);
+    }
+
+    match copy_result {
+        Err(UploadCopyError::Canceled) => Err(UploadAttemptError::Canceled),
+        Err(error) => {
+            let retryable = openssh_upload_is_retryable(&status, &stderr, Some(&error));
+            Err(UploadAttemptError::Failed {
+                message: format_upload_attempt_failure(&status, &stderr, &error.description()),
+                retryable,
+            })
+        }
+        Ok(_) if !status.success() => Err(UploadAttemptError::Failed {
+            message: format_upload_attempt_failure(&status, &stderr, "OpenSSH 上传进程提前退出"),
+            retryable: openssh_upload_is_retryable(&status, &stderr, None),
+        }),
+        Ok(_) => Ok(()),
+    }
+}
+
+#[cfg(not(russh_backend))]
+fn join_stderr_reader(
+    reader: Option<std::thread::JoinHandle<io::Result<Vec<u8>>>>,
+) -> Result<Vec<u8>, String> {
+    match reader {
+        Some(reader) => reader
+            .join()
+            .map_err(|_| "OpenSSH 错误输出线程异常退出".to_string())?
+            .map_err(|error| error.to_string()),
+        None => Ok(Vec::new()),
+    }
+}
+
+#[cfg(not(russh_backend))]
+fn upload_copy_is_connection_error(error: &UploadCopyError) -> bool {
+    matches!(
+        error,
+        UploadCopyError::Write { error, .. }
+            if matches!(
+                error.kind(),
+                io::ErrorKind::BrokenPipe
+                    | io::ErrorKind::ConnectionReset
+                    | io::ErrorKind::ConnectionAborted
+                    | io::ErrorKind::NotConnected
+                    | io::ErrorKind::UnexpectedEof
+                    | io::ErrorKind::TimedOut
+            )
+    )
+}
+
+#[cfg(not(russh_backend))]
+fn openssh_upload_is_retryable(
+    status: &std::process::ExitStatus,
+    stderr: &[u8],
+    copy_error: Option<&UploadCopyError>,
+) -> bool {
+    if matches!(copy_error, Some(UploadCopyError::Read { .. })) {
+        return false;
+    }
+    let stderr = String::from_utf8_lossy(stderr);
+    if stderr.contains(openssh::UPLOAD_SIZE_MISMATCH_MARKER) {
+        return true;
+    }
+    let normalized = stderr.to_ascii_lowercase();
+    let permanent_ssh_error = [
+        "permission denied",
+        "remote host identification has changed",
+        "host key verification failed",
+        "could not resolve hostname",
+        "hostname contains invalid characters",
+        "bad configuration option",
+        "no such identity",
+        "identity file",
+        "load key",
+        "invalid format",
+        "no supported authentication methods",
+        "too many authentication failures",
+        "unable to negotiate",
+    ]
+    .iter()
+    .any(|needle| normalized.contains(needle));
+    if permanent_ssh_error {
+        return false;
+    }
+    if status.code() == Some(255) {
+        return true;
+    }
+    if status.code().is_some() && !status.success() {
+        return false;
+    }
+    copy_error.is_some_and(upload_copy_is_connection_error)
 }
 
 /// Stream the file in chunks, emitting throttled progress events (at most every
@@ -911,6 +3111,109 @@ impl<'a> ProgressConfig<'a> {
             is_canceled,
         }
     }
+}
+
+#[cfg(not(russh_backend))]
+#[derive(Debug)]
+enum UploadCopyError {
+    Canceled,
+    Read { error: io::Error },
+    Write { error: io::Error },
+}
+
+#[cfg(not(russh_backend))]
+impl UploadCopyError {
+    fn description(&self) -> String {
+        match self {
+            Self::Canceled => "上传已停止".to_string(),
+            Self::Read { error, .. } => format!("读取本地文件失败：{error}"),
+            Self::Write { error, .. } => format!("写入 OpenSSH 上传输入失败：{error}"),
+        }
+    }
+}
+
+/// Upload-specific copy loop that records exact progress and distinguishes local
+/// read failures from connection-oriented child-stdin failures.
+#[cfg(not(russh_backend))]
+fn copy_upload_stream(
+    reader: &mut impl Read,
+    writer: &mut impl Write,
+    is_canceled: &dyn Fn() -> bool,
+    on_progress: &mut dyn FnMut(u64),
+) -> Result<u64, UploadCopyError> {
+    let mut buffer = vec![0u8; 64 * 1024];
+    let mut transferred = 0_u64;
+
+    loop {
+        if is_canceled() {
+            return Err(UploadCopyError::Canceled);
+        }
+        let read = loop {
+            match reader.read(&mut buffer) {
+                Ok(read) => break read,
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+                Err(error) => return Err(UploadCopyError::Read { error }),
+            }
+        };
+        if read == 0 {
+            return Ok(transferred);
+        }
+
+        let mut offset = 0;
+        while offset < read {
+            if is_canceled() {
+                return Err(UploadCopyError::Canceled);
+            }
+            match writer.write(&buffer[offset..read]) {
+                Ok(0) => {
+                    return Err(UploadCopyError::Write {
+                        error: io::Error::new(
+                            io::ErrorKind::WriteZero,
+                            "OpenSSH 上传输入未接受数据",
+                        ),
+                    });
+                }
+                Ok(written) => {
+                    offset += written;
+                    transferred += written as u64;
+                    on_progress(transferred);
+                }
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+                Err(error) => return Err(UploadCopyError::Write { error }),
+            }
+        }
+    }
+}
+
+#[cfg(not(russh_backend))]
+fn copy_upload_with_progress(
+    reader: &mut impl Read,
+    writer: &mut impl Write,
+    progress: ProgressConfig<'_>,
+) -> Result<u64, UploadCopyError> {
+    let mut last_emit = Instant::now();
+    emit_progress(
+        progress.app,
+        progress.event_name,
+        progress.transfer_id,
+        0,
+        progress.total,
+        false,
+    );
+    let mut on_progress = |transferred: u64| {
+        if transferred >= progress.total || last_emit.elapsed() >= Duration::from_millis(80) {
+            emit_progress(
+                progress.app,
+                progress.event_name,
+                progress.transfer_id,
+                transferred,
+                progress.total,
+                false,
+            );
+            last_emit = Instant::now();
+        }
+    };
+    copy_upload_stream(reader, writer, progress.is_canceled, &mut on_progress)
 }
 
 #[cfg(not(russh_backend))]
@@ -1251,20 +3554,45 @@ fn spawn_remote_ex(
 
 #[cfg(not(russh_backend))]
 fn create_askpass_helper(id: &str) -> Result<PathBuf, String> {
-    let path = std::env::temp_dir().join(format!("ishell-ssh-askpass-{id}.sh"));
-    fs::write(
-        &path,
-        "#!/bin/sh\nprintf '%s\\n' \"$ISHELL_SSH_PASSWORD\"\n",
-    )
-    .map_err(|err| format!("无法创建 SSH_ASKPASS helper：{err}"))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let permissions = fs::Permissions::from_mode(0o700);
-        fs::set_permissions(&path, permissions)
-            .map_err(|err| format!("无法设置 SSH_ASKPASS helper 权限：{err}"))?;
+    let slug: String = id
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '-' || *ch == '_')
+        .take(32)
+        .collect();
+    let slug = if slug.is_empty() { "server" } else { &slug };
+
+    for _ in 0..4 {
+        let path = std::env::temp_dir().join(format!(
+            "ishell-ssh-askpass-{slug}-{}.sh",
+            uuid::Uuid::new_v4()
+        ));
+        let mut file = match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(file) => file,
+            Err(err) if err.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(err) => return Err(format!("无法创建 SSH_ASKPASS helper：{err}")),
+        };
+        if let Err(err) = file.write_all(b"#!/bin/sh\nprintf '%s\\n' \"$ISHELL_SSH_PASSWORD\"\n") {
+            let _ = fs::remove_file(&path);
+            return Err(format!("无法写入 SSH_ASKPASS helper：{err}"));
+        }
+        drop(file);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let permissions = fs::Permissions::from_mode(0o700);
+            if let Err(err) = fs::set_permissions(&path, permissions) {
+                let _ = fs::remove_file(&path);
+                return Err(format!("无法设置 SSH_ASKPASS helper 权限：{err}"));
+            }
+        }
+        return Ok(path);
     }
-    Ok(path)
+
+    Err("无法创建唯一的 SSH_ASKPASS helper".to_string())
 }
 
 #[cfg(not(russh_backend))]
@@ -1281,6 +3609,22 @@ fn format_process_error(prefix: &str, stderr: &[u8]) -> String {
         prefix.to_string()
     } else {
         format!("{prefix}：{message}")
+    }
+}
+
+#[cfg(not(russh_backend))]
+fn format_upload_attempt_failure(
+    status: &std::process::ExitStatus,
+    stderr: &[u8],
+    fallback: &str,
+) -> String {
+    let stderr = humanize_upload_error_message(String::from_utf8_lossy(stderr).trim());
+    if !stderr.is_empty() {
+        format!("上传失败：{stderr}")
+    } else if !status.success() {
+        format!("上传失败（OpenSSH {status}）：{fallback}")
+    } else {
+        format!("上传失败：{fallback}")
     }
 }
 
@@ -1478,16 +3822,838 @@ fn parse_disk_mounts(raw: &str) -> Vec<DiskMount> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(not(russh_backend))]
     use super::{
-        remote_basename, remote_parent, sanitize_archive_for_windows, sanitize_windows_file_name,
+        cleanup_askpass_helper, copy_upload_stream, create_askpass_helper,
+        format_upload_attempt_failure, humanize_upload_error_message, openssh_upload_is_retryable,
+        parse_remote_folder_target, remote_folder_upload_paths,
+        transactional_folder_upload_command, transactional_folder_upload_command_with_script,
+        PreparedFolderArchive, RemoteFolderTarget, UploadCopyError, FOLDER_TARGET_PROBE_SCRIPT,
+        TRANSACTIONAL_FOLDER_UPLOAD_SCRIPT, UPLOAD_FOLDER_CHANGED_MARKER,
+        UPLOAD_FOLDER_CONFLICT_MARKER, UPLOAD_FOLDER_UNSAFE_MARKER,
+        UPLOAD_TARGET_UNSUPPORTED_MARKER,
     };
-    use std::{fs, io::Cursor, path::PathBuf};
+    use super::{
+        prepare_folder_archive, remote_basename, remote_parent, remote_upload_temp_path,
+        sanitize_archive_for_windows, sanitize_windows_file_name, should_retry_upload,
+        transactional_upload_command, CancelReader, UploadAttemptError,
+    };
+    #[cfg(not(russh_backend))]
+    use crate::openssh;
+    #[cfg(not(russh_backend))]
+    use std::io::{self, Write};
+    #[cfg(not(russh_backend))]
+    use std::path::Path;
+    #[cfg(not(russh_backend))]
+    use std::process::Stdio;
+    use std::{fs, io::Cursor, io::Seek, path::PathBuf};
     use uuid::Uuid;
+
+    #[cfg(not(russh_backend))]
+    struct BrokenPipeWriter {
+        bytes_before_failure: usize,
+        written: usize,
+    }
+
+    #[cfg(not(russh_backend))]
+    impl Write for BrokenPipeWriter {
+        fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+            if self.written >= self.bytes_before_failure {
+                return Err(io::Error::new(io::ErrorKind::BrokenPipe, "closed"));
+            }
+            let written = buffer.len().min(self.bytes_before_failure - self.written);
+            self.written += written;
+            Ok(written)
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
 
     #[test]
     fn remote_paths_always_use_posix_separators() {
         assert_eq!(remote_basename("/tmp/a\\b.txt"), Some("a\\b.txt"));
         assert_eq!(remote_parent("/tmp/a\\b.txt"), "/tmp");
+    }
+
+    #[test]
+    fn retries_only_one_transactional_connection_failure() {
+        let retryable = UploadAttemptError::Failed {
+            message: "connection closed".to_string(),
+            retryable: true,
+        };
+        assert!(should_retry_upload(&retryable, 0, false));
+        assert!(!should_retry_upload(&retryable, 1, false));
+        assert!(!should_retry_upload(&retryable, 0, true));
+
+        let partial = UploadAttemptError::Failed {
+            message: "connection closed".to_string(),
+            retryable: true,
+        };
+        assert!(should_retry_upload(&partial, 0, false));
+
+        let local_read_failure = UploadAttemptError::Failed {
+            message: "local read failed".to_string(),
+            retryable: false,
+        };
+        assert!(!should_retry_upload(&local_read_failure, 0, false));
+    }
+
+    #[test]
+    fn transactional_upload_uses_unique_same_directory_temp_and_atomic_commit() {
+        let first = remote_upload_temp_path("/srv/files");
+        let second = remote_upload_temp_path("/srv/files");
+        assert_ne!(first, second);
+        assert!(first.starts_with("/srv/files/.ishell-upload-"));
+        assert!(second.starts_with("/srv/files/.ishell-upload-"));
+
+        let command = transactional_upload_command("/srv/files/final.bin", &first, 123);
+        assert!(command.starts_with("sh -c "));
+        assert!(command.contains("python3 -c"));
+        assert!(command.contains(" 123"));
+        assert!(command.contains("__ISHELL_UPLOAD_TARGET_IS_DIRECTORY__"));
+        assert!(command.contains("__ISHELL_UPLOAD_SIZE_MISMATCH__"));
+        assert!(command.contains("os.replace"));
+        assert!(command.contains("os.unlink"));
+    }
+
+    #[test]
+    fn prepares_retryable_folder_archive_without_root_wrapper() {
+        let root = std::env::temp_dir().join(format!("ishell-folder-test-{}", Uuid::new_v4()));
+        fs::create_dir_all(root.join("nested/empty")).unwrap();
+        fs::write(root.join("alpha.txt"), b"alpha").unwrap();
+        fs::write(root.join("nested/beta.txt"), b"beta").unwrap();
+        let mut prepared = prepare_folder_archive(&root, "folder-test", &|| false).unwrap();
+        let archive_path = prepared.path.clone();
+        let mut input = prepared.file_mut().try_clone().unwrap();
+        input.seek(std::io::SeekFrom::Start(0)).unwrap();
+        let mut archive = tar::Archive::new(input);
+        let mut paths = archive
+            .entries()
+            .unwrap()
+            .map(|entry| entry.unwrap().path().unwrap().into_owned())
+            .collect::<Vec<_>>();
+        paths.sort();
+        assert!(paths.contains(&PathBuf::from("alpha.txt")));
+        assert!(paths.contains(&PathBuf::from("nested")));
+        assert!(paths.contains(&PathBuf::from("nested/beta.txt")));
+        assert!(!paths
+            .iter()
+            .any(|path| path.starts_with(root.file_name().unwrap())));
+        drop(archive);
+        drop(prepared);
+        assert!(!archive_path.exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn folder_archive_rejects_source_changes_after_its_temp_file_is_created() {
+        let root = std::env::temp_dir().join(format!("ishell-folder-mutation-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("seed.txt"), b"seed").unwrap();
+        let transfer_id = format!(
+            "mutate-{}",
+            Uuid::new_v4()
+                .simple()
+                .to_string()
+                .chars()
+                .take(8)
+                .collect::<String>()
+        );
+        let archive_prefix = format!("ishell-folder-{transfer_id}-");
+        let callbacks_after_archive = std::cell::Cell::new(0_u32);
+        let injected = std::cell::Cell::new(false);
+        let is_canceled = || {
+            let archive_exists = fs::read_dir(std::env::temp_dir())
+                .unwrap()
+                .filter_map(Result::ok)
+                .any(|entry| {
+                    entry
+                        .file_name()
+                        .to_string_lossy()
+                        .starts_with(&archive_prefix)
+                });
+            if archive_exists && !injected.get() {
+                let count = callbacks_after_archive.get() + 1;
+                callbacks_after_archive.set(count);
+                if count == 3 {
+                    fs::write(root.join("concurrent.txt"), b"concurrent").unwrap();
+                    injected.set(true);
+                }
+            }
+            false
+        };
+
+        let error = prepare_folder_archive(&root, &transfer_id, &is_canceled).unwrap_err();
+        assert!(injected.get());
+        assert!(error.contains("打包期间发生变化"), "{error}");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn folder_packaging_cancel_error_is_not_retried_as_interrupted_io() {
+        let path = std::env::temp_dir().join(format!("ishell-cancel-reader-{}", Uuid::new_v4()));
+        fs::write(&path, b"data").unwrap();
+        let file = fs::File::open(&path).unwrap();
+        let mut reader = CancelReader {
+            inner: file,
+            is_canceled: &|| true,
+        };
+        let error = std::io::Read::read(&mut reader, &mut [0_u8; 4]).unwrap_err();
+        assert_ne!(error.kind(), std::io::ErrorKind::Interrupted);
+        fs::remove_file(path).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn folder_archive_rejects_symlinks_and_special_files() {
+        use std::os::unix::fs::symlink;
+        use std::os::unix::net::UnixListener;
+
+        let root = PathBuf::from("/tmp").join(format!(
+            "ifu-{}",
+            Uuid::new_v4()
+                .simple()
+                .to_string()
+                .chars()
+                .take(8)
+                .collect::<String>()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("target"), b"data").unwrap();
+        symlink(root.join("target"), root.join("link")).unwrap();
+        assert!(prepare_folder_archive(&root, "unsafe", &|| false)
+            .unwrap_err()
+            .contains("符号链接"));
+        fs::remove_file(root.join("link")).unwrap();
+        let _socket = UnixListener::bind(root.join("socket")).unwrap();
+        assert!(prepare_folder_archive(&root, "unsafe", &|| false)
+            .unwrap_err()
+            .contains("特殊文件"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(not(russh_backend))]
+    fn run_folder_upload_script(
+        prepared: &mut PreparedFolderArchive,
+        remote: &Path,
+        folder_name: &str,
+        replace_existing_folder: bool,
+        expected_size: u64,
+    ) -> (std::process::Output, String, String) {
+        run_folder_upload_script_with_source(
+            prepared,
+            remote,
+            folder_name,
+            replace_existing_folder,
+            expected_size,
+            TRANSACTIONAL_FOLDER_UPLOAD_SCRIPT,
+        )
+    }
+
+    #[cfg(not(russh_backend))]
+    fn run_folder_upload_script_with_source(
+        prepared: &mut PreparedFolderArchive,
+        remote: &Path,
+        folder_name: &str,
+        replace_existing_folder: bool,
+        expected_size: u64,
+        script: &str,
+    ) -> (std::process::Output, String, String) {
+        let (archive_path, staging_path) = remote_folder_upload_paths(remote.to_str().unwrap());
+        let (expected_revision, expected_stable) =
+            folder_revision_tokens_for_test(remote, folder_name, replace_existing_folder);
+        let command = transactional_folder_upload_command_with_script(
+            script,
+            remote.to_str().unwrap(),
+            folder_name,
+            &archive_path,
+            &staging_path,
+            expected_size,
+            prepared.root_mode,
+            replace_existing_folder,
+            &expected_revision,
+            &expected_stable,
+        );
+        let mut input = prepared.file_mut().try_clone().unwrap();
+        input.seek(std::io::SeekFrom::Start(0)).unwrap();
+        let output = std::process::Command::new("/bin/sh")
+            .args(["-c", &command])
+            .stdin(Stdio::from(input))
+            .stderr(Stdio::piped())
+            .output()
+            .unwrap();
+        (output, archive_path, staging_path)
+    }
+
+    #[cfg(not(russh_backend))]
+    fn folder_revision_tokens_for_test(
+        remote: &Path,
+        folder_name: &str,
+        replace_existing_folder: bool,
+    ) -> (String, String) {
+        if !replace_existing_folder {
+            return ("unchecked".to_string(), "unchecked".to_string());
+        }
+        let target = remote.join(folder_name);
+        let Ok(metadata) = fs::symlink_metadata(&target) else {
+            return ("missing".to_string(), "missing".to_string());
+        };
+        if metadata.file_type().is_symlink() || !metadata.is_dir() {
+            return ("missing".to_string(), "missing".to_string());
+        }
+        let output = std::process::Command::new("python3")
+            .args([
+                "-c",
+                FOLDER_TARGET_PROBE_SCRIPT,
+                remote.to_str().unwrap(),
+                folder_name,
+                "1",
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        match parse_remote_folder_target(&String::from_utf8(output.stdout).unwrap()).unwrap() {
+            RemoteFolderTarget::Directory(Some(revision)) => {
+                (revision.revision, revision.rename_stable)
+            }
+            other => panic!("unexpected folder probe result: {other:?}"),
+        }
+    }
+
+    #[cfg(not(russh_backend))]
+    fn assert_folder_upload_artifacts_removed(archive_path: &str, staging_path: &str) {
+        assert!(!Path::new(archive_path).exists());
+        assert!(!Path::new(staging_path).exists());
+        assert!(!Path::new(&format!("{staging_path}.backup")).exists());
+    }
+
+    #[cfg(not(russh_backend))]
+    #[test]
+    fn folder_upload_conflict_preserves_old_then_confirmed_replace_is_full() {
+        let sandbox = fs::canonicalize(std::env::temp_dir())
+            .unwrap()
+            .join(format!("ishell-folder-remote-{}", Uuid::new_v4()));
+        let local = sandbox.join("source-folder");
+        let remote = sandbox.join("remote");
+        fs::create_dir_all(local.join("nested")).unwrap();
+        fs::create_dir_all(&remote).unwrap();
+        fs::write(local.join("nested/file.txt"), b"folder-data").unwrap();
+        let mut prepared = prepare_folder_archive(&local, "remote-test", &|| false).unwrap();
+        let destination = remote.join("source-folder");
+        fs::create_dir_all(destination.join("old-only")).unwrap();
+        fs::write(destination.join("keep.txt"), b"old-data").unwrap();
+        fs::write(destination.join("old-only/remote.txt"), b"remote-only").unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink("keep.txt", destination.join("old-link")).unwrap();
+
+        let expected_size = prepared.size;
+        let (conflict, conflict_archive, conflict_staging) = run_folder_upload_script(
+            &mut prepared,
+            &remote,
+            "source-folder",
+            false,
+            expected_size,
+        );
+        assert!(!conflict.status.success());
+        assert!(String::from_utf8_lossy(&conflict.stderr).contains(UPLOAD_FOLDER_CONFLICT_MARKER));
+        assert_eq!(fs::read(destination.join("keep.txt")).unwrap(), b"old-data");
+        assert_folder_upload_artifacts_removed(&conflict_archive, &conflict_staging);
+
+        let (output, archive_path, staging_path) =
+            run_folder_upload_script(&mut prepared, &remote, "source-folder", true, expected_size);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            fs::read(destination.join("nested/file.txt")).unwrap(),
+            b"folder-data"
+        );
+        assert!(!destination.join("keep.txt").exists());
+        assert!(!destination.join("old-only").exists());
+        assert!(!destination.join("old-link").exists());
+        assert_folder_upload_artifacts_removed(&archive_path, &staging_path);
+        fs::remove_dir_all(sandbox).unwrap();
+    }
+
+    #[cfg(not(russh_backend))]
+    #[test]
+    fn folder_replace_rolls_back_if_old_changes_during_atomic_commit() {
+        let sandbox = fs::canonicalize(std::env::temp_dir())
+            .unwrap()
+            .join(format!("ishell-folder-rollback-{}", Uuid::new_v4()));
+        let local = sandbox.join("source-folder");
+        let remote = sandbox.join("remote");
+        let destination = remote.join("source-folder");
+        fs::create_dir_all(&local).unwrap();
+        fs::create_dir_all(&destination).unwrap();
+        fs::write(local.join("new.txt"), b"new-data").unwrap();
+        fs::write(destination.join("old.txt"), b"old-data").unwrap();
+        let mut prepared = prepare_folder_archive(&local, "rollback-test", &|| false).unwrap();
+        let expected_size = prepared.size;
+
+        let exchange_marker =
+            "            staging_contains_old = True\n\n            exchanged_destination";
+        let injected_exchange = "            staging_contains_old = True\n            with open(os.path.join(staging_path, \"concurrent.txt\"), \"wb\") as changed:\n                changed.write(b\"concurrent\")\n\n            exchanged_destination";
+        let rollback_script =
+            TRANSACTIONAL_FOLDER_UPLOAD_SCRIPT.replacen(exchange_marker, injected_exchange, 1);
+        assert_ne!(rollback_script, TRANSACTIONAL_FOLDER_UPLOAD_SCRIPT);
+
+        let (output, archive_path, staging_path) = run_folder_upload_script_with_source(
+            &mut prepared,
+            &remote,
+            "source-folder",
+            true,
+            expected_size,
+            &rollback_script,
+        );
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains(UPLOAD_FOLDER_CHANGED_MARKER));
+        assert_eq!(fs::read(destination.join("old.txt")).unwrap(), b"old-data");
+        assert_eq!(
+            fs::read(destination.join("concurrent.txt")).unwrap(),
+            b"concurrent"
+        );
+        assert!(!destination.join("new.txt").exists());
+        assert_folder_upload_artifacts_removed(&archive_path, &staging_path);
+        fs::remove_dir_all(sandbox).unwrap();
+    }
+
+    #[cfg(not(russh_backend))]
+    #[test]
+    fn folder_upload_does_not_overwrite_destination_created_during_transfer() {
+        let sandbox = fs::canonicalize(std::env::temp_dir())
+            .unwrap()
+            .join(format!("ishell-folder-race-{}", Uuid::new_v4()));
+        let local = sandbox.join("raced-folder");
+        let remote = sandbox.join("remote");
+        fs::create_dir_all(&local).unwrap();
+        fs::create_dir_all(&remote).unwrap();
+        fs::write(local.join("new.txt"), b"new-data").unwrap();
+        let mut prepared = prepare_folder_archive(&local, "race-test", &|| false).unwrap();
+        let (archive_path, staging_path) = remote_folder_upload_paths(remote.to_str().unwrap());
+        let command = transactional_folder_upload_command(
+            remote.to_str().unwrap(),
+            "raced-folder",
+            &archive_path,
+            &staging_path,
+            prepared.size,
+            prepared.root_mode,
+            false,
+            "unchecked",
+            "unchecked",
+        );
+        let mut child = std::process::Command::new("/bin/sh")
+            .args(["-c", &command])
+            .stdin(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        for _ in 0..500 {
+            if Path::new(&archive_path).exists() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        if !Path::new(&archive_path).exists() {
+            drop(child.stdin.take());
+            let output = child.wait_with_output().unwrap();
+            panic!(
+                "remote archive was not created: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        let destination = remote.join("raced-folder");
+        fs::create_dir(&destination).unwrap();
+        fs::write(destination.join("keep.txt"), b"concurrent").unwrap();
+        let mut input = prepared.file_mut().try_clone().unwrap();
+        input.seek(std::io::SeekFrom::Start(0)).unwrap();
+        std::io::copy(&mut input, &mut child.stdin.take().unwrap()).unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains(UPLOAD_FOLDER_CONFLICT_MARKER));
+        assert_eq!(
+            fs::read(destination.join("keep.txt")).unwrap(),
+            b"concurrent"
+        );
+        assert!(!destination.join("new.txt").exists());
+        assert_folder_upload_artifacts_removed(&archive_path, &staging_path);
+        fs::remove_dir_all(sandbox).unwrap();
+    }
+
+    #[cfg(not(russh_backend))]
+    #[test]
+    fn folder_replace_rejects_remote_changes_while_archive_is_in_flight() {
+        let sandbox = fs::canonicalize(std::env::temp_dir())
+            .unwrap()
+            .join(format!("ishell-folder-revision-race-{}", Uuid::new_v4()));
+        let local = sandbox.join("source-folder");
+        let remote = sandbox.join("remote");
+        let destination = remote.join("source-folder");
+        fs::create_dir_all(&local).unwrap();
+        fs::create_dir_all(&destination).unwrap();
+        fs::write(local.join("new.txt"), b"new-data").unwrap();
+        fs::write(destination.join("old.txt"), b"old-data").unwrap();
+        let mut prepared = prepare_folder_archive(&local, "revision-race-test", &|| false).unwrap();
+        let (expected_revision, expected_stable) =
+            folder_revision_tokens_for_test(&remote, "source-folder", true);
+        let (archive_path, staging_path) = remote_folder_upload_paths(remote.to_str().unwrap());
+        let command = transactional_folder_upload_command(
+            remote.to_str().unwrap(),
+            "source-folder",
+            &archive_path,
+            &staging_path,
+            prepared.size,
+            prepared.root_mode,
+            true,
+            &expected_revision,
+            &expected_stable,
+        );
+        let mut child = std::process::Command::new("/bin/sh")
+            .args(["-c", &command])
+            .stdin(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        for _ in 0..500 {
+            if Path::new(&archive_path).exists() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        if !Path::new(&archive_path).exists() {
+            drop(child.stdin.take());
+            let output = child.wait_with_output().unwrap();
+            panic!(
+                "remote archive was not created: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        fs::write(destination.join("concurrent.txt"), b"concurrent").unwrap();
+        let mut input = prepared.file_mut().try_clone().unwrap();
+        input.seek(std::io::SeekFrom::Start(0)).unwrap();
+        std::io::copy(&mut input, &mut child.stdin.take().unwrap()).unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains(UPLOAD_FOLDER_CHANGED_MARKER));
+        assert_eq!(fs::read(destination.join("old.txt")).unwrap(), b"old-data");
+        assert_eq!(
+            fs::read(destination.join("concurrent.txt")).unwrap(),
+            b"concurrent"
+        );
+        assert!(!destination.join("new.txt").exists());
+        assert_folder_upload_artifacts_removed(&archive_path, &staging_path);
+        fs::remove_dir_all(sandbox).unwrap();
+    }
+
+    #[cfg(not(russh_backend))]
+    #[test]
+    fn folder_upload_script_refuses_to_cross_mount_points() {
+        assert!(TRANSACTIONAL_FOLDER_UPLOAD_SCRIPT.contains("destination-is-mount-point"));
+        assert!(TRANSACTIONAL_FOLDER_UPLOAD_SCRIPT.contains("destination-contains-mount-point"));
+        assert!(TRANSACTIONAL_FOLDER_UPLOAD_SCRIPT.contains("refusing to remove mounted directory"));
+        assert!(TRANSACTIONAL_FOLDER_UPLOAD_SCRIPT.contains("os.path.ismount"));
+        assert!(TRANSACTIONAL_FOLDER_UPLOAD_SCRIPT.contains("/proc/self/mountinfo"));
+    }
+
+    #[cfg(all(not(russh_backend), unix))]
+    #[test]
+    fn folder_replace_failure_preserves_old_and_special_targets_are_rejected() {
+        use std::os::unix::fs::symlink;
+
+        let sandbox = fs::canonicalize(std::env::temp_dir())
+            .unwrap()
+            .join(format!("ishell-folder-failure-{}", Uuid::new_v4()));
+        let local = sandbox.join("source-folder");
+        let remote = sandbox.join("remote");
+        fs::create_dir_all(&local).unwrap();
+        fs::create_dir_all(&remote).unwrap();
+        fs::write(local.join("new.txt"), b"new-data").unwrap();
+        let mut prepared = prepare_folder_archive(&local, "failure-test", &|| false).unwrap();
+
+        let destination = remote.join("source-folder");
+        fs::create_dir(&destination).unwrap();
+        fs::write(destination.join("old.txt"), b"old-data").unwrap();
+        let wrong_size = prepared.size + 1;
+        let (failed, failed_archive, failed_staging) =
+            run_folder_upload_script(&mut prepared, &remote, "source-folder", true, wrong_size);
+        assert!(!failed.status.success());
+        assert_eq!(fs::read(destination.join("old.txt")).unwrap(), b"old-data");
+        assert!(!destination.join("new.txt").exists());
+        assert_folder_upload_artifacts_removed(&failed_archive, &failed_staging);
+
+        let file_target = remote.join("file-target");
+        fs::write(&file_target, b"file-data").unwrap();
+        let expected_size = prepared.size;
+        let (file_result, file_archive, file_staging) =
+            run_folder_upload_script(&mut prepared, &remote, "file-target", true, expected_size);
+        assert!(!file_result.status.success());
+        assert!(String::from_utf8_lossy(&file_result.stderr).contains(UPLOAD_FOLDER_UNSAFE_MARKER));
+        assert_eq!(fs::read(&file_target).unwrap(), b"file-data");
+        assert_folder_upload_artifacts_removed(&file_archive, &file_staging);
+
+        let link_target = remote.join("link-target-data");
+        let link_path = remote.join("link-target");
+        fs::create_dir(&link_target).unwrap();
+        fs::write(link_target.join("old.txt"), b"linked-old").unwrap();
+        symlink(&link_target, &link_path).unwrap();
+        let (link_result, link_archive, link_staging) =
+            run_folder_upload_script(&mut prepared, &remote, "link-target", true, expected_size);
+        assert!(!link_result.status.success());
+        assert!(String::from_utf8_lossy(&link_result.stderr).contains(UPLOAD_FOLDER_UNSAFE_MARKER));
+        assert!(fs::symlink_metadata(&link_path)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert_eq!(
+            fs::read(link_target.join("old.txt")).unwrap(),
+            b"linked-old"
+        );
+        assert_folder_upload_artifacts_removed(&link_archive, &link_staging);
+        fs::remove_dir_all(sandbox).unwrap();
+    }
+
+    #[cfg(not(russh_backend))]
+    #[test]
+    fn transactional_upload_preserves_final_on_mismatch_and_replaces_on_success() {
+        let root = std::env::temp_dir().join(format!("ishell-upload-test-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        let final_path = root.join("final 'quoted name.bin");
+        fs::write(&final_path, b"original").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&final_path, fs::Permissions::from_mode(0o751)).unwrap();
+        }
+
+        let failed_temp = root.join("failed 'quoted.tmp");
+        let failed_command = transactional_upload_command(
+            final_path.to_str().unwrap(),
+            failed_temp.to_str().unwrap(),
+            10,
+        );
+        let mut failed_child = std::process::Command::new("/bin/sh")
+            .args(["-c", &failed_command])
+            .stdin(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        failed_child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(b"short")
+            .unwrap();
+        let failed_output = failed_child.wait_with_output().unwrap();
+        assert!(!failed_output.status.success());
+        assert!(String::from_utf8_lossy(&failed_output.stderr)
+            .contains(openssh::UPLOAD_SIZE_MISMATCH_MARKER));
+        assert_eq!(fs::read(&final_path).unwrap(), b"original");
+        assert!(!failed_temp.exists());
+
+        let replacement = b"replacement";
+        let success_temp = root.join("success 'quoted.tmp");
+        let success_command = transactional_upload_command(
+            final_path.to_str().unwrap(),
+            success_temp.to_str().unwrap(),
+            replacement.len() as u64,
+        );
+        let mut success_child = std::process::Command::new("/bin/sh")
+            .args(["-c", &success_command])
+            .stdin(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        success_child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(replacement)
+            .unwrap();
+        let success_output = success_child.wait_with_output().unwrap();
+        assert!(
+            success_output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&success_output.stderr)
+        );
+        assert_eq!(fs::read(&final_path).unwrap(), replacement);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                fs::metadata(&final_path).unwrap().permissions().mode() & 0o777,
+                0o751
+            );
+        }
+        assert!(!success_temp.exists());
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+
+            let symlink_target = root.join("symlink-target.bin");
+            let symlink_path = root.join("symlink-upload.bin");
+            let symlink_temp = root.join("symlink-upload.tmp");
+            fs::write(&symlink_target, b"linked-original").unwrap();
+            symlink(&symlink_target, &symlink_path).unwrap();
+            let symlink_command = transactional_upload_command(
+                symlink_path.to_str().unwrap(),
+                symlink_temp.to_str().unwrap(),
+                replacement.len() as u64,
+            );
+            let mut symlink_child = std::process::Command::new("/bin/sh")
+                .args(["-c", &symlink_command])
+                .stdin(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .unwrap();
+            symlink_child
+                .stdin
+                .take()
+                .unwrap()
+                .write_all(replacement)
+                .unwrap();
+            let symlink_output = symlink_child.wait_with_output().unwrap();
+            assert!(!symlink_output.status.success());
+            assert!(String::from_utf8_lossy(&symlink_output.stderr)
+                .contains(UPLOAD_TARGET_UNSUPPORTED_MARKER));
+            assert!(fs::symlink_metadata(&symlink_path)
+                .unwrap()
+                .file_type()
+                .is_symlink());
+            assert_eq!(fs::read(&symlink_target).unwrap(), b"linked-original");
+            assert!(!symlink_temp.exists());
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(not(russh_backend))]
+    #[test]
+    fn upload_copy_distinguishes_zero_and_partial_writes() {
+        let mut reader = Cursor::new(b"payload".to_vec());
+        let mut writer = BrokenPipeWriter {
+            bytes_before_failure: 0,
+            written: 0,
+        };
+        let error =
+            copy_upload_stream(&mut reader, &mut writer, &|| false, &mut |_| {}).unwrap_err();
+        assert!(matches!(error, UploadCopyError::Write { .. }));
+
+        let mut reader = Cursor::new(b"payload".to_vec());
+        let mut writer = BrokenPipeWriter {
+            bytes_before_failure: 3,
+            written: 0,
+        };
+        let error =
+            copy_upload_stream(&mut reader, &mut writer, &|| false, &mut |_| {}).unwrap_err();
+        assert!(matches!(error, UploadCopyError::Write { .. }));
+    }
+
+    #[cfg(not(russh_backend))]
+    #[test]
+    fn askpass_helpers_are_unique_per_ssh_invocation() {
+        let first = create_askpass_helper("same-server").unwrap();
+        let second = create_askpass_helper("same-server").unwrap();
+        assert_ne!(first, second);
+        assert!(first.exists());
+        assert!(second.exists());
+        cleanup_askpass_helper(Some(&first));
+        cleanup_askpass_helper(Some(&second));
+    }
+
+    #[cfg(not(russh_backend))]
+    #[test]
+    fn upload_failure_prefers_ssh_stderr_over_broken_pipe() {
+        let output = std::process::Command::new("/bin/sh")
+            .args(["-c", "printf 'authentication failed' >&2; exit 255"])
+            .output()
+            .unwrap();
+        assert_eq!(
+            format_upload_attempt_failure(
+                &output.status,
+                &output.stderr,
+                "Broken pipe (os error 32)"
+            ),
+            "上传失败：authentication failed"
+        );
+
+        let marker = std::process::Command::new("/bin/sh")
+            .args([
+                "-c",
+                "printf '__ISHELL_UPLOAD_SIZE_MISMATCH__ expected=10 actual=5' >&2; exit 75",
+            ])
+            .output()
+            .unwrap();
+        let message = format_upload_attempt_failure(
+            &marker.status,
+            &marker.stderr,
+            "OpenSSH 上传进程提前退出",
+        );
+        assert!(message.contains("上传字节数校验失败"));
+        assert!(!message.contains("__ISHELL_"));
+
+        let conflict = humanize_upload_error_message(UPLOAD_FOLDER_CONFLICT_MARKER);
+        assert!(conflict.contains(UPLOAD_FOLDER_CONFLICT_MARKER));
+        assert!(conflict.contains("全量覆盖"));
+    }
+
+    #[cfg(not(russh_backend))]
+    #[test]
+    fn retry_classifier_accepts_connections_and_size_mismatch_not_remote_errors() {
+        let connection = std::process::Command::new("/bin/sh")
+            .args(["-c", "exit 255"])
+            .output()
+            .unwrap();
+        assert!(openssh_upload_is_retryable(
+            &connection.status,
+            &connection.stderr,
+            None
+        ));
+
+        let authentication = std::process::Command::new("/bin/sh")
+            .args(["-c", "printf 'Permission denied (publickey)' >&2; exit 255"])
+            .output()
+            .unwrap();
+        assert!(!openssh_upload_is_retryable(
+            &authentication.status,
+            &authentication.stderr,
+            None
+        ));
+
+        let size_mismatch = std::process::Command::new("/bin/sh")
+            .args([
+                "-c",
+                "printf '__ISHELL_UPLOAD_SIZE_MISMATCH__' >&2; exit 75",
+            ])
+            .output()
+            .unwrap();
+        assert!(openssh_upload_is_retryable(
+            &size_mismatch.status,
+            &size_mismatch.stderr,
+            None
+        ));
+
+        let permission = std::process::Command::new("/bin/sh")
+            .args(["-c", "printf 'Permission denied' >&2; exit 1"])
+            .output()
+            .unwrap();
+        let broken_pipe = UploadCopyError::Write {
+            error: io::Error::new(io::ErrorKind::BrokenPipe, "closed"),
+        };
+        assert!(!openssh_upload_is_retryable(
+            &permission.status,
+            &permission.stderr,
+            Some(&broken_pipe)
+        ));
     }
 
     #[test]

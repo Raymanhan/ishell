@@ -24,7 +24,7 @@ use crate::{
     ssh::{
         download_file, download_folder, fetch_network_sample as fetch_network, fetch_status,
         list_sftp, make_directory, read_text_file, remove_entry, rename_entry, test_connection,
-        upload_file, write_text_file,
+        upload_file, upload_folder, write_text_file,
     },
     store::{
         append_command_history, delete_server as remove_server, get_server,
@@ -495,6 +495,7 @@ pub async fn sftp_download_folder(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn sftp_upload(
     app: AppHandle,
     pool: State<'_, Arc<SshPool>>,
@@ -503,21 +504,43 @@ pub async fn sftp_upload(
     local_path: String,
     remote_dir: String,
     transfer_id: String,
+    replace_existing_folder: Option<bool>,
 ) -> Result<String, String> {
     let pool = pool.inner().clone();
     let cancels = cancels.inner().clone();
-    cancels.clear(&transfer_id);
     run_blocking(move || {
         let is_canceled = || cancels.is_canceled(&transfer_id);
-        let result = upload_file(
-            &pool,
-            &app,
-            &id,
-            &local_path,
-            &remote_dir,
-            &transfer_id,
-            &is_canceled,
-        );
+        let result = fs::symlink_metadata(&local_path)
+            .map_err(|err| format!("无法读取本地上传路径：{err}"))
+            .and_then(|metadata| {
+                let file_type = metadata.file_type();
+                if file_type.is_symlink() {
+                    Err("不支持上传本地符号链接".to_string())
+                } else if metadata.is_dir() {
+                    upload_folder(
+                        &pool,
+                        &app,
+                        &id,
+                        &local_path,
+                        &remote_dir,
+                        &transfer_id,
+                        replace_existing_folder.unwrap_or(false),
+                        &is_canceled,
+                    )
+                } else if metadata.is_file() {
+                    upload_file(
+                        &pool,
+                        &app,
+                        &id,
+                        &local_path,
+                        &remote_dir,
+                        &transfer_id,
+                        &is_canceled,
+                    )
+                } else {
+                    Err("不支持上传本地特殊文件".to_string())
+                }
+            });
         cancels.clear(&transfer_id);
         result
     })
