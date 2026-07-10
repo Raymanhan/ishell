@@ -2462,7 +2462,10 @@ async function applyNativeWindowTheme(theme: AppTheme) {
         // gray) so the CSS blur(40px) saturate(200%) can render a vivid glass.
         { effects: [Effect.UnderWindowBackground], state: EffectState.Active, radius: 14 }
       : platform === "windows"
-        ? { effects: [Effect.Acrylic, Effect.Blur], color: windowBackgroundColor }
+        ? // Acrylic and Blur are known to make Windows window moves/resizes lag.
+          // Mica is composed by DWM without that penalty; on Windows 10 it is
+          // unsupported and intentionally becomes a no-op instead of falling back.
+          { effects: [Effect.Mica] }
         : null;
 
   if (effects) {
