@@ -198,6 +198,9 @@
   height: 1px;
   margin: 4px 0;
 }
+.sftp-upload-tool-menu {
+  min-width: 168px;
+}
 .columns {
   display: flex;
   min-height: 0;

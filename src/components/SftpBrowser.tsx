@@ -153,11 +153,18 @@ function SftpBrowserBase({
   const [pathValue, setPathValue] = useState(currentDir);
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
   const [downloadSubmenuOpen, setDownloadSubmenuOpen] = useState(false);
+  const [uploadSubmenuOpen, setUploadSubmenuOpen] = useState(false);
+  const [uploadToolMenuPosition, setUploadToolMenuPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const [renaming, setRenaming] = useState<RenameState | null>(null);
   const [creatingDir, setCreatingDir] = useState<CreateDirState | null>(null);
   const [detailColumnWidths, setDetailColumnWidths] = useState(() => DETAIL_COLUMN_WIDTHS);
   const [resizingDetailDivider, setResizingDetailDivider] = useState<number | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const uploadToolButtonRef = useRef<HTMLButtonElement>(null);
+  const uploadToolMenuRef = useRef<HTMLDivElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const createInputRef = useRef<HTMLInputElement>(null);
   const renameStartedForRef = useRef<string | null>(null);
@@ -286,6 +293,35 @@ function SftpBrowserBase({
   }, [menu]);
 
   useEffect(() => {
+    if (!uploadToolMenuPosition) return;
+    const close = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (
+        uploadToolButtonRef.current?.contains(target)
+        || uploadToolMenuRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setUploadToolMenuPosition(null);
+    };
+    const closeOnResize = () => setUploadToolMenuPosition(null);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setUploadToolMenuPosition(null);
+        uploadToolButtonRef.current?.focus();
+      }
+    };
+    window.addEventListener("pointerdown", close);
+    window.addEventListener("resize", closeOnResize);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", close);
+      window.removeEventListener("resize", closeOnResize);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [uploadToolMenuPosition]);
+
+  useEffect(() => {
     if (!menu) return;
     const node = menuRef.current;
     if (!node) return;
@@ -306,6 +342,8 @@ function SftpBrowserBase({
     event.stopPropagation();
     if (entry && !selectedPathSet.has(entry.path)) onSelect(entry.path, [entry.path]);
     setDownloadSubmenuOpen(false);
+    setUploadSubmenuOpen(false);
+    setUploadToolMenuPosition(null);
     setMenu({
       x: event.clientX,
       y: event.clientY,
@@ -321,6 +359,25 @@ function SftpBrowserBase({
 
   function runMenu(action: () => void) {
     setMenu(null);
+    action();
+  }
+
+  function toggleUploadToolMenu() {
+    if (uploadToolMenuPosition) {
+      setUploadToolMenuPosition(null);
+      return;
+    }
+    const rect = uploadToolButtonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setMenu(null);
+    setUploadToolMenuPosition({
+      x: Math.max(8, rect.left - 178),
+      y: Math.max(8, Math.min(rect.top - 5, window.innerHeight - 80)),
+    });
+  }
+
+  function runUploadToolMenu(action: () => void) {
+    setUploadToolMenuPosition(null);
     action();
   }
 
@@ -440,6 +497,44 @@ function SftpBrowserBase({
     return selectedPathSet.has(entry.path) ? selectedEntries : [entry];
   }
 
+  function renderUploadSubmenu(targetDir: string, label: string) {
+    return (
+      <div
+        className={[
+          "ctx-menu-item",
+          "has-submenu",
+          uploadSubmenuOpen ? "open" : "",
+          menu && menu.x > window.innerWidth / 2 ? "submenu-left" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        onMouseEnter={() => {
+          setDownloadSubmenuOpen(false);
+          setUploadSubmenuOpen(true);
+        }}
+        onMouseLeave={() => setUploadSubmenuOpen(false)}
+        onClick={(event) => {
+          event.stopPropagation();
+          setDownloadSubmenuOpen(false);
+          setUploadSubmenuOpen((current) => !current);
+        }}
+      >
+        <span className="ctx-menu-row">
+          <Upload size={14} /> {label}
+          <ChevronRight size={12} className="ctx-submenu-caret" />
+        </span>
+        <div className="ctx-submenu">
+          <button type="button" onClick={() => runMenu(() => onUpload(targetDir))}>
+            <Upload size={14} /> 上传文件
+          </button>
+          <button type="button" onClick={() => runMenu(() => onUploadFolder(targetDir))}>
+            <FolderUp size={14} /> 上传文件夹
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const pathBar = (
     <label className="pathbar" title="输入远程路径后按 Enter 跳转">
       <HardDrive size={14} />
@@ -498,11 +593,18 @@ function SftpBrowserBase({
         {showHidden ? <Eye size={15} /> : <EyeOff size={15} />}
       </button>
       <span className="tool-sep" />
-      <button type="button" className="tool" onClick={() => onUpload(currentDir)} title="上传文件到当前目录">
+      <button
+        ref={uploadToolButtonRef}
+        type="button"
+        className={`tool ${uploadToolMenuPosition ? "on" : ""}`}
+        onClick={toggleUploadToolMenu}
+        title="上传到当前目录"
+        aria-label="上传到当前目录"
+        aria-haspopup="menu"
+        aria-expanded={Boolean(uploadToolMenuPosition)}
+        aria-controls={uploadToolMenuPosition ? "sftp-upload-tool-menu" : undefined}
+      >
         <Upload size={15} />
-      </button>
-      <button type="button" className="tool" onClick={() => onUploadFolder(currentDir)} title="上传文件夹到当前目录">
-        <FolderUp size={15} />
       </button>
       <button
         type="button"
@@ -915,6 +1017,36 @@ function SftpBrowserBase({
         </div>
       )}
 
+      {uploadToolMenuPosition && createPortal(
+        <div
+          id="sftp-upload-tool-menu"
+          ref={uploadToolMenuRef}
+          className="ctx-menu sftp-upload-tool-menu"
+          role="menu"
+          aria-label="选择上传类型"
+          style={{ left: uploadToolMenuPosition.x, top: uploadToolMenuPosition.y }}
+          onClick={(event) => event.stopPropagation()}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            autoFocus
+            onClick={() => runUploadToolMenu(() => onUpload(currentDir))}
+          >
+            <Upload size={14} /> 上传文件
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => runUploadToolMenu(() => onUploadFolder(currentDir))}
+          >
+            <FolderUp size={14} /> 上传文件夹
+          </button>
+        </div>,
+        document.body,
+      )}
+
       {menu && createPortal(
         <div
           ref={menuRef}
@@ -942,10 +1074,14 @@ function SftpBrowserBase({
                     ]
                       .filter(Boolean)
                       .join(" ")}
-                    onMouseEnter={() => setDownloadSubmenuOpen(true)}
+                    onMouseEnter={() => {
+                      setUploadSubmenuOpen(false);
+                      setDownloadSubmenuOpen(true);
+                    }}
                     onMouseLeave={() => setDownloadSubmenuOpen(false)}
                     onClick={(event) => {
                       event.stopPropagation();
+                      setUploadSubmenuOpen(false);
                       setDownloadSubmenuOpen((current) => !current);
                     }}
                   >
@@ -990,12 +1126,7 @@ function SftpBrowserBase({
                   )}
                 </>
               )}
-              <button type="button" onClick={() => runMenu(() => onUpload(targetDirFor(menu.entry, menu.columnIndex)))}>
-                <Upload size={14} /> 上传文件到此处
-              </button>
-              <button type="button" onClick={() => runMenu(() => onUploadFolder(targetDirFor(menu.entry, menu.columnIndex)))}>
-                <FolderUp size={14} /> 上传文件夹到此处
-              </button>
+              {renderUploadSubmenu(targetDirFor(menu.entry, menu.columnIndex), "上传到此处")}
               <button type="button" onClick={() => runMenu(() => onTerminalJump(targetDirFor(menu.entry, menu.columnIndex)))}>
                 <SquareTerminal size={14} /> 跳转到此处
               </button>
@@ -1016,12 +1147,7 @@ function SftpBrowserBase({
             </>
           ) : (
             <>
-              <button type="button" onClick={() => runMenu(() => onUpload(targetDirFor(null, menu.columnIndex)))}>
-                <Upload size={14} /> 上传文件
-              </button>
-              <button type="button" onClick={() => runMenu(() => onUploadFolder(targetDirFor(null, menu.columnIndex)))}>
-                <FolderUp size={14} /> 上传文件夹
-              </button>
+              {renderUploadSubmenu(targetDirFor(null, menu.columnIndex), "上传")}
               <button type="button" onClick={() => runMenu(() => onTerminalJump(targetDirFor(null, menu.columnIndex)))}>
                 <SquareTerminal size={14} /> 跳转到此处
               </button>

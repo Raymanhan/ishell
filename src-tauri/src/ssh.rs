@@ -4027,7 +4027,14 @@ mod tests {
             .unwrap_err()
             .contains("符号链接"));
         fs::remove_file(root.join("link")).unwrap();
-        let _socket = UnixListener::bind(root.join("socket")).unwrap();
+        let _socket = match UnixListener::bind(root.join("socket")) {
+            Ok(socket) => socket,
+            Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
+                fs::remove_dir_all(root).unwrap();
+                return;
+            }
+            Err(error) => panic!("failed to create Unix socket fixture: {error}"),
+        };
         assert!(prepare_folder_archive(&root, "unsafe", &|| false)
             .unwrap_err()
             .contains("特殊文件"));
