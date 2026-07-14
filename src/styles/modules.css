@@ -1316,7 +1316,9 @@ button.detail-row:hover {
   white-space: pre;
   word-break: normal;
   overflow-wrap: normal;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .file-editor-highlight {
   z-index: 0;

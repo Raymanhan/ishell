@@ -238,6 +238,7 @@ export default function App() {
   const statusPanelRef = useRef<HTMLElement>(null);
   const fileEditorHighlightRef = useRef<HTMLPreElement>(null);
   const fileEditorTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileEditorSelectionCleanupRef = useRef<(() => void) | null>(null);
   const dockDragCleanupRef = useRef<(() => void) | null>(null);
   const statusDragCleanupRef = useRef<(() => void) | null>(null);
   // Latest values for the once-registered native drag-drop listener.
@@ -296,6 +297,97 @@ export default function App() {
     highlight.scrollTop = textarea.scrollTop;
     highlight.scrollLeft = textarea.scrollLeft;
   }, [fileEditor?.entry.path, fileEditor?.content]);
+
+  useEffect(() => () => fileEditorSelectionCleanupRef.current?.(), []);
+
+  function startFileEditorSelectionDrag(event: ReactPointerEvent<HTMLTextAreaElement>) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+
+    const textarea = event.currentTarget;
+    const highlight = fileEditorHighlightRef.current;
+    if (!highlight) return;
+
+    fileEditorSelectionCleanupRef.current?.();
+
+    const pointerId = event.pointerId;
+    let pointerX = event.clientX;
+    let pointerY = event.clientY;
+    let selectionAnchor: number | null = null;
+    let frame = 0;
+
+    const syncHighlight = () => {
+      highlight.scrollTop = textarea.scrollTop;
+      highlight.scrollLeft = textarea.scrollLeft;
+    };
+    const cleanup = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", cleanup);
+      window.removeEventListener("pointercancel", cleanup);
+      window.removeEventListener("blur", cleanup);
+      if (frame) window.cancelAnimationFrame(frame);
+      frame = 0;
+      if (fileEditorSelectionCleanupRef.current === cleanup) {
+        fileEditorSelectionCleanupRef.current = null;
+      }
+    };
+    const scrollSelection = () => {
+      frame = 0;
+      const rect = textarea.getBoundingClientRect();
+      const overflow = pointerX < rect.left
+        ? pointerX - rect.left
+        : pointerX > rect.right
+          ? pointerX - rect.right
+          : 0;
+      if (!overflow) return;
+
+      const previousScrollLeft = textarea.scrollLeft;
+      const speed = Math.sign(overflow) * Math.min(32, Math.max(4, Math.abs(overflow) * 0.2));
+      textarea.scrollLeft += speed;
+      if (textarea.scrollLeft === previousScrollLeft) return;
+
+      syncHighlight();
+      if (selectionAnchor === null) {
+        selectionAnchor = textarea.selectionDirection === "backward"
+          ? textarea.selectionEnd
+          : textarea.selectionStart;
+      }
+
+      const offset = textOffsetAtPoint(
+        textarea,
+        highlight,
+        Math.min(rect.right - 12, Math.max(rect.left + 2, pointerX)),
+        Math.min(rect.bottom - 12, Math.max(rect.top + 2, pointerY)),
+      );
+      if (offset !== null) {
+        if (offset < selectionAnchor) {
+          textarea.setSelectionRange(offset, selectionAnchor, "backward");
+        } else {
+          textarea.setSelectionRange(selectionAnchor, offset, "forward");
+        }
+      }
+
+      frame = window.requestAnimationFrame(scrollSelection);
+    };
+    const onMove = (move: PointerEvent) => {
+      if (move.pointerId !== pointerId) return;
+      if (move.pointerType === "mouse" && (move.buttons & 1) === 0) {
+        cleanup();
+        return;
+      }
+      pointerX = move.clientX;
+      pointerY = move.clientY;
+      const rect = textarea.getBoundingClientRect();
+      if ((pointerX < rect.left || pointerX > rect.right) && !frame) {
+        frame = window.requestAnimationFrame(scrollSelection);
+      }
+    };
+
+    window.addEventListener("pointermove", onMove, { passive: true });
+    window.addEventListener("pointerup", cleanup, { once: true });
+    window.addEventListener("pointercancel", cleanup, { once: true });
+    window.addEventListener("blur", cleanup, { once: true });
+    fileEditorSelectionCleanupRef.current = cleanup;
+  }
 
   async function refreshServers() {
     if (!isTauri) {
@@ -2590,6 +2682,7 @@ export default function App() {
                 disabled={fileEditor.loading || fileEditor.saving}
                 spellCheck={false}
                 wrap="off"
+                onPointerDown={startFileEditorSelectionDrag}
                 onScroll={(event) => {
                   const highlight = fileEditorHighlightRef.current;
                   if (!highlight) return;
@@ -3098,6 +3191,46 @@ function parentPath(path: string) {
 interface HighlightToken {
   text: string;
   kind?: string;
+}
+
+function textOffsetAtPoint(
+  textarea: HTMLTextAreaElement,
+  highlight: HTMLPreElement,
+  x: number,
+  y: number,
+) {
+  const textareaPointerEvents = textarea.style.pointerEvents;
+  const highlightPointerEvents = highlight.style.pointerEvents;
+  const highlightZIndex = highlight.style.zIndex;
+  textarea.style.pointerEvents = "none";
+  highlight.style.pointerEvents = "auto";
+  highlight.style.zIndex = "2";
+
+  let node: Node | null = null;
+  let nodeOffset = 0;
+  try {
+    const documentWithCaretRange = document as Document & {
+      caretRangeFromPoint?: (clientX: number, clientY: number) => Range | null;
+    };
+    const caretPosition = document.caretPositionFromPoint?.(x, y);
+    const caretRange = caretPosition ? null : documentWithCaretRange.caretRangeFromPoint?.(x, y);
+    node = caretPosition?.offsetNode ?? caretRange?.startContainer ?? null;
+    nodeOffset = caretPosition?.offset ?? caretRange?.startOffset ?? 0;
+  } finally {
+    textarea.style.pointerEvents = textareaPointerEvents;
+    highlight.style.pointerEvents = highlightPointerEvents;
+    highlight.style.zIndex = highlightZIndex;
+  }
+
+  if (!node || !highlight.contains(node)) return null;
+  try {
+    const range = document.createRange();
+    range.setStart(highlight, 0);
+    range.setEnd(node, nodeOffset);
+    return Math.min(textarea.value.length, range.toString().length);
+  } catch {
+    return null;
+  }
 }
 
 const HIGHLIGHT_MAX_BYTES = 220_000;
