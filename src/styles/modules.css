@@ -1819,6 +1819,56 @@ button.detail-row:hover {
   color: var(--dim);
   line-height: 1.55;
 }
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 46px;
+  padding: 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: var(--surface-soft-bg);
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+}
+.settings-toggle input {
+  position: relative;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 20px;
+  margin: 0;
+  border: 1px solid var(--hairline-3);
+  border-radius: 999px;
+  appearance: none;
+  background: var(--control-bg);
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.settings-toggle input::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--dim);
+  transition: transform 140ms ease, background 140ms ease;
+}
+.settings-toggle input:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.settings-toggle input:checked::before {
+  background: #fff;
+  transform: translateX(16px);
+}
+.settings-toggle input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .theme-options {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));

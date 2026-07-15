@@ -550,26 +550,31 @@
 .workbench-bar .topbar-title,
 .workbench-bar .dock-switcher,
 .workbench-bar .topbar-new {
-  opacity: 0;
   transition: opacity 160ms ease, transform 160ms ease;
 }
-.workbench-bar .connection-trigger,
-.workbench-bar .dock-switcher,
-.workbench-bar .topbar-new {
+.workbench-bar.auto-hide .connection-trigger,
+.workbench-bar.auto-hide .topbar-title,
+.workbench-bar.auto-hide .dock-switcher,
+.workbench-bar.auto-hide .topbar-new {
+  opacity: 0;
+}
+.workbench-bar.auto-hide .connection-trigger,
+.workbench-bar.auto-hide .dock-switcher,
+.workbench-bar.auto-hide .topbar-new {
   pointer-events: none;
 }
 /* Every topbar control stays hidden until the pointer reaches the top edge —
    the chrome never auto-shows, even while the connection drawer is open. */
-.workbench-bar:hover .connection-trigger,
-.workbench-bar:hover .topbar-title,
-.workbench-bar:hover .dock-switcher,
-.workbench-bar:hover .topbar-new,
+.workbench-bar.auto-hide:hover .connection-trigger,
+.workbench-bar.auto-hide:hover .topbar-title,
+.workbench-bar.auto-hide:hover .dock-switcher,
+.workbench-bar.auto-hide:hover .topbar-new,
 .workbench-bar.tab-dragging .topbar-title {
   opacity: 1;
 }
-.workbench-bar:hover .connection-trigger,
-.workbench-bar:hover .dock-switcher,
-.workbench-bar:hover .topbar-new {
+.workbench-bar.auto-hide:hover .connection-trigger,
+.workbench-bar.auto-hide:hover .dock-switcher,
+.workbench-bar.auto-hide:hover .topbar-new {
   pointer-events: auto;
 }
 .topbar-drag-strip {
@@ -951,9 +956,13 @@
   padding: var(--topbar-tab-top) 0 0;
   overflow: hidden;
   background: transparent;
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 140ms ease;
+}
+.workbench-bar.auto-hide .terminal-tabs {
   opacity: 0;
   pointer-events: none;
-  transition: opacity 140ms ease;
 }
 .terminal-tabs-spacer {
   flex: 1 1 auto;
@@ -962,7 +971,7 @@
   height: var(--titlebar-safe, 34px);
   cursor: default;
 }
-.workbench-bar:hover .terminal-tabs,
+.workbench-bar.auto-hide:hover .terminal-tabs,
 .workbench-bar.tab-dragging .terminal-tabs,
 .terminal-tabs.is-sorting,
 .terminal-tabs.visible,
@@ -987,7 +996,7 @@
   background: transparent;
   color: var(--dim);
   overflow: hidden;
-  pointer-events: none;
+  pointer-events: auto;
   cursor: grab;
   touch-action: none;
   user-select: none;
@@ -999,6 +1008,9 @@
     opacity 140ms ease,
     transform 180ms cubic-bezier(0.2, 0.85, 0.25, 1);
   will-change: transform;
+}
+.workbench-bar.auto-hide .terminal-tab {
+  pointer-events: none;
 }
 .terminal-tab.dragging {
   z-index: 2;
@@ -1061,7 +1073,7 @@
 .terminal-tab:active {
   cursor: grabbing;
 }
-.workbench-bar:hover .terminal-tabs .terminal-tab,
+.workbench-bar.auto-hide:hover .terminal-tabs .terminal-tab,
 .workbench-bar.tab-dragging .terminal-tab,
 .terminal-tabs.is-sorting .terminal-tab,
 .terminal-tabs.visible .terminal-tab,

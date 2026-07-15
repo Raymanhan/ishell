@@ -29,6 +29,7 @@ interface TabDragPreview {
 }
 
 export function TabBar({
+  autoHide,
   connectionsOpen,
   onNewServer,
   tabs,
@@ -51,6 +52,7 @@ export function TabBar({
   onCloseTabs,
   onReorder,
 }: {
+  autoHide: boolean;
   connectionsOpen: boolean;
   onNewServer: () => void;
   tabs: ShellTab[];
@@ -412,7 +414,7 @@ export function TabBar({
 
   return (
     <header
-      className={`workbench-bar ${connectionsOpen ? "connections-open" : ""} ${tabs.length > 0 ? "has-tabs" : ""} ${
+      className={`workbench-bar ${autoHide ? "auto-hide" : ""} ${connectionsOpen ? "connections-open" : ""} ${tabs.length > 0 ? "has-tabs" : ""} ${
         draggingTabId ? "tab-dragging" : ""
       }`}
     >

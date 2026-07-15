@@ -14,14 +14,18 @@ const themeIcons: Record<ThemeIcon, typeof Layers> = {
 export function SettingsModal({
   theme,
   terminalFontSize,
+  autoHideTopBar,
   onThemeChange,
   onTerminalFontSizeChange,
+  onAutoHideTopBarChange,
   onClose,
 }: {
   theme: AppTheme;
   terminalFontSize: number;
+  autoHideTopBar: boolean;
   onThemeChange: (theme: AppTheme) => void;
   onTerminalFontSizeChange: (size: number) => void;
+  onAutoHideTopBarChange: (autoHide: boolean) => void;
   onClose: () => void;
 }) {
   return (
@@ -41,6 +45,22 @@ export function SettingsModal({
           <button type="button" className="icon-button" onClick={onClose} aria-label="关闭设置">
             <X size={17} />
           </button>
+        </div>
+
+        <div className="settings-section">
+          <div className="settings-section-copy">
+            <h3>顶部栏</h3>
+            <p>开启后，顶部栏会在鼠标离开时隐藏，移到窗口顶端时重新显示。</p>
+          </div>
+
+          <label className="settings-toggle">
+            <span>自动隐藏顶部栏</span>
+            <input
+              type="checkbox"
+              checked={autoHideTopBar}
+              onChange={(event) => onAutoHideTopBarChange(event.target.checked)}
+            />
+          </label>
         </div>
 
         <div className="settings-section">

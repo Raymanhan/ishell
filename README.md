@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.1.17](https://github.com/Raymanhan/ishell/releases/tag/v1.1.17)**
+**[Download iShell v1.1.18](https://github.com/Raymanhan/ishell/releases/tag/v1.1.18)**
 
 Available packages:
 
@@ -95,6 +95,8 @@ connections, secret export is optional and can be passphrase-protected.
 - Closing the native window closes active terminal tabs and hides the app
   instead of leaving background sessions behind.
 - Right-click a tab for tab-level actions.
+- The top bar can stay visible or auto-hide until the pointer reaches the top
+  edge.
 - The terminal font size is configurable in Settings.
 - Command history can be searched and pasted back into the active terminal.
 
@@ -106,7 +108,8 @@ Supported operations:
 
 - Switch between tree/detail and multi-column browsing.
 - Upload files or folders to the current directory, including folder drag and drop. If a same-named remote folder exists, iShell asks before replacing it in full; replacement does not merge and removes remote-only entries.
-- Download selected files.
+- Download selected files; newly queued transfers appear at the top of the
+  transfer list.
 - Create folders, rename entries, and delete one or more entries.
 - Symlinks are shown with link icons and safer delete messaging.
 - Jump the active terminal to the selected remote directory from the SFTP
@@ -137,6 +140,7 @@ The status panel samples remote host information through SSH:
 Settings currently include:
 
 - Glass gray desktop theme
+- Auto-hide top bar toggle
 - Terminal font size
 
 The glass theme uses Tauri native window effects where available, with a
@@ -206,8 +210,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.1.17
-git push origin v1.1.17
+git tag v1.1.18
+git push origin v1.1.18
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -241,6 +245,8 @@ src-tauri/src/
 
 ## Recent Changes
 
+- `v1.1.18` adds a Settings toggle for the auto-hiding top bar and places new
+  upload/download queue items at the top for easier progress tracking.
 - `v1.1.17` improves remote file editing by automatically scrolling
   horizontally when a dragged text selection moves beyond the editor edge.
 - `v1.1.16` consolidates SFTP file and folder uploads into accessible toolbar

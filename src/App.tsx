@@ -77,6 +77,7 @@ const NOTICE_DURATION_MS = 4200;
 const COMMAND_HISTORY_LIMIT = 10_000;
 const DEMO_COMMAND_HISTORY_KEY = "ishell.commandHistory";
 const CONNECTION_FOLDERS_KEY = "ishell.connectionFolders";
+const AUTO_HIDE_TOP_BAR_KEY = "ishell.autoHideTopBar";
 const MAX_EDITABLE_TEXT_BYTES = 1024 * 1024;
 const FILES_PANEL_RATIO = 0.4;
 const STATUS_PANEL_WIDTH = 300;
@@ -199,6 +200,9 @@ export default function App() {
     const saved = Number(window.localStorage.getItem("ishell.terminalFontSize"));
     return Number.isFinite(saved) ? Math.min(20, Math.max(11, saved)) : 14;
   });
+  const [autoHideTopBar, setAutoHideTopBar] = useState(
+    () => window.localStorage.getItem(AUTO_HIDE_TOP_BAR_KEY) !== "false",
+  );
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<ServerForm>(defaultForm);
   const [saving, setSaving] = useState(false);
@@ -472,6 +476,10 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem("ishell.terminalFontSize", String(terminalFontSize));
   }, [terminalFontSize]);
+
+  useEffect(() => {
+    window.localStorage.setItem(AUTO_HIDE_TOP_BAR_KEY, String(autoHideTopBar));
+  }, [autoHideTopBar]);
 
   useEffect(() => {
     window.localStorage.setItem(CONNECTION_FOLDERS_KEY, JSON.stringify(connectionFolders));
@@ -1833,7 +1841,7 @@ export default function App() {
       status: "pending",
     }));
     items.forEach((item) => scheduledUploadIdsRef.current.add(item.id));
-    setUploads((current) => [...current, ...items]);
+    setUploads((current) => [...items, ...current]);
 
     uploadChainRef.current = uploadChainRef.current.then(async () => {
       for (const item of items) {
@@ -2006,7 +2014,7 @@ export default function App() {
       status: "pending",
       folderMode: mode,
     };
-    setDownloads((current) => [...current, item]);
+    setDownloads((current) => [item, ...current]);
     showNotice(`已加入下载队列：${entry.name}`);
 
     downloadChainRef.current = downloadChainRef.current.then(async () => {
@@ -2028,7 +2036,7 @@ export default function App() {
       total: entry.size ?? 0,
       status: "pending",
     }));
-    setDownloads((current) => [...current, ...items]);
+    setDownloads((current) => [...items, ...current]);
     showNotice(`已加入下载队列：${items.length} 个文件`);
 
     downloadChainRef.current = downloadChainRef.current.then(async () => {
@@ -2332,6 +2340,7 @@ export default function App() {
     <div className="app">
       <main className="workspace">
         <TabBar
+          autoHide={autoHideTopBar}
           connectionsOpen={connectionsOpen}
           onNewServer={() => newServer()}
           tabs={tabs}
@@ -2518,8 +2527,10 @@ export default function App() {
         <SettingsModal
           theme={theme}
           terminalFontSize={terminalFontSize}
+          autoHideTopBar={autoHideTopBar}
           onThemeChange={setTheme}
           onTerminalFontSizeChange={setTerminalFontSize}
+          onAutoHideTopBarChange={setAutoHideTopBar}
           onClose={() => setSettingsOpen(false)}
         />
       )}
