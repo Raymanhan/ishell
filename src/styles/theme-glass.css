@@ -110,6 +110,7 @@
 :root[data-theme="glass"] .recent-card,
 :root[data-theme="glass"] .network-card,
 :root[data-theme="glass"] .metric-row,
+:root[data-theme="glass"] .process-card,
 :root[data-theme="glass"] .mount-card,
 :root[data-theme="glass"] .editor-section,
 :root[data-theme="glass"] .field input,
@@ -121,6 +122,7 @@
 :root[data-theme="glass"] .history-search,
 :root[data-theme="glass"] .network-card,
 :root[data-theme="glass"] .metric-row,
+:root[data-theme="glass"] .process-card,
 :root[data-theme="glass"] .mount-card {
   border-color: rgba(255, 255, 255, 0.105);
   background: rgba(255, 255, 255, 0.045);
@@ -634,6 +636,7 @@
 :root[data-theme^="liquid-glass"] .recent-card,
 :root[data-theme^="liquid-glass"] .network-card,
 :root[data-theme^="liquid-glass"] .metric-row,
+:root[data-theme^="liquid-glass"] .process-card,
 :root[data-theme^="liquid-glass"] .mount-card,
 :root[data-theme^="liquid-glass"] .history-search,
 :root[data-theme^="liquid-glass"] .theme-option,
@@ -670,6 +673,7 @@
 :root[data-theme^="liquid-glass"] .recent-card::before,
 :root[data-theme^="liquid-glass"] .network-card::before,
 :root[data-theme^="liquid-glass"] .metric-row::before,
+:root[data-theme^="liquid-glass"] .process-card::before,
 :root[data-theme^="liquid-glass"] .mount-card::before,
 :root[data-theme^="liquid-glass"] .history-search::before,
 :root[data-theme^="liquid-glass"] .theme-option::before,
@@ -708,6 +712,7 @@
 :root[data-theme^="liquid-glass"] .recent-card > *,
 :root[data-theme^="liquid-glass"] .network-card > *,
 :root[data-theme^="liquid-glass"] .metric-row > *,
+:root[data-theme^="liquid-glass"] .process-card > *,
 :root[data-theme^="liquid-glass"] .mount-card > *,
 :root[data-theme^="liquid-glass"] .history-search > *,
 :root[data-theme^="liquid-glass"] .theme-option > *,
@@ -787,6 +792,7 @@
 :root[data-theme^="liquid-glass"] .recent-card,
 :root[data-theme^="liquid-glass"] .network-card,
 :root[data-theme^="liquid-glass"] .metric-row,
+:root[data-theme^="liquid-glass"] .process-card,
 :root[data-theme^="liquid-glass"] .mount-card,
 :root[data-theme^="liquid-glass"] .editor-section,
 :root[data-theme^="liquid-glass"] .field input,

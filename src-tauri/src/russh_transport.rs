@@ -520,6 +520,59 @@ pub fn run_command(
     })
 }
 
+/// Run a long-lived remote command on a pooled SSH channel and stream stdout
+/// chunks until the caller cancels or the remote command exits.
+pub fn stream_command(
+    server: &ServerRecord,
+    secret: Option<&str>,
+    remote_command: &str,
+    is_canceled: &dyn Fn() -> bool,
+    on_data: &mut dyn FnMut(&[u8]),
+) -> Result<(), String> {
+    runtime()?.block_on(async {
+        let (_handle, mut channel) = session_channel(server, secret).await?;
+        channel
+            .exec(true, remote_command)
+            .await
+            .map_err(|err| format!("无法执行远程流命令：{err}"))?;
+
+        let mut stderr = Vec::new();
+        let mut exit_code = None;
+        let mut exit_signal = None;
+        loop {
+            if is_canceled() {
+                let _ = channel.eof().await;
+                let _ = channel.close().await;
+                return Ok(());
+            }
+
+            match tokio::time::timeout(Duration::from_millis(250), channel.wait()).await {
+                Ok(Some(msg)) => match msg {
+                    ChannelMsg::Data { ref data } => on_data(data),
+                    ChannelMsg::ExtendedData { ref data, .. } => stderr.extend_from_slice(data),
+                    ChannelMsg::ExitStatus { exit_status } => exit_code = Some(exit_status),
+                    ChannelMsg::ExitSignal {
+                        signal_name,
+                        error_message,
+                        ..
+                    } => {
+                        exit_signal = Some(format!("{signal_name:?}"));
+                        if !error_message.is_empty() {
+                            stderr.extend_from_slice(error_message.as_bytes());
+                        }
+                    }
+                    ChannelMsg::Close => break,
+                    _ => {}
+                },
+                Ok(None) => break,
+                Err(_) => {}
+            }
+        }
+
+        ensure_successful_exit("远程流命令", exit_code, exit_signal, &stderr)
+    })
+}
+
 /// Stream the stdout of `remote_command` (e.g. `cat -- file`) into `sink`,
 /// invoking `on_progress` with the running byte count and aborting when
 /// `is_canceled` returns true.

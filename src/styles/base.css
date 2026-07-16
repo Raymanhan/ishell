@@ -81,6 +81,9 @@
 
 :root[data-platform="windows"] .speed-pill,
 :root[data-platform="windows"] .metric-row strong,
+:root[data-platform="windows"] .process-card-title,
+:root[data-platform="windows"] .process-name strong,
+:root[data-platform="windows"] .process-value,
 :root[data-platform="windows"] .mount-id strong,
 :root[data-platform="windows"] .mount-size,
 :root[data-platform="windows"] .entry small {

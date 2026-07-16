@@ -2,6 +2,7 @@ mod commands;
 mod models;
 mod openssh;
 mod pool;
+mod process_monitor;
 #[cfg(russh_backend)]
 mod russh_transport;
 mod ssh;
@@ -10,6 +11,7 @@ mod terminal;
 mod time;
 
 use pool::SshPool;
+use process_monitor::ProcessMonitorRegistry;
 use std::sync::Arc;
 #[cfg(target_os = "macos")]
 use tauri::Manager;
@@ -21,6 +23,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(Arc::new(TerminalRegistry::default()))
         .manage(Arc::new(SshPool))
+        .manage(Arc::new(ProcessMonitorRegistry::default()))
         .manage(Arc::new(commands::UploadCancelRegistry::default()))
         .manage(Arc::new(commands::DownloadCancelRegistry::default()))
         .invoke_handler(tauri::generate_handler![
@@ -33,6 +36,8 @@ pub fn run() {
             commands::list_command_history,
             commands::save_command_history,
             commands::fetch_server_status,
+            commands::start_process_monitor,
+            commands::stop_process_monitor,
             commands::fetch_network_sample,
             commands::test_server_connection,
             commands::invalidate_connection,

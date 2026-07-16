@@ -262,6 +262,9 @@
   flex: 0 0 auto;
   pointer-events: none;
 }
+.topbar-left > button {
+  pointer-events: auto;
+}
 .topbar-new.icon-button {
   --icon-control-size: 28px;
   --icon-control-border: 1px solid transparent;

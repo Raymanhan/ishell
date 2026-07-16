@@ -93,6 +93,24 @@ pub struct ConnectionImportServer {
     pub password: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProcessUsage {
+    pub pid: u64,
+    pub name: String,
+    pub cpu_percent: f64,
+    pub memory_bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProcessSamplePayload {
+    pub id: String,
+    pub top_cpu_processes: Vec<ProcessUsage>,
+    pub top_memory_processes: Vec<ProcessUsage>,
+    pub sampled_at: f64,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerStatus {
@@ -104,6 +122,9 @@ pub struct ServerStatus {
     pub load15: f64,
     pub cpu_cores: Option<u64>,
     pub cpu_percent: f64,
+    pub gpu_percent: Option<f64>,
+    pub gpu_memory_used_mb: Option<u64>,
+    pub gpu_memory_total_mb: Option<u64>,
     pub memory_total_mb: Option<u64>,
     pub memory_available_mb: Option<u64>,
     pub swap_total_mb: Option<u64>,

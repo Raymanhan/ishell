@@ -38,6 +38,7 @@ import type {
   FileColumn,
   FolderDownloadMode,
   NetworkSample,
+  ProcessSamplePayload,
   ServerInput,
   ServerRecord,
   ServerStatus,
@@ -418,6 +419,38 @@ export default function App() {
     setSelectedServerId(handedOffInitialTab.serverId);
     loadCommandHistory();
   }, [handedOffInitialTab]);
+
+  useEffect(() => {
+    if (!isTauri) return;
+    let unlisten: (() => void) | undefined;
+    let active = true;
+    (async () => {
+      const { listen } = await import("@tauri-apps/api/event");
+      const un = await listen<ProcessSamplePayload>("server-process-sample", (event) => {
+        const { id, topCpuProcesses, topMemoryProcesses } = event.payload;
+        setTabs((current) =>
+          current.map((tab) =>
+            tab.serverId === id && tab.status
+              ? {
+                  ...tab,
+                  status: {
+                    ...tab.status,
+                    topCpuProcesses,
+                    topMemoryProcesses,
+                  },
+                }
+              : tab,
+          ),
+        );
+      });
+      if (active) unlisten = un;
+      else un();
+    })();
+    return () => {
+      active = false;
+      unlisten?.();
+    };
+  }, []);
 
   useEffect(() => {
     if (!isTauri) return;
@@ -811,22 +844,27 @@ export default function App() {
     });
   }
 
-  // Auto-refresh the dashboard with different cadences:
-  // network 1s, core metrics 5s, disk mounts 60s.
+  // Auto-refresh live monitoring every second; disk mounts stay on a slower cadence.
   useEffect(() => {
     if (!statusOpen || !activeTab || activeTab.state !== "connected") return;
     const tabId = activeTab.id;
     const serverId = activeTab.serverId;
+    if (isTauri) {
+      void command("start_process_monitor", { id: serverId, consumerId: tabId });
+    }
     refreshNetwork(tabId, serverId, true);
     const warmupTimer = window.setTimeout(() => refreshNetwork(tabId, serverId, true), 650);
     const networkTimer = window.setInterval(() => refreshNetwork(tabId, serverId, true), 1000);
-    const metricTimer = window.setInterval(() => refreshStatus(tabId, serverId, true, false), 5000);
+    const metricTimer = window.setInterval(() => refreshStatus(tabId, serverId, true, false), 1000);
     const diskTimer = window.setInterval(() => refreshStatus(tabId, serverId, true, true), 60000);
     return () => {
       window.clearTimeout(warmupTimer);
       window.clearInterval(networkTimer);
       window.clearInterval(metricTimer);
       window.clearInterval(diskTimer);
+      if (isTauri) {
+        void command("stop_process_monitor", { id: serverId, consumerId: tabId });
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusOpen, activeTabId, activeTab?.state]);
@@ -1518,11 +1556,20 @@ export default function App() {
       setTabs((current) =>
         current.map((tab) => {
           if (tab.id !== tabId) return tab;
-          if (includeDisk || !tab.status) return { ...tab, status: next };
+          const liveProcessState = tab.status
+            ? {
+                topCpuProcesses: tab.status.topCpuProcesses,
+                topMemoryProcesses: tab.status.topMemoryProcesses,
+              }
+            : {};
+          if (includeDisk || !tab.status) {
+            return { ...tab, status: { ...next, ...liveProcessState } };
+          }
           return {
             ...tab,
             status: {
               ...next,
+              ...liveProcessState,
               diskUsedPercent: tab.status.diskUsedPercent,
               diskUsedGb: tab.status.diskUsedGb,
               diskTotalGb: tab.status.diskTotalGb,

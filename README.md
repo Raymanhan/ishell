@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.1.18](https://github.com/Raymanhan/ishell/releases/tag/v1.1.18)**
+**[Download iShell v1.1.19](https://github.com/Raymanhan/ishell/releases/tag/v1.1.19)**
 
 Available packages:
 
@@ -42,8 +42,8 @@ Available packages:
 - **SFTP browser**: column or tree browsing, upload, download, rename, delete,
   mkdir, context menus, symlink-aware entries, terminal directory jump, and
   remote text editing for small files.
-- **Live monitoring**: CPU, memory, swap, disk, load, processes, and network
-  throughput per connected host, plus one-click host/IP copy.
+- **Live monitoring**: CPU, GPU, memory, swap, disk, load, process rankings,
+  and network throughput per connected host, plus one-click host/IP copy.
 - **Glass desktop UI**: transparent native window, glass gray theme, xterm
   transparency, and platform-tuned font rendering.
 
@@ -128,10 +128,12 @@ responsive and safe for remote sessions.
 The status panel samples remote host information through SSH:
 
 - CPU usage
+- GPU usage and VRAM when the remote host exposes supported metrics
 - Memory and swap
 - Disk mounts
 - Load average
 - Process count
+- Top CPU and memory processes
 - Network upload/download throughput
 - Host/IP copy shortcut
 
@@ -210,8 +212,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.1.18
-git push origin v1.1.18
+git tag v1.1.19
+git push origin v1.1.19
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -245,6 +247,8 @@ src-tauri/src/
 
 ## Recent Changes
 
+- `v1.1.19` expands live monitoring with GPU/VRAM metrics and live Top 5
+  process rankings for CPU and memory usage.
 - `v1.1.18` adds a Settings toggle for the auto-hiding top bar and places new
   upload/download queue items at the top for easier progress tracking.
 - `v1.1.17` improves remote file editing by automatically scrolling

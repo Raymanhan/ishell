@@ -1,12 +1,14 @@
 import { useState, type ReactNode } from "react";
 import {
+  Activity,
   ArrowDown,
   ArrowUp,
+  CircuitBoard,
   Cpu,
   Gauge as GaugeIcon,
   MemoryStick,
 } from "lucide-react";
-import type { DiskMount } from "../types";
+import type { DiskMount, ProcessUsage } from "../types";
 import type { ShellTab } from "../features/shell/types";
 import { formatBytes, memoryPercent } from "../utils/format";
 
@@ -21,6 +23,17 @@ export function StatusDashboard({
   const [hostCopied, setHostCopied] = useState(false);
   const mem = memoryPercent(status);
   const cpu = Math.round(status?.cpuPercent ?? 0);
+  const gpu = status?.gpuPercent == null ? null : Math.round(status.gpuPercent);
+  const gpuMemoryUsedMb = status?.gpuMemoryUsedMb;
+  const gpuMemoryTotalMb = status?.gpuMemoryTotalMb;
+  const gpuMemoryPercent =
+    gpuMemoryUsedMb != null && gpuMemoryTotalMb != null && gpuMemoryTotalMb > 0
+      ? Math.min(Math.round((gpuMemoryUsedMb / gpuMemoryTotalMb) * 100), 100)
+      : 0;
+  const gpuMemoryAvailableMb =
+    gpuMemoryUsedMb != null && gpuMemoryTotalMb != null
+      ? Math.max(0, gpuMemoryTotalMb - gpuMemoryUsedMb)
+      : null;
   const cpuCores = Math.max(1, status?.cpuCores ?? 1);
   const load1Percent = Math.min(Math.round(((status?.load1 ?? 0) / cpuCores) * 100), 100);
   const memoryUsedGb =
@@ -103,10 +116,34 @@ export function StatusDashboard({
             tone="warn"
           />
           <MetricBar
+            icon={<CircuitBoard size={14} />}
+            label="GPU"
+            value={gpu ?? 0}
+            valueText={gpu == null ? "—" : `${gpu}%`}
+            detail={gpu == null ? "未检测到受支持的 GPU" : "当前 GPU 中的最高占用率"}
+            tone="violet"
+          />
+          {gpuMemoryUsedMb != null && gpuMemoryTotalMb != null && gpuMemoryAvailableMb != null && (
+            <MetricBar
+              icon={<MemoryStick size={14} />}
+              label="显存"
+              value={gpuMemoryPercent}
+              valueText={`${formatCapacityMb(gpuMemoryUsedMb, true)}/${formatCapacityMb(gpuMemoryTotalMb, true)}`}
+              detail={`已用 ${formatCapacityMb(gpuMemoryUsedMb)} / ${formatCapacityMb(gpuMemoryTotalMb)} · 可用 ${formatCapacityMb(gpuMemoryAvailableMb)}`}
+              tone="info"
+            />
+          )}
+          <MetricBar
             icon={<MemoryStick size={14} />}
             label="交换"
             value={swapPercent}
-            valueText={swapTotalMb == null ? "—" : swapEnabled ? `${swapPercent}%` : "关闭"}
+            valueText={
+              swapTotalMb == null
+                ? "—"
+                : swapEnabled && swapUsedMb != null
+                  ? `${formatCapacityMb(swapUsedMb, true)}/${formatCapacityMb(swapTotalMb, true)}`
+                  : "关闭"
+            }
             detail={
               swapTotalMb == null
                 ? "暂不可用"
@@ -128,6 +165,13 @@ export function StatusDashboard({
       </section>
 
       <section className="metric-section">
+        <ProcessTopCard
+          cpuProcesses={status?.topCpuProcesses ?? []}
+          memoryProcesses={status?.topMemoryProcesses ?? []}
+        />
+      </section>
+
+      <section className="metric-section">
         <div className="mount-card">
           {diskMounts.length ? (
             diskMounts.map((mount) => (
@@ -143,6 +187,84 @@ export function StatusDashboard({
       </section>
     </div>
   );
+}
+
+function ProcessTopCard({
+  cpuProcesses,
+  memoryProcesses,
+}: {
+  cpuProcesses: ProcessUsage[];
+  memoryProcesses: ProcessUsage[];
+}) {
+  const [mode, setMode] = useState<"cpu" | "memory">("cpu");
+  const processes = mode === "cpu" ? cpuProcesses : memoryProcesses;
+  const valueFor = (process: ProcessUsage) =>
+    mode === "cpu" ? process.cpuPercent : process.memoryBytes;
+  const maxValue = Math.max(1, ...processes.map(valueFor));
+
+  return (
+    <div className={`process-card process-card-${mode}`}>
+      <div className="process-card-head">
+        <span className="process-card-title">
+          <Activity size={14} />
+          进程 Top 5
+        </span>
+        <div className="process-switch" role="group" aria-label="进程排行指标">
+          <button
+            type="button"
+            className={mode === "cpu" ? "on" : ""}
+            aria-pressed={mode === "cpu"}
+            onClick={() => setMode("cpu")}
+          >
+            CPU
+          </button>
+          <button
+            type="button"
+            className={mode === "memory" ? "on" : ""}
+            aria-pressed={mode === "memory"}
+            onClick={() => setMode("memory")}
+          >
+            内存
+          </button>
+        </div>
+      </div>
+
+      {processes.length ? (
+        <div className="process-list">
+          {processes.map((process, index) => {
+            const value = valueFor(process);
+            return (
+              <div
+                className="process-row"
+                key={`${mode}-${process.pid}`}
+                title={`${process.name} · PID ${process.pid} · CPU ${formatPercent(process.cpuPercent)} · 内存 ${formatBytes(process.memoryBytes)}`}
+              >
+                <span className="process-rank">{index + 1}</span>
+                <span className="process-name">
+                  <strong>{process.name}</strong>
+                  <small>PID {process.pid}</small>
+                </span>
+                {mode === "memory" && (
+                  <span className="process-track" aria-hidden="true">
+                    <span className="process-fill" style={{ width: `${(value / maxValue) * 100}%` }} />
+                  </span>
+                )}
+                <strong className="process-value">
+                  {mode === "cpu" ? formatPercent(value) : formatBytes(value)}
+                </strong>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="process-empty">正在采样进程数据…</div>
+      )}
+    </div>
+  );
+}
+
+function formatPercent(value: number) {
+  return `${value.toFixed(1)}%`;
 }
 
 function SpeedPill({ icon, value, label }: { icon: ReactNode; value: number; label: string }) {
@@ -275,9 +397,13 @@ function MetricBar({
   );
 }
 
-function formatCapacityMb(value: number) {
-  if (value >= 1024) return `${(value / 1024).toFixed(1)} GB`;
-  return `${Math.round(value)} MB`;
+function formatCapacityMb(value: number, compact = false) {
+  if (value >= 1024) {
+    const gigabytes = value / 1024;
+    const formatted = gigabytes.toFixed(gigabytes >= 10 || Number.isInteger(gigabytes) ? 0 : 1);
+    return compact ? `${formatted}G` : `${formatted} GB`;
+  }
+  return compact ? `${Math.round(value)}M` : `${Math.round(value)} MB`;
 }
 
 function formatCapacityGb(value: number, compact = false) {

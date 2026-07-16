@@ -21,6 +21,7 @@ use crate::{
         ServerStatus, SftpEntry, TerminalSnapshotPayload,
     },
     pool::SshPool,
+    process_monitor::ProcessMonitorRegistry,
     ssh::{
         download_file, download_folder, fetch_network_sample as fetch_network, fetch_status,
         list_sftp, make_directory, read_text_file, remove_entry, rename_entry, test_connection,
@@ -413,6 +414,25 @@ pub async fn fetch_server_status(
 ) -> Result<ServerStatus, String> {
     let pool = pool.inner().clone();
     run_blocking(move || fetch_status(&pool, &app, &id, include_disk.unwrap_or(true))).await
+}
+
+#[tauri::command]
+pub fn start_process_monitor(
+    app: AppHandle,
+    registry: State<'_, Arc<ProcessMonitorRegistry>>,
+    id: String,
+    consumer_id: String,
+) -> Result<(), String> {
+    registry.inner().clone().start(app, id, consumer_id)
+}
+
+#[tauri::command]
+pub fn stop_process_monitor(
+    registry: State<'_, Arc<ProcessMonitorRegistry>>,
+    id: String,
+    consumer_id: String,
+) {
+    registry.stop(&id, &consumer_id);
 }
 
 #[tauri::command]

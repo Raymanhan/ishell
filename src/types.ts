@@ -42,6 +42,9 @@ export interface ServerStatus {
   load15: number;
   cpuCores?: number | null;
   cpuPercent: number;
+  gpuPercent?: number | null;
+  gpuMemoryUsedMb?: number | null;
+  gpuMemoryTotalMb?: number | null;
   memoryTotalMb?: number | null;
   memoryAvailableMb?: number | null;
   swapTotalMb?: number | null;
@@ -51,6 +54,22 @@ export interface ServerStatus {
   diskTotalGb?: number | null;
   diskMounts?: DiskMount[];
   processes?: number | null;
+  topCpuProcesses?: ProcessUsage[];
+  topMemoryProcesses?: ProcessUsage[];
+  sampledAt: number;
+}
+
+export interface ProcessUsage {
+  pid: number;
+  name: string;
+  cpuPercent: number;
+  memoryBytes: number;
+}
+
+export interface ProcessSamplePayload {
+  id: string;
+  topCpuProcesses: ProcessUsage[];
+  topMemoryProcesses: ProcessUsage[];
   sampledAt: number;
 }
 
