@@ -18,6 +18,7 @@ import {
   HardDrive,
   Pencil,
   RefreshCw,
+  ScrollText,
   TableProperties,
   SquareTerminal,
   Trash2,
@@ -85,6 +86,7 @@ function SftpBrowserBase({
   onDownload,
   onDownloadFolder,
   onEdit,
+  onTailView,
   onTerminalJump,
   onMkdir,
   onRename,
@@ -103,6 +105,7 @@ function SftpBrowserBase({
   onDownload: (entries: SftpEntry[]) => void;
   onDownloadFolder: (entry: SftpEntry, mode: FolderDownloadMode) => void;
   onEdit: (entry: SftpEntry) => void;
+  onTailView: (entry: SftpEntry) => void;
   onTerminalJump: (targetDir: string) => void;
   onMkdir: (name: string, targetDir?: string) => void;
   onRename: (entry: SftpEntry, columnIndex: number, nextName: string) => void;
@@ -1094,7 +1097,7 @@ function SftpBrowserBase({
                         type="button"
                         onClick={() => runMenu(() => menu.entry && onDownloadFolder(menu.entry, "archive"))}
                       >
-                        <FileArchive size={14} /> 打包下载（.tar.gz）
+                        <FileArchive size={14} /> 压缩下载
                       </button>
                       <button
                         type="button"
@@ -1114,7 +1117,9 @@ function SftpBrowserBase({
                       runMenu(() => menu.entry && onDownload(selectedBatchFor(menu.entry).filter((entry) => !entry.isDir)))
                     }
                   >
-                    <Download size={14} /> 下载{selectedBatchFor(menu.entry).filter((entry) => !entry.isDir).length > 1 ? "所选" : ""}
+                    <Download size={14} /> {selectedBatchFor(menu.entry).filter((entry) => !entry.isDir).length > 1
+                      ? `下载所选（${selectedBatchFor(menu.entry).filter((entry) => !entry.isDir).length}）`
+                      : "下载"}
                   </button>
                   {isEditableTextEntry(menu.entry) && (
                     <button
@@ -1124,11 +1129,17 @@ function SftpBrowserBase({
                       <FilePenLine size={14} /> 编辑
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => runMenu(() => menu.entry && onTailView(menu.entry))}
+                  >
+                    <ScrollText size={14} /> 实时查看
+                  </button>
                 </>
               )}
-              {renderUploadSubmenu(targetDirFor(menu.entry, menu.columnIndex), "上传到此处")}
+              {renderUploadSubmenu(targetDirFor(menu.entry, menu.columnIndex), "上传")}
               <button type="button" onClick={() => runMenu(() => onTerminalJump(targetDirFor(menu.entry, menu.columnIndex)))}>
-                <SquareTerminal size={14} /> 跳转到此处
+                <SquareTerminal size={14} /> 终端跳转
               </button>
               <button type="button" onClick={() => runMenu(() => startCreateDirFromMenu(menu))}>
                 <FolderPlus size={14} /> 新建文件夹
@@ -1142,14 +1153,16 @@ function SftpBrowserBase({
                 className="danger"
                 onClick={() => runMenu(() => menu.entry && onDelete(selectedBatchFor(menu.entry), menu.columnIndex))}
               >
-                <Trash2 size={14} /> 删除{menu.entry && selectedBatchFor(menu.entry).length > 1 ? "所选" : ""}
+                <Trash2 size={14} /> {menu.entry && selectedBatchFor(menu.entry).length > 1
+                  ? `删除所选（${selectedBatchFor(menu.entry).length}）`
+                  : "删除"}
               </button>
             </>
           ) : (
             <>
               {renderUploadSubmenu(targetDirFor(null, menu.columnIndex), "上传")}
               <button type="button" onClick={() => runMenu(() => onTerminalJump(targetDirFor(null, menu.columnIndex)))}>
-                <SquareTerminal size={14} /> 跳转到此处
+                <SquareTerminal size={14} /> 终端跳转
               </button>
               <button type="button" onClick={() => runMenu(() => startCreateDirFromMenu(menu))}>
                 <FolderPlus size={14} /> 新建文件夹
@@ -1183,6 +1196,7 @@ export const SftpBrowser = memo(SftpBrowserBase, (previous, next) => (
   previous.onDownload === next.onDownload &&
   previous.onDownloadFolder === next.onDownloadFolder &&
   previous.onEdit === next.onEdit &&
+  previous.onTailView === next.onTailView &&
   previous.onTerminalJump === next.onTerminalJump &&
   previous.onMkdir === next.onMkdir &&
   previous.onRename === next.onRename &&

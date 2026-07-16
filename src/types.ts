@@ -163,6 +163,28 @@ export interface DownloadProgressPayload {
   done: boolean;
 }
 
+export interface TailViewerConfig {
+  viewerId: string;
+  serverId: string;
+  serverName: string;
+  fileName: string;
+  path: string;
+  initialLines: number;
+}
+
+export interface TailDataPayload {
+  viewerId: string;
+  data: string;
+}
+
+export type TailMonitorState = "connecting" | "streaming" | "stopped" | "error";
+
+export interface TailStatusPayload {
+  viewerId: string;
+  state: TailMonitorState;
+  message?: string | null;
+}
+
 export interface TerminalDataPayload {
   sessionId: string;
   offset: number;

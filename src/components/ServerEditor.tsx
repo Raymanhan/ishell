@@ -41,6 +41,9 @@ export function ServerEditor({
     >
       <form
         className="editor-sheet server-editor-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="server-editor-title"
         onMouseDown={(event) => event.stopPropagation()}
         onSubmit={(event) => {
           event.preventDefault();
@@ -50,9 +53,9 @@ export function ServerEditor({
         <header className="server-editor-head">
           <div>
             <span>SSH CONNECTION</span>
-            <h2>{title}</h2>
+            <h2 id="server-editor-title">{title}</h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose} title="关闭">
+          <button type="button" className="icon-button" onClick={onClose} title="关闭" aria-label="关闭">
             <X size={16} />
           </button>
         </header>
@@ -75,18 +78,18 @@ export function ServerEditor({
                 </label>
                 <label className="field port-field">
                   <span>端口</span>
-                  <input type="number" min={1} max={65535} value={form.port} onChange={(event) => update("port", Number(event.target.value))} />
+                  <input type="number" inputMode="numeric" min={1} max={65535} value={form.port} onChange={(event) => update("port", Number(event.target.value))} />
                 </label>
               </div>
             </section>
 
             <section className="editor-section">
               <span className="field-group-label">认证</span>
-              <div className="auth-switch">
-                <button type="button" className={form.authType === "password" ? "active" : ""} onClick={() => update("authType", "password")}>
+              <div className="auth-switch" role="group" aria-label="认证方式">
+                <button type="button" className={form.authType === "password" ? "active" : ""} aria-pressed={form.authType === "password"} onClick={() => update("authType", "password")}>
                   <span>密码</span>
                 </button>
-                <button type="button" className={form.authType === "key" ? "active" : ""} onClick={() => update("authType", "key")}>
+                <button type="button" className={form.authType === "key" ? "active" : ""} aria-pressed={form.authType === "key"} onClick={() => update("authType", "key")}>
                   <span>私钥</span>
                 </button>
               </div>
@@ -121,9 +124,9 @@ export function ServerEditor({
                 <span>标签</span>
                 <input value={form.tagsText} onChange={(event) => update("tagsText", event.target.value)} />
               </label>
-              <div className="swatches" aria-label="连接颜色">
+              <div className="swatches" role="group" aria-label="连接颜色">
                 {swatches.map((color) => (
-                  <button key={color} type="button" className={form.color === color ? "active" : ""} style={{ backgroundColor: color }} onClick={() => update("color", color)} aria-label={color} />
+                  <button key={color} type="button" className={form.color === color ? "active" : ""} style={{ backgroundColor: color }} onClick={() => update("color", color)} aria-label={color} aria-pressed={form.color === color} />
                 ))}
               </div>
             </section>

@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import "@xterm/xterm/css/xterm.css";
 import "./styles.css";
 import App from "./App";
+import { readTailViewerConfigFromUrl, TailViewer } from "./components/TailViewer";
 
 const platformSource = `${navigator.userAgent} ${navigator.platform}`.toLowerCase();
 const platform =
@@ -15,9 +16,10 @@ const platform =
         : "other";
 
 document.documentElement.dataset.platform = platform;
+const tailViewerConfig = readTailViewerConfigFromUrl();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <App />
+    {tailViewerConfig ? <TailViewer config={tailViewerConfig} /> : <App />}
   </React.StrictMode>,
 );

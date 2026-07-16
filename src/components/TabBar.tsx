@@ -575,12 +575,12 @@ export function TabBar({
           </button>
           <button type="button" role="menuitem" onClick={() => runMenu(() => onReconnect(menu.tabId))}>
             <RefreshCw size={14} />
-            重新连接
+            重连
           </button>
           {tabs.length > 1 && (
             <button type="button" role="menuitem" onClick={() => runMenu(() => onDetach(menu.tabId))}>
               <PanelsTopLeft size={14} />
-              移到新窗口
+              移至新窗口
             </button>
           )}
           <div className="ctx-sep" role="separator" />
@@ -604,7 +604,7 @@ export function TabBar({
             关闭当前
           </button>
           <button type="button" role="menuitem" className="danger" onClick={() => runMenu(() => onCloseTabs(tabs.map((tab) => tab.id)))}>
-            关闭全部
+            全部关闭
           </button>
         </div>
       )}

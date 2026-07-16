@@ -187,6 +187,21 @@ pub struct UploadProgress {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TailDataPayload {
+    pub viewer_id: String,
+    pub data: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TailStatusPayload {
+    pub viewer_id: String,
+    pub state: String,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TerminalDataPayload {
     pub session_id: String,
     pub offset: usize,

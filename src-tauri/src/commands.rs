@@ -11,7 +11,7 @@ use std::{
     io::{Cursor, Read, Write},
     sync::{Arc, Mutex},
 };
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, State, WebviewWindow};
 use uuid::Uuid;
 
 use crate::{
@@ -32,6 +32,7 @@ use crate::{
         list_command_history as load_command_history, list_servers as load_servers, normalize_tags,
         read_secret, reorder_servers as save_server_order, upsert_server, validate_server,
     },
+    tail_monitor::TailMonitorRegistry,
     terminal::{self, TerminalRegistry},
     time::now,
 };
@@ -433,6 +434,31 @@ pub fn stop_process_monitor(
     consumer_id: String,
 ) {
     registry.stop(&id, &consumer_id);
+}
+
+#[tauri::command]
+pub fn start_tail_monitor(
+    app: AppHandle,
+    window: WebviewWindow,
+    registry: State<'_, Arc<TailMonitorRegistry>>,
+    id: String,
+    path: String,
+    initial_lines: u32,
+    viewer_id: String,
+) -> Result<(), String> {
+    registry.inner().clone().start(
+        app,
+        viewer_id,
+        window.label().to_string(),
+        id,
+        path,
+        initial_lines,
+    )
+}
+
+#[tauri::command]
+pub fn stop_tail_monitor(registry: State<'_, Arc<TailMonitorRegistry>>, viewer_id: String) {
+    registry.stop(&viewer_id);
 }
 
 #[tauri::command]

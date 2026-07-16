@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.1.19](https://github.com/Raymanhan/ishell/releases/tag/v1.1.19)**
+**[Download iShell v1.1.20](https://github.com/Raymanhan/ishell/releases/tag/v1.1.20)**
 
 Available packages:
 
@@ -40,8 +40,8 @@ Available packages:
 - **OpenSSH and russh transports**: macOS/Linux use the system OpenSSH client;
   Windows uses a pure-Rust `russh` backend with pooled sessions.
 - **SFTP browser**: column or tree browsing, upload, download, rename, delete,
-  mkdir, context menus, symlink-aware entries, terminal directory jump, and
-  remote text editing for small files.
+  mkdir, context menus, symlink-aware entries, terminal directory jump, remote
+  text editing for small files, and a separate live tail viewer for log files.
 - **Live monitoring**: CPU, GPU, memory, swap, disk, load, process rankings,
   and network throughput per connected host, plus one-click host/IP copy.
 - **Glass desktop UI**: transparent native window, glass gray theme, xterm
@@ -116,12 +116,25 @@ Supported operations:
   context menu.
 - Open small text files in the built-in editor and save changes back to the
   remote host.
+- Open a live tail viewer for a selected file to follow appended log output in
+  a dedicated desktop window.
 - Drag text selection beyond the editor's left or right edge to keep selecting
   while the editor scrolls horizontally.
 - Use the path bar to jump directly to a directory.
 
 Text editing is intentionally limited to small files so the UI remains
 responsive and safe for remote sessions.
+
+### Live Tail Viewer
+
+- Open **Live Tail** from the SFTP context menu for a file on the active host.
+- iShell opens the viewer in a separate desktop window so long-running logs do
+  not take over the main workbench.
+- Choose how many trailing lines to load before following new output.
+- Pause following, resume at the bottom, clear the current buffer, or restart
+  the tail session from the viewer toolbar.
+- The viewer streams through the same SSH backend as the active host and stops
+  its remote process when the window closes.
 
 ### Live Status
 
@@ -144,6 +157,7 @@ Settings currently include:
 - Glass gray desktop theme
 - Auto-hide top bar toggle
 - Terminal font size
+- Default line count for new live tail viewer windows
 
 The glass theme uses Tauri native window effects where available, with a
 transparent xterm background so the terminal and panels share one desktop
@@ -212,8 +226,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.1.19
-git push origin v1.1.19
+git tag v1.1.20
+git push origin v1.1.20
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -240,6 +254,7 @@ src-tauri/src/
   russh_transport.rs Pure-Rust SSH transport used by the Windows backend
   ssh.rs            SSH, SFTP, file editing, and status sampling
   store.rs          Server persistence and OS keychain secret storage
+  tail_monitor.rs   Live remote file tail process registry
   terminal.rs       Interactive terminal session registry
   time.rs           Small time helper
   lib.rs            Tauri application assembly
@@ -247,6 +262,9 @@ src-tauri/src/
 
 ## Recent Changes
 
+- `v1.1.20` adds a separate live tail viewer for remote log files, improves
+  vertical drag-scrolling in the remote editor, refines SFTP detail column
+  resizing, and polishes the pearl/light theme plus the add-server dialog.
 - `v1.1.19` expands live monitoring with GPU/VRAM metrics and live Top 5
   process rankings for CPU and memory usage.
 - `v1.1.18` adds a Settings toggle for the auto-hiding top bar and places new

@@ -7,13 +7,14 @@ mod process_monitor;
 mod russh_transport;
 mod ssh;
 mod store;
+mod tail_monitor;
 mod terminal;
 mod time;
 
 use pool::SshPool;
 use process_monitor::ProcessMonitorRegistry;
 use std::sync::Arc;
-#[cfg(target_os = "macos")]
+use tail_monitor::TailMonitorRegistry;
 use tauri::Manager;
 use terminal::TerminalRegistry;
 
@@ -24,6 +25,7 @@ pub fn run() {
         .manage(Arc::new(TerminalRegistry::default()))
         .manage(Arc::new(SshPool))
         .manage(Arc::new(ProcessMonitorRegistry::default()))
+        .manage(Arc::new(TailMonitorRegistry::default()))
         .manage(Arc::new(commands::UploadCancelRegistry::default()))
         .manage(Arc::new(commands::DownloadCancelRegistry::default()))
         .invoke_handler(tauri::generate_handler![
@@ -38,6 +40,8 @@ pub fn run() {
             commands::fetch_server_status,
             commands::start_process_monitor,
             commands::stop_process_monitor,
+            commands::start_tail_monitor,
+            commands::stop_tail_monitor,
             commands::fetch_network_sample,
             commands::test_server_connection,
             commands::invalidate_connection,
@@ -61,6 +65,12 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building iShell")
         .run(|app, event| {
+            if let tauri::RunEvent::WindowEvent { label, event, .. } = &event {
+                if matches!(event, tauri::WindowEvent::Destroyed) && label.starts_with("tail-") {
+                    app.state::<Arc<TailMonitorRegistry>>().stop_window(label);
+                }
+            }
+
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = event {
                 if let Some(window) = app.get_webview_window("main") {
@@ -70,6 +80,6 @@ pub fn run() {
             }
 
             #[cfg(not(target_os = "macos"))]
-            let _ = (app, event);
+            let _ = event;
         });
 }

@@ -107,6 +107,7 @@
 :root[data-theme="glass"] .history-search,
 :root[data-theme="glass"] .theme-option,
 :root[data-theme="glass"] .settings-range,
+:root[data-theme="glass"] .settings-number,
 :root[data-theme="glass"] .recent-card,
 :root[data-theme="glass"] .network-card,
 :root[data-theme="glass"] .metric-row,
@@ -197,6 +198,7 @@
 :root[data-theme="glass"] .editor-sheet,
 :root[data-theme="glass"] .delete-confirm,
 :root[data-theme="glass"] .file-editor,
+:root[data-theme="glass"] .tail-viewer,
 :root[data-theme="glass"] .server-context-menu,
 :root[data-theme="glass"] .tab-context-menu,
 :root[data-theme="glass"] .ctx-menu,
@@ -228,7 +230,8 @@
 :root[data-theme="glass"] .uq-item {
   background: rgba(255, 255, 255, 0.055);
 }
-:root[data-theme="glass"] .file-editor-code {
+:root[data-theme="glass"] .file-editor-code,
+:root[data-theme="glass"] .tail-viewer-output {
   border-color: rgba(255, 255, 255, 0.12);
   background: rgba(20, 24, 30, 0.34);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
@@ -641,6 +644,7 @@
 :root[data-theme^="liquid-glass"] .history-search,
 :root[data-theme^="liquid-glass"] .theme-option,
 :root[data-theme^="liquid-glass"] .settings-range,
+:root[data-theme^="liquid-glass"] .settings-number,
 :root[data-theme^="liquid-glass"] .editor-section,
 :root[data-theme^="liquid-glass"] .auth-switch,
 :root[data-theme^="liquid-glass"] .field input,
@@ -678,6 +682,7 @@
 :root[data-theme^="liquid-glass"] .history-search::before,
 :root[data-theme^="liquid-glass"] .theme-option::before,
 :root[data-theme^="liquid-glass"] .settings-range::before,
+:root[data-theme^="liquid-glass"] .settings-number::before,
 :root[data-theme^="liquid-glass"] .editor-section::before,
 :root[data-theme^="liquid-glass"] .auth-switch::before,
 :root[data-theme^="liquid-glass"] .field input::before,
@@ -717,6 +722,7 @@
 :root[data-theme^="liquid-glass"] .history-search > *,
 :root[data-theme^="liquid-glass"] .theme-option > *,
 :root[data-theme^="liquid-glass"] .settings-range > *,
+:root[data-theme^="liquid-glass"] .settings-number > *,
 :root[data-theme^="liquid-glass"] .editor-section > *,
 :root[data-theme^="liquid-glass"] .auth-switch > * {
   position: relative;
@@ -737,6 +743,7 @@
 :root[data-theme^="liquid-glass"] .server-editor-sheet,
 :root[data-theme^="liquid-glass"] .delete-confirm,
 :root[data-theme^="liquid-glass"] .file-editor,
+:root[data-theme^="liquid-glass"] .tail-viewer,
 :root[data-theme^="liquid-glass"] .server-context-menu,
 :root[data-theme^="liquid-glass"] .tab-context-menu,
 :root[data-theme^="liquid-glass"] .ctx-menu,
@@ -789,6 +796,7 @@
 :root[data-theme^="liquid-glass"] .history-search,
 :root[data-theme^="liquid-glass"] .theme-option,
 :root[data-theme^="liquid-glass"] .settings-range,
+:root[data-theme^="liquid-glass"] .settings-number,
 :root[data-theme^="liquid-glass"] .recent-card,
 :root[data-theme^="liquid-glass"] .network-card,
 :root[data-theme^="liquid-glass"] .metric-row,
@@ -879,6 +887,7 @@
 }
 
 :root[data-theme^="liquid-glass"] .file-editor-code,
+:root[data-theme^="liquid-glass"] .tail-viewer-output,
 :root[data-theme^="liquid-glass"] .entry-rename {
   border-color: rgba(230, 252, 255, 0.14);
   background: rgba(74, 94, 100, 0.38);
@@ -951,6 +960,475 @@
 :root[data-theme^="liquid-glass"] .server-editor-sheet .danger-button {
   border-color: transparent;
   background: transparent;
+}
+
+/* ===== Pearl glass refinements =====
+   The shared liquid-glass rules are tuned for dark surfaces. Pearl needs its
+   own contrast model so glass stays translucent without washing out content. */
+:root[data-theme="liquid-glass-pearl"] {
+  color-scheme: light;
+
+  --bg: rgba(231, 232, 229, 0.76);
+  --titlebar: rgba(247, 246, 242, 0.72);
+  --panel: rgba(249, 248, 244, 0.82);
+  --panel-2: rgba(230, 231, 228, 0.68);
+  --inset: rgba(224, 225, 222, 0.64);
+  --card: rgba(255, 255, 255, 0.58);
+  --card-hover: rgba(255, 255, 255, 0.76);
+
+  --hairline: rgba(52, 66, 75, 0.15);
+  --hairline-2: rgba(52, 66, 75, 0.24);
+  --hairline-3: rgba(52, 66, 75, 0.34);
+
+  --text: #20282e;
+  --dim: #4e5f69;
+  --faint: #697983;
+  --accent: #3f6d88;
+  --accent-2: #567f97;
+  --accent-soft: rgba(63, 109, 136, 0.13);
+  --focus-ring: rgba(48, 102, 135, 0.5);
+  --focus-bg: rgba(63, 109, 136, 0.1);
+  --control-hover-bg: rgba(49, 70, 83, 0.08);
+  --control-active-bg: rgba(63, 109, 136, 0.12);
+  --row-hover-bg: rgba(63, 83, 95, 0.07);
+  --row-active-bg: rgba(63, 109, 136, 0.13);
+  --surface-soft-bg: rgba(255, 255, 255, 0.54);
+  --surface-muted-bg: rgba(245, 246, 243, 0.68);
+
+  --shadow: 0 20px 60px rgba(45, 56, 63, 0.16);
+  --ctx-menu-bg: rgba(250, 249, 246, 0.96);
+  --ctx-menu-hover: rgba(63, 109, 136, 0.1);
+  --ctx-menu-shadow: 0 16px 42px rgba(45, 56, 63, 0.18);
+  --liquid-surface: rgba(249, 248, 244, 0.78);
+  --liquid-surface-strong: rgba(251, 250, 247, 0.93);
+  --liquid-edge: rgba(255, 255, 255, 0.9);
+  --liquid-edge-soft: rgba(52, 66, 75, 0.14);
+  --liquid-shadow: 0 12px 34px rgba(45, 56, 63, 0.13);
+  --liquid-accent-rgb: 63, 109, 136;
+  --liquid-app-bg:
+    radial-gradient(680px 360px at 14% -4%, rgba(255, 255, 255, 0.66), transparent 64%),
+    radial-gradient(560px 360px at 94% 16%, rgba(158, 180, 191, 0.16), transparent 68%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.28), transparent 42%),
+    rgba(226, 228, 225, 0.72);
+  --liquid-body-bg:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 170px),
+    rgba(231, 231, 227, 0.68);
+  --liquid-body-files-bg:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 170px),
+    linear-gradient(0deg, rgba(63, 109, 136, 0.055), transparent 54px),
+    rgba(231, 231, 227, 0.68);
+  --liquid-body-glow:
+    radial-gradient(420px 210px at 22% 8%, rgba(255, 255, 255, 0.2), transparent 68%),
+    radial-gradient(460px 230px at 86% 86%, rgba(115, 141, 154, 0.08), transparent 72%);
+  --liquid-backdrop-bg: rgba(207, 211, 211, 0.38);
+}
+
+:root[data-theme="liquid-glass-pearl"] ::-webkit-scrollbar-thumb {
+  background: rgba(52, 66, 75, 0.18);
+  background-clip: padding-box;
+}
+:root[data-theme="liquid-glass-pearl"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(52, 66, 75, 0.3);
+  background-clip: padding-box;
+}
+
+:root[data-theme="liquid-glass-pearl"] .app {
+  box-shadow:
+    inset 0 0 0 1px rgba(52, 66, 75, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.68);
+}
+:root[data-theme="liquid-glass-pearl"] .workbench-body {
+  backdrop-filter: blur(30px) saturate(118%);
+  -webkit-backdrop-filter: blur(30px) saturate(118%);
+}
+:root[data-theme="liquid-glass-pearl"] .workbench-body::before {
+  opacity: 0.28;
+  filter: blur(24px);
+}
+
+:root[data-theme="liquid-glass-pearl"] .connection-manager,
+:root[data-theme="liquid-glass-pearl"] .status-panel,
+:root[data-theme="liquid-glass-pearl"] .files-region {
+  border-color: rgba(52, 66, 75, 0.14);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.42), transparent 32%),
+    var(--liquid-surface);
+  backdrop-filter: blur(38px) saturate(120%);
+  -webkit-backdrop-filter: blur(38px) saturate(120%);
+  box-shadow:
+    var(--liquid-shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    inset 0 -1px 0 rgba(52, 66, 75, 0.06);
+}
+:root[data-theme="liquid-glass-pearl"] .workbench-body.files-open.has-status-panel .files-region.open {
+  box-shadow:
+    0 6px 22px rgba(45, 56, 63, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.76),
+    inset 0 -1px 0 rgba(52, 66, 75, 0.06);
+}
+:root[data-theme="liquid-glass-pearl"] .workbench-body.files-open.has-status-panel .status-panel.open {
+  box-shadow:
+    0 6px 22px rgba(45, 56, 63, 0.1),
+    inset -1px 0 0 rgba(52, 66, 75, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.76),
+    inset 0 -1px 0 rgba(52, 66, 75, 0.06);
+}
+
+:root[data-theme="liquid-glass-pearl"] .connection-manager::before,
+:root[data-theme="liquid-glass-pearl"] .status-panel::before,
+:root[data-theme="liquid-glass-pearl"] .settings-modal::before,
+:root[data-theme="liquid-glass-pearl"] .editor-sheet::before,
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet::before,
+:root[data-theme="liquid-glass-pearl"] .delete-confirm::before,
+:root[data-theme="liquid-glass-pearl"] .file-editor::before,
+:root[data-theme="liquid-glass-pearl"] .server-context-menu::before,
+:root[data-theme="liquid-glass-pearl"] .tab-context-menu::before,
+:root[data-theme="liquid-glass-pearl"] .ctx-menu::before,
+:root[data-theme="liquid-glass-pearl"] .terminal-history-suggest::before,
+:root[data-theme="liquid-glass-pearl"] .upload-queue::before,
+:root[data-theme="liquid-glass-pearl"] .sftp-drop-card::before,
+:root[data-theme="liquid-glass-pearl"] .recent-card::before,
+:root[data-theme="liquid-glass-pearl"] .network-card::before,
+:root[data-theme="liquid-glass-pearl"] .metric-row::before,
+:root[data-theme="liquid-glass-pearl"] .process-card::before,
+:root[data-theme="liquid-glass-pearl"] .mount-card::before,
+:root[data-theme="liquid-glass-pearl"] .history-search::before,
+:root[data-theme="liquid-glass-pearl"] .theme-option::before,
+:root[data-theme="liquid-glass-pearl"] .settings-range::before,
+:root[data-theme="liquid-glass-pearl"] .settings-number::before,
+:root[data-theme="liquid-glass-pearl"] .editor-section::before,
+:root[data-theme="liquid-glass-pearl"] .auth-switch::before,
+:root[data-theme="liquid-glass-pearl"] .field input::before,
+:root[data-theme="liquid-glass-pearl"] .field textarea::before {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.28), transparent 46%);
+  opacity: 0.42;
+  mix-blend-mode: normal;
+}
+
+:root[data-theme="liquid-glass-pearl"] .dashboard,
+:root[data-theme="liquid-glass-pearl"] .history-panel {
+  background: transparent;
+}
+:root[data-theme="liquid-glass-pearl"] .sftp-tree,
+:root[data-theme="liquid-glass-pearl"] .sftp-detail,
+:root[data-theme="liquid-glass-pearl"] .sftp-tool-rail,
+:root[data-theme="liquid-glass-pearl"] .sftp-stage > .columns,
+:root[data-theme="liquid-glass-pearl"] .detail-header,
+:root[data-theme="liquid-glass-pearl"] .settings-head,
+:root[data-theme="liquid-glass-pearl"] .terminal-history-suggest-head,
+:root[data-theme="liquid-glass-pearl"] .uq-head {
+  border-color: rgba(52, 66, 75, 0.14);
+  background: rgba(255, 255, 255, 0.34);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
+}
+:root[data-theme="liquid-glass-pearl"] .detail-body {
+  border-color: rgba(52, 66, 75, 0.14);
+  background: rgba(248, 248, 245, 0.54);
+}
+
+:root[data-theme="liquid-glass-pearl"] .history-search,
+:root[data-theme="liquid-glass-pearl"] .theme-option,
+:root[data-theme="liquid-glass-pearl"] .settings-range,
+:root[data-theme="liquid-glass-pearl"] .settings-number,
+:root[data-theme="liquid-glass-pearl"] .recent-card,
+:root[data-theme="liquid-glass-pearl"] .network-card,
+:root[data-theme="liquid-glass-pearl"] .metric-row,
+:root[data-theme="liquid-glass-pearl"] .process-card,
+:root[data-theme="liquid-glass-pearl"] .mount-card,
+:root[data-theme="liquid-glass-pearl"] .editor-section,
+:root[data-theme="liquid-glass-pearl"] .field input,
+:root[data-theme="liquid-glass-pearl"] .field textarea,
+:root[data-theme="liquid-glass-pearl"] .connection-rename-input,
+:root[data-theme="liquid-glass-pearl"] .auth-switch {
+  border-color: rgba(52, 66, 75, 0.14);
+  background: rgba(255, 255, 255, 0.38);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.56);
+}
+
+:root[data-theme="liquid-glass-pearl"] .dock-toggle.on,
+:root[data-theme="liquid-glass-pearl"] .connection-folder-row.on,
+:root[data-theme="liquid-glass-pearl"] .connection-node.on,
+:root[data-theme="liquid-glass-pearl"] .tool.on,
+:root[data-theme="liquid-glass-pearl"] .entry.on,
+:root[data-theme="liquid-glass-pearl"] .tree-row.current,
+:root[data-theme="liquid-glass-pearl"] .tree-row.on,
+:root[data-theme="liquid-glass-pearl"] .detail-row.on {
+  border-color: rgba(63, 109, 136, 0.3);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.52), rgba(63, 109, 136, 0.12)),
+    rgba(63, 109, 136, 0.08);
+  color: var(--text);
+  box-shadow:
+    inset 3px 0 0 rgba(63, 109, 136, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.58);
+}
+:root[data-theme="liquid-glass-pearl"] .dock-toggle:hover,
+:root[data-theme="liquid-glass-pearl"] .connection-folder-row:hover,
+:root[data-theme="liquid-glass-pearl"] .connection-node:hover,
+:root[data-theme="liquid-glass-pearl"] .history-row:hover,
+:root[data-theme="liquid-glass-pearl"] .history-row:focus-visible,
+:root[data-theme="liquid-glass-pearl"] .entry:hover,
+:root[data-theme="liquid-glass-pearl"] .entry.trail,
+:root[data-theme="liquid-glass-pearl"] .tree-row:hover,
+:root[data-theme="liquid-glass-pearl"] button.detail-row:hover,
+:root[data-theme="liquid-glass-pearl"] .detail-row.trail,
+:root[data-theme="liquid-glass-pearl"] .icon-button:hover,
+:root[data-theme="liquid-glass-pearl"] .tool:hover:not(:disabled),
+:root[data-theme="liquid-glass-pearl"] .uq-clear:hover,
+:root[data-theme="liquid-glass-pearl"] .uq-x:hover {
+  background: rgba(51, 75, 89, 0.08);
+  color: var(--text);
+}
+:root[data-theme="liquid-glass-pearl"] .tree-row:focus-visible,
+:root[data-theme="liquid-glass-pearl"] .detail-row:focus-visible,
+:root[data-theme="liquid-glass-pearl"] .entry:focus-visible {
+  outline: 2px solid rgba(63, 109, 136, 0.58);
+  outline-offset: -2px;
+}
+
+:root[data-theme="liquid-glass-pearl"] .history-search:focus-within,
+:root[data-theme="liquid-glass-pearl"] .pathbar:focus-within,
+:root[data-theme="liquid-glass-pearl"] .field input:focus,
+:root[data-theme="liquid-glass-pearl"] .field textarea:focus,
+:root[data-theme="liquid-glass-pearl"] .connection-rename-input:focus {
+  border-color: rgba(63, 109, 136, 0.56);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow:
+    0 0 0 3px rgba(63, 109, 136, 0.11),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+:root[data-theme="liquid-glass-pearl"] .btn-primary,
+:root[data-theme="liquid-glass-pearl"] .solid-button {
+  border-color: rgba(63, 109, 136, 0.3);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.45), transparent),
+    rgba(63, 109, 136, 0.12);
+  color: #244456;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
+}
+:root[data-theme="liquid-glass-pearl"] .btn-primary:hover,
+:root[data-theme="liquid-glass-pearl"] .solid-button:hover:not(:disabled) {
+  border-color: rgba(63, 109, 136, 0.46);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.54), transparent),
+    rgba(63, 109, 136, 0.18);
+}
+
+:root[data-theme="liquid-glass-pearl"] .connection-trigger,
+:root[data-theme="liquid-glass-pearl"] .dock-toggle,
+:root[data-theme="liquid-glass-pearl"] .topbar-new.icon-button {
+  --icon-control-color: #657681;
+  --icon-control-hover-bg: rgba(51, 75, 89, 0.09);
+  --icon-control-hover-color: #20282e;
+}
+:root[data-theme="liquid-glass-pearl"] .terminal-tab:hover,
+:root[data-theme="liquid-glass-pearl"] .terminal-tab.active:hover {
+  background: rgba(63, 109, 136, 0.13);
+  color: var(--text);
+}
+:root[data-theme="liquid-glass-pearl"] .terminal-tab.active {
+  background: rgba(255, 255, 255, 0.48);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px rgba(52, 66, 75, 0.08);
+}
+
+:root[data-theme="liquid-glass-pearl"] .network-head > span,
+:root[data-theme="liquid-glass-pearl"] .metric-label,
+:root[data-theme="liquid-glass-pearl"] .process-card-title {
+  color: var(--dim);
+}
+:root[data-theme="liquid-glass-pearl"] .process-card-title svg {
+  color: #2f8eb8;
+}
+:root[data-theme="liquid-glass-pearl"] .process-switch {
+  border-color: rgba(52, 66, 75, 0.13);
+  background: rgba(52, 66, 75, 0.07);
+}
+:root[data-theme="liquid-glass-pearl"] .process-switch button.on {
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--text);
+  box-shadow: 0 1px 4px rgba(45, 56, 63, 0.14);
+}
+:root[data-theme="liquid-glass-pearl"] .theme-option.on,
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .auth-switch button.active {
+  border-color: rgba(63, 109, 136, 0.38);
+  background: rgba(63, 109, 136, 0.1);
+  color: var(--text);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.42),
+    0 3px 12px rgba(45, 56, 63, 0.08);
+}
+:root[data-theme="liquid-glass-pearl"] .metric-track,
+:root[data-theme="liquid-glass-pearl"] .mount-track,
+:root[data-theme="liquid-glass-pearl"] .process-track,
+:root[data-theme="liquid-glass-pearl"] .uq-track {
+  background: rgba(52, 66, 75, 0.13);
+  box-shadow: inset 0 0 0 1px rgba(52, 66, 75, 0.03);
+}
+:root[data-theme="liquid-glass-pearl"] .wave-grid {
+  stroke: rgba(52, 66, 75, 0.13);
+}
+
+:root[data-theme="liquid-glass-pearl"] .settings-modal,
+:root[data-theme="liquid-glass-pearl"] .editor-sheet,
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet,
+:root[data-theme="liquid-glass-pearl"] .delete-confirm,
+:root[data-theme="liquid-glass-pearl"] .file-editor,
+:root[data-theme="liquid-glass-pearl"] .tail-viewer,
+:root[data-theme="liquid-glass-pearl"] .server-context-menu,
+:root[data-theme="liquid-glass-pearl"] .tab-context-menu,
+:root[data-theme="liquid-glass-pearl"] .ctx-menu,
+:root[data-theme="liquid-glass-pearl"] .terminal-history-suggest,
+:root[data-theme="liquid-glass-pearl"] .upload-queue,
+:root[data-theme="liquid-glass-pearl"] .sftp-drop-card {
+  border-color: rgba(52, 66, 75, 0.18);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.5), transparent 34%),
+    var(--liquid-surface-strong);
+  backdrop-filter: blur(48px) saturate(122%);
+  -webkit-backdrop-filter: blur(48px) saturate(122%);
+  box-shadow:
+    0 22px 64px rgba(45, 56, 63, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -1px 0 rgba(52, 66, 75, 0.07);
+}
+:root[data-theme="liquid-glass-pearl"] .file-editor-code,
+:root[data-theme="liquid-glass-pearl"] .tail-viewer-output,
+:root[data-theme="liquid-glass-pearl"] .entry-rename {
+  border-color: rgba(52, 66, 75, 0.16);
+  background: rgba(244, 245, 242, 0.74);
+  box-shadow: inset 0 1px 2px rgba(52, 66, 75, 0.06);
+}
+
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet {
+  border-color: rgba(52, 66, 75, 0.2);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.34), transparent 34%),
+    rgba(248, 248, 245, 0.96);
+  box-shadow:
+    0 24px 64px rgba(45, 56, 63, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.86);
+}
+:root[data-theme="liquid-glass-pearl"] .server-editor-head {
+  border-color: rgba(52, 66, 75, 0.13);
+  background: rgba(255, 255, 255, 0.42);
+}
+:root[data-theme="liquid-glass-pearl"] .server-editor-main .editor-section {
+  border-color: rgba(52, 66, 75, 0.13);
+  background: rgba(237, 240, 239, 0.58);
+  box-shadow: none;
+}
+:root[data-theme="liquid-glass-pearl"] .server-editor-main .editor-section::before,
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .auth-switch::before {
+  display: none;
+}
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .field span,
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .field-group-label {
+  color: #53646f;
+}
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .field input,
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .field textarea {
+  border-color: rgba(52, 66, 75, 0.18);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow:
+    inset 0 1px 2px rgba(45, 56, 63, 0.045),
+    0 1px 0 rgba(255, 255, 255, 0.58);
+}
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .field input:hover,
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .field textarea:hover {
+  border-color: rgba(52, 66, 75, 0.28);
+  background: rgba(255, 255, 255, 0.9);
+}
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .field input:focus,
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .field textarea:focus,
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .password-input-wrap:focus-within {
+  border-color: rgba(63, 109, 136, 0.62);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow:
+    0 0 0 3px rgba(63, 109, 136, 0.12),
+    inset 0 1px 2px rgba(45, 56, 63, 0.04);
+}
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .auth-switch {
+  border-color: rgba(52, 66, 75, 0.14);
+  background: rgba(52, 66, 75, 0.065);
+  box-shadow: inset 0 1px 2px rgba(45, 56, 63, 0.035);
+}
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .auth-switch button:hover {
+  background: rgba(255, 255, 255, 0.48);
+  color: var(--text);
+}
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .auth-switch button.active {
+  border-color: rgba(63, 109, 136, 0.3);
+  background: rgba(255, 255, 255, 0.8);
+  color: #26485b;
+  box-shadow:
+    0 1px 4px rgba(45, 56, 63, 0.12),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+}
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .password-input-wrap {
+  border-color: rgba(52, 66, 75, 0.18);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow:
+    inset 0 1px 2px rgba(45, 56, 63, 0.045),
+    0 1px 0 rgba(255, 255, 255, 0.58);
+}
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .password-input-wrap input,
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .password-input-wrap input:hover,
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .password-input-wrap input:focus {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .password-toggle {
+  color: #60727d;
+}
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .password-toggle:hover {
+  background: rgba(52, 66, 75, 0.08);
+  color: var(--text);
+}
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .swatches button.active {
+  border-color: rgba(255, 255, 255, 0.94);
+  box-shadow:
+    0 0 0 2px rgba(248, 248, 245, 0.92),
+    0 0 0 4px rgba(63, 109, 136, 0.48);
+}
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .swatches button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .editor-actions {
+  border-color: rgba(52, 66, 75, 0.14);
+  background: rgba(243, 244, 241, 0.78);
+}
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .editor-actions .btn-ghost {
+  border-color: rgba(52, 66, 75, 0.16);
+  background: rgba(255, 255, 255, 0.48);
+  color: #42545f;
+}
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .editor-actions .btn-ghost:hover:not(:disabled) {
+  border-color: rgba(52, 66, 75, 0.26);
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--text);
+}
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .editor-actions .solid-button {
+  border-color: #315e77;
+  background: #426f88;
+  color: #f8fbfc;
+  box-shadow:
+    0 2px 6px rgba(45, 75, 92, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+:root[data-theme="liquid-glass-pearl"] .server-editor-sheet .editor-actions .solid-button:hover:not(:disabled) {
+  border-color: #294f64;
+  background: #365f77;
+}
+:root[data-theme="liquid-glass-pearl"] .server-editor-head .icon-button {
+  --icon-control-border: 1px solid rgba(52, 66, 75, 0.15);
+  --icon-control-bg: rgba(255, 255, 255, 0.46);
+  --icon-control-color: #53646f;
+  --icon-control-hover-bg: rgba(52, 66, 75, 0.08);
+  --icon-control-hover-color: #20282e;
 }
 
 @media (max-width: 1120px) {

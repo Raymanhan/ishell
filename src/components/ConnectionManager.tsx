@@ -723,7 +723,7 @@ export function ConnectionManager({
               <div className="ctx-sep" />
               <button type="button" onClick={exportFromMenu} role="menuitem">
                 <Server size={14} />
-                <span>{selectedExportCount > 1 ? `导出所选 ${selectedExportCount} 项` : "导出"}</span>
+                <span>{selectedExportCount > 1 ? `导出所选（${selectedExportCount}）` : "导出"}</span>
               </button>
               <button type="button" onClick={importFromMenu} role="menuitem">
                 <FolderOpen size={14} />
@@ -732,14 +732,14 @@ export function ConnectionManager({
               <div className="ctx-sep" />
               <button type="button" className="danger" onClick={deleteFromMenu} role="menuitem">
                 <Trash2 size={14} />
-                <span>{selectedExportCount > 1 ? `删除所选 ${selectedExportCount} 项` : "删除"}</span>
+                <span>{selectedExportCount > 1 ? `删除所选（${selectedExportCount}）` : "删除"}</span>
               </button>
             </>
           ) : (
             <>
               <button type="button" onClick={createServerFromMenu} role="menuitem">
                 <Server size={14} />
-                <span>新建服务器</span>
+                <span>新建连接</span>
               </button>
               <button type="button" onClick={createFolderFromMenu} role="menuitem">
                 <Folder size={14} />
@@ -754,7 +754,7 @@ export function ConnectionManager({
               <div className="ctx-sep" />
               <button type="button" onClick={exportFromMenu} role="menuitem">
                 <Server size={14} />
-                <span>{selectedExportCount > 1 ? `导出所选 ${selectedExportCount} 项` : "导出"}</span>
+                <span>{selectedExportCount > 1 ? `导出所选（${selectedExportCount}）` : "导出"}</span>
               </button>
               <button type="button" onClick={importFromMenu} role="menuitem">
                 <FolderOpen size={14} />
@@ -765,7 +765,7 @@ export function ConnectionManager({
                   <div className="ctx-sep" />
                   <button type="button" className="danger" onClick={deleteFromMenu} role="menuitem">
                     <Trash2 size={14} />
-                    <span>{selectedExportCount > 1 ? `删除所选 ${selectedExportCount} 项` : "删除文件夹"}</span>
+                    <span>{selectedExportCount > 1 ? `删除所选（${selectedExportCount}）` : "删除"}</span>
                   </button>
                 </>
               )}

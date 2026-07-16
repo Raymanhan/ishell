@@ -407,6 +407,120 @@ pub fn stream_process_usage(
     }
 }
 
+/// Follow a remote regular file without loading it into memory. This is kept
+/// separate from terminal sessions so a viewer window can be closed without
+/// affecting the interactive shell that opened it.
+pub fn stream_tail_file(
+    app: &AppHandle,
+    id: &str,
+    path: &str,
+    initial_lines: u32,
+    is_canceled: impl Fn() -> bool,
+    mut on_ready: impl FnMut(),
+    mut on_data: impl FnMut(&[u8]),
+) -> Result<(), String> {
+    let remote_command = tail_remote_command(path, initial_lines);
+
+    #[cfg(not(russh_backend))]
+    {
+        let (mut child, helper_path) = spawn_remote(app, id, &remote_command, false, true, true)?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| "无法读取滚动查看输出".to_string())?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| "无法读取滚动查看错误输出".to_string())?;
+
+        let (chunk_sender, chunk_receiver) = std::sync::mpsc::channel::<Vec<u8>>();
+        let stdout_reader = std::thread::spawn(move || -> io::Result<()> {
+            let mut reader = BufReader::new(stdout);
+            loop {
+                let mut chunk = vec![0_u8; 16 * 1024];
+                let size = reader.read(&mut chunk)?;
+                if size == 0 {
+                    return Ok(());
+                }
+                chunk.truncate(size);
+                if chunk_sender.send(chunk).is_err() {
+                    return Ok(());
+                }
+            }
+        });
+        let stderr_reader = std::thread::spawn(move || -> io::Result<Vec<u8>> {
+            let mut stderr = stderr;
+            let mut output = Vec::new();
+            stderr.read_to_end(&mut output)?;
+            Ok(output)
+        });
+
+        on_ready();
+        let mut canceled = false;
+        loop {
+            if is_canceled() {
+                canceled = true;
+                let _ = child.kill();
+                break;
+            }
+            match chunk_receiver.recv_timeout(Duration::from_millis(250)) {
+                Ok(chunk) => on_data(&chunk),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    if child
+                        .try_wait()
+                        .map_err(|err| format!("检查滚动查看状态失败：{err}"))?
+                        .is_some()
+                    {
+                        break;
+                    }
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+            }
+        }
+
+        let status = child
+            .wait()
+            .map_err(|err| format!("等待滚动查看命令结束失败：{err}"));
+        cleanup_askpass_helper(helper_path.as_ref());
+        let stdout_result = stdout_reader
+            .join()
+            .map_err(|_| "滚动查看输出线程异常退出".to_string())?;
+        let stderr = stderr_reader
+            .join()
+            .map_err(|_| "滚动查看错误线程异常退出".to_string())?
+            .map_err(|err| format!("读取滚动查看错误输出失败：{err}"))?;
+        if canceled {
+            return Ok(());
+        }
+        stdout_result.map_err(|err| format!("读取滚动查看输出失败：{err}"))?;
+        let status = status?;
+        if !status.success() {
+            return Err(format_process_error("滚动查看失败", &stderr));
+        }
+        Ok(())
+    }
+
+    #[cfg(russh_backend)]
+    {
+        let server = get_server(app, id)?;
+        let secret = read_secret(app, id).ok().filter(|value| !value.is_empty());
+        on_ready();
+        crate::russh_transport::stream_command(
+            &server,
+            secret.as_deref(),
+            &remote_command,
+            &is_canceled,
+            &mut on_data,
+        )
+        .map_err(|err| format!("SSH 滚动查看失败：{err}"))
+    }
+}
+
+fn tail_remote_command(path: &str, initial_lines: u32) -> String {
+    let lines = initial_lines.clamp(10, 10_000);
+    format!("tail -n {lines} -F -- {}", openssh::shell_quote(path))
+}
+
 pub fn fetch_network_sample(
     _pool: &SshPool,
     app: &AppHandle,
@@ -4197,8 +4311,8 @@ mod tests {
     use super::{
         parse_gpu_memory, parse_gpu_percent, parse_top_memory, prepare_folder_archive,
         remote_basename, remote_parent, remote_upload_temp_path, sanitize_archive_for_windows,
-        sanitize_windows_file_name, should_retry_upload, transactional_upload_command,
-        CancelReader, TopStreamParser, UploadAttemptError,
+        sanitize_windows_file_name, should_retry_upload, tail_remote_command,
+        transactional_upload_command, CancelReader, TopStreamParser, UploadAttemptError,
     };
     #[cfg(not(russh_backend))]
     use crate::openssh;
@@ -4237,6 +4351,22 @@ mod tests {
     fn remote_paths_always_use_posix_separators() {
         assert_eq!(remote_basename("/tmp/a\\b.txt"), Some("a\\b.txt"));
         assert_eq!(remote_parent("/tmp/a\\b.txt"), "/tmp");
+    }
+
+    #[test]
+    fn tail_command_bounds_lines_and_quotes_remote_path() {
+        assert_eq!(
+            tail_remote_command("/var/log/app's output.log", 200),
+            "tail -n 200 -F -- '/var/log/app'\"'\"'s output.log'"
+        );
+        assert_eq!(
+            tail_remote_command("/tmp/a.log", 1),
+            "tail -n 10 -F -- '/tmp/a.log'"
+        );
+        assert_eq!(
+            tail_remote_command("/tmp/a.log", 50_000),
+            "tail -n 10000 -F -- '/tmp/a.log'"
+        );
     }
 
     #[test]

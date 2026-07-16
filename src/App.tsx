@@ -24,6 +24,10 @@ import { StatusDashboard } from "./components/StatusDashboard";
 import { TabBar } from "./components/TabBar";
 import { UploadQueue } from "./components/UploadQueue";
 import {
+  readSavedTailViewerLines,
+  TAIL_VIEWER_DEFAULT_LINES_KEY,
+} from "./constants/tail";
+import {
   getThemeDefinition,
   readSavedTheme,
   swatches,
@@ -43,6 +47,7 @@ import type {
   ServerRecord,
   ServerStatus,
   SftpEntry,
+  TailViewerConfig,
   UploadItem,
   UploadProgressPayload,
 } from "./types";
@@ -201,6 +206,9 @@ export default function App() {
     const saved = Number(window.localStorage.getItem("ishell.terminalFontSize"));
     return Number.isFinite(saved) ? Math.min(20, Math.max(11, saved)) : 14;
   });
+  const [tailViewerDefaultLines, setTailViewerDefaultLines] = useState(
+    () => readSavedTailViewerLines(window.localStorage.getItem(TAIL_VIEWER_DEFAULT_LINES_KEY)),
+  );
   const [autoHideTopBar, setAutoHideTopBar] = useState(
     () => window.localStorage.getItem(AUTO_HIDE_TOP_BAR_KEY) !== "false",
   );
@@ -338,17 +346,34 @@ export default function App() {
     const scrollSelection = () => {
       frame = 0;
       const rect = textarea.getBoundingClientRect();
-      const overflow = pointerX < rect.left
+      const horizontalOverflow = pointerX < rect.left
         ? pointerX - rect.left
         : pointerX > rect.right
           ? pointerX - rect.right
           : 0;
-      if (!overflow) return;
+      const verticalOverflow = pointerY < rect.top
+        ? pointerY - rect.top
+        : pointerY > rect.bottom
+          ? pointerY - rect.bottom
+          : 0;
+      if (!horizontalOverflow && !verticalOverflow) return;
 
       const previousScrollLeft = textarea.scrollLeft;
-      const speed = Math.sign(overflow) * Math.min(32, Math.max(4, Math.abs(overflow) * 0.2));
-      textarea.scrollLeft += speed;
-      if (textarea.scrollLeft === previousScrollLeft) return;
+      const previousScrollTop = textarea.scrollTop;
+      if (horizontalOverflow) {
+        const horizontalSpeed = Math.sign(horizontalOverflow)
+          * Math.min(32, Math.max(4, Math.abs(horizontalOverflow) * 0.2));
+        textarea.scrollLeft += horizontalSpeed;
+      }
+      if (verticalOverflow) {
+        const verticalSpeed = Math.sign(verticalOverflow)
+          * Math.min(24, Math.max(4, Math.abs(verticalOverflow) * 0.2));
+        textarea.scrollTop += verticalSpeed;
+      }
+      const didScroll =
+        textarea.scrollLeft !== previousScrollLeft
+        || textarea.scrollTop !== previousScrollTop;
+      if (!didScroll) return;
 
       syncHighlight();
       if (selectionAnchor === null) {
@@ -382,7 +407,15 @@ export default function App() {
       pointerX = move.clientX;
       pointerY = move.clientY;
       const rect = textarea.getBoundingClientRect();
-      if ((pointerX < rect.left || pointerX > rect.right) && !frame) {
+      if (
+        (
+          pointerX < rect.left
+          || pointerX > rect.right
+          || pointerY < rect.top
+          || pointerY > rect.bottom
+        )
+        && !frame
+      ) {
         frame = window.requestAnimationFrame(scrollSelection);
       }
     };
@@ -509,6 +542,10 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem("ishell.terminalFontSize", String(terminalFontSize));
   }, [terminalFontSize]);
+
+  useEffect(() => {
+    window.localStorage.setItem(TAIL_VIEWER_DEFAULT_LINES_KEY, String(tailViewerDefaultLines));
+  }, [tailViewerDefaultLines]);
 
   useEffect(() => {
     window.localStorage.setItem(AUTO_HIDE_TOP_BAR_KEY, String(autoHideTopBar));
@@ -2230,6 +2267,54 @@ export default function App() {
     }
   }
 
+  async function openTailViewer(entry: SftpEntry) {
+    if (!activeTab || entry.isDir) return;
+    if (!isTauri) {
+      showNotice("滚动查看仅支持桌面应用");
+      return;
+    }
+    try {
+      const { getAllWebviewWindows, WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+      const windows = await getAllWebviewWindows();
+      if (windows.filter((windowRef) => windowRef.label.startsWith("tail-")).length >= 12) {
+        showNotice("最多同时打开 12 个滚动查看窗口");
+        return;
+      }
+      const viewerId = crypto.randomUUID();
+      const label = `tail-${viewerId}`;
+      const serverName = servers.find((server) => server.id === activeTab.serverId)?.name ?? activeTab.title;
+      const config: TailViewerConfig = {
+        viewerId,
+        serverId: activeTab.serverId,
+        serverName,
+        fileName: entry.name,
+        path: entry.path,
+        initialLines: tailViewerDefaultLines,
+      };
+      const payload = encodeURIComponent(JSON.stringify(config));
+      const windowRef = new WebviewWindow(label, {
+        url: `/#tailViewer=${payload}`,
+        title: `${entry.name} · ${serverName}`,
+        width: 860,
+        height: 620,
+        minWidth: 560,
+        minHeight: 380,
+        transparent: true,
+        backgroundColor: "#00000000",
+        decorations: true,
+        hiddenTitle: true,
+        titleBarStyle: "overlay",
+        focus: true,
+      });
+      await new Promise<void>((resolve, reject) => {
+        void windowRef.once("tauri://created", () => resolve());
+        void windowRef.once<string>("tauri://error", (event) => reject(new Error(String(event.payload))));
+      });
+    } catch (error) {
+      showNotice(String(error));
+    }
+  }
+
   async function saveFileEditor() {
     if (!fileEditor || fileEditor.loading || fileEditor.saving) return;
     const size = new TextEncoder().encode(fileEditor.content).length;
@@ -2501,6 +2586,7 @@ export default function App() {
                           onDownload={downloadFiles}
                           onDownloadFolder={downloadFolder}
                           onEdit={openFileEditor}
+                          onTailView={openTailViewer}
                           onTerminalJump={jumpTerminalToDir}
                           onMkdir={makeDir}
                           onRename={renameEntry}
@@ -2574,9 +2660,11 @@ export default function App() {
         <SettingsModal
           theme={theme}
           terminalFontSize={terminalFontSize}
+          tailViewerDefaultLines={tailViewerDefaultLines}
           autoHideTopBar={autoHideTopBar}
           onThemeChange={setTheme}
           onTerminalFontSizeChange={setTerminalFontSize}
+          onTailViewerDefaultLinesChange={setTailViewerDefaultLines}
           onAutoHideTopBarChange={setAutoHideTopBar}
           onClose={() => setSettingsOpen(false)}
         />
