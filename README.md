@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.1.20](https://github.com/Raymanhan/ishell/releases/tag/v1.1.20)**
+**[Download iShell v1.2.0](https://github.com/Raymanhan/ishell/releases/tag/v1.2.0)**
 
 Available packages:
 
@@ -44,8 +44,9 @@ Available packages:
   text editing for small files, and a separate live tail viewer for log files.
 - **Live monitoring**: CPU, GPU, memory, swap, disk, load, process rankings,
   and network throughput per connected host, plus one-click host/IP copy.
-- **Glass desktop UI**: transparent native window, glass gray theme, xterm
-  transparency, and platform-tuned font rendering.
+- **Glass desktop UI**: transparent native window, nine themes (including
+  Otty-style and Claude Code-style floating-card themes), xterm transparency,
+  and platform-tuned font rendering.
 
 ## Quick Start
 
@@ -154,14 +155,17 @@ The status panel samples remote host information through SSH:
 
 Settings currently include:
 
-- Glass gray desktop theme
+- Theme: Cloud, Dusk, Claude Dark, Claude Light, Graphite, Midnight, Jade,
+  Obsidian, or Ivory
 - Auto-hide top bar toggle
 - Terminal font size
 - Default line count for new live tail viewer windows
 
-The glass theme uses Tauri native window effects where available, with a
+Every theme uses Tauri native window effects where available, with a
 transparent xterm background so the terminal and panels share one desktop
-surface.
+surface. Cloud, Dusk and the two Claude themes float the terminal, dashboard
+and docked panels as rounded cards on a frosted chrome; each theme ships its
+own 16-color terminal palette.
 
 ## Requirements
 
@@ -226,8 +230,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.1.20
-git push origin v1.1.20
+git tag v1.2.0
+git push origin v1.2.0
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -262,6 +266,11 @@ src-tauri/src/
 
 ## Recent Changes
 
+- `v1.2.0` redesigns the theme system: refined palettes for all existing
+  themes, four new floating-card themes (Otty-style Cloud and Dusk, Claude
+  Dark and Claude Light), full 16-color terminal palettes per theme,
+  theme-aware charts, meters and syntax colors, and SFTP detail columns that
+  adapt to the panel width.
 - `v1.1.20` adds a separate live tail viewer for remote log files, improves
   vertical drag-scrolling in the remote editor, refines SFTP detail column
   resizing, and polishes the pearl/light theme plus the add-server dialog.
