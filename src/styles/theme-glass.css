@@ -1016,6 +1016,84 @@
   --card-shadow: 0 1px 2px rgba(6, 6, 14, 0.3), 0 10px 30px rgba(6, 6, 14, 0.28);
 }
 
+/* Clay (陶土橙): Claude Code-style. Warm charcoal chrome, a slightly lifted
+   charcoal card, ivory text, clay-orange accent with lavender as the quiet
+   secondary, a whisper of paper grain and serif headings. */
+:root[data-theme="liquid-glass-clay"] {
+  --bg: rgba(31, 30, 29, 0.32);
+  --titlebar: rgba(28, 27, 26, 0.4);
+  --panel: rgba(38, 38, 36, 0.95);
+  --panel-2: rgba(48, 48, 46, 0.62);
+  --inset: rgba(31, 30, 29, 0.55);
+  --card: rgba(245, 244, 239, 0.045);
+  --card-hover: rgba(245, 244, 239, 0.08);
+  --hairline: rgba(var(--liquid-line-rgb), 0.09);
+  --hairline-2: rgba(var(--liquid-line-rgb), 0.15);
+  --hairline-3: rgba(var(--accent-rgb), 0.42);
+  --text: #f5f4ef;
+  --dim: #c2c0b6;
+  --faint: #8f8d86;
+  --accent-rgb: 217, 119, 87;
+  --accent: #d97757;
+  --accent-2: #c6613f;
+  --accent-soft: rgba(var(--accent-rgb), 0.15);
+  --focus-ring: rgba(var(--accent-rgb), 0.55);
+  --focus-bg: rgba(var(--accent-rgb), 0.07);
+  --control-hover-bg: rgba(245, 244, 239, 0.07);
+  --control-active-bg: rgba(245, 244, 239, 0.08);
+  --row-hover-bg: rgba(245, 244, 239, 0.05);
+  --row-active-bg: rgba(245, 244, 239, 0.08);
+  --row-busy-bg: rgba(var(--accent-rgb), 0.12);
+  --surface-soft-bg: rgba(245, 244, 239, 0.035);
+  --surface-muted-bg: rgba(245, 244, 239, 0.025);
+  --ok: #6cbf7c;
+  --warn: #e5b567;
+  --info: #b1b9f9;
+  --bad: #f07a86;
+  --danger: #f39ba3;
+  --danger-strong: #fbd1d5;
+  --danger-soft: rgba(240, 122, 134, 0.09);
+  --danger-hover-bg: rgba(240, 122, 134, 0.15);
+  --violet: #b49af0;
+  --chart-rx: #b1b9f9;
+  --chart-tx: #d97757;
+  --meter-shade: #262624;
+  --syntax-comment: #8f8d86;
+  --syntax-keyword: #d97757;
+  --syntax-string: #9fc78f;
+  --syntax-number: #e5b567;
+  --syntax-literal: #f07a86;
+  --syntax-key: #b1b9f9;
+  --syntax-type: #e8c9a0;
+  --syntax-punct: #a9a69c;
+  --shadow: 0 28px 80px rgba(10, 9, 8, 0.5);
+  --ctx-menu-bg: rgba(48, 48, 46, 0.97);
+  --ctx-menu-hover: rgba(245, 244, 239, 0.08);
+  --ctx-menu-danger-hover: rgba(240, 122, 134, 0.14);
+  --ctx-menu-shadow: 0 16px 40px rgba(10, 9, 8, 0.45);
+  --liquid-line-rgb: 245, 244, 239;
+  --liquid-surface: rgba(38, 38, 36, 0.96);
+  --liquid-surface-strong: rgba(38, 38, 36, 0.98);
+  --liquid-edge: rgba(var(--accent-rgb), 0.55);
+  --liquid-shadow: 0 10px 30px rgba(10, 9, 8, 0.3);
+  --liquid-code-bg: rgba(31, 30, 29, 0.75);
+  --liquid-drop-bg: rgba(38, 38, 36, 0.75);
+  --liquid-sheen: none;
+  --liquid-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 0.96 0 0 0 0 0.9 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --liquid-app-bg: rgba(26, 25, 24, 0.42);
+  --liquid-body-bg: var(--liquid-grain), rgba(31, 30, 29, 0.58);
+  --liquid-body-files-bg: var(--liquid-grain), rgba(31, 30, 29, 0.58);
+  --liquid-body-glow: none;
+  --liquid-backdrop-bg: rgba(14, 13, 12, 0.4);
+  --ink-rgb: 245, 244, 239;
+  --shadow-rgb: 10, 9, 8;
+  --card-surface: rgba(38, 38, 36, 0.97);
+  --card-border: rgba(245, 244, 239, 0.08);
+  --card-shadow: 0 1px 2px rgba(10, 9, 8, 0.3), 0 10px 30px rgba(10, 9, 8, 0.26);
+  --font-serif: "Tiempos Headline", "Copernicus", Georgia, "Songti SC", "Noto Serif SC",
+    "Source Han Serif SC", serif;
+}
+
 /* ===== Light liquid themes =====
    The shared liquid-glass rules are tuned for dark surfaces. Light themes
    (Ivory, Cloud) share the contrast model below; each supplies its tint
@@ -1611,61 +1689,61 @@
   --icon-control-hover-color: var(--text);
 }
 
-/* ===== Floating-card layout (Cloud, Dusk) =====
+/* ===== Floating-card layout (Cloud, Dusk, Clay) =====
    Otty-style composition: the window chrome is one frosted sheet, the
    connection list sits flush on it like a sidebar, and the terminal, the
    dashboard and the docked panels are rounded cards floating above it. */
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) {
   --card-radius: 12px;
 }
 
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .app {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .app {
   box-shadow: inset 0 0 0 1px rgba(var(--ink-rgb), 0.08);
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .workbench-body {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .workbench-body {
   backdrop-filter: blur(30px) saturate(120%);
   -webkit-backdrop-filter: blur(30px) saturate(120%);
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .workbench-body::before,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .connection-manager::before,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .status-panel::before {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .workbench-body::before,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .connection-manager::before,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .status-panel::before {
   display: none;
 }
 
 /* Terminal card */
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .terminal-region {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .terminal-region {
   margin: var(--titlebar-safe, 34px) var(--rail-gap, 12px) var(--rail-gap, 12px);
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .workbench-body.connections-open .terminal-region {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .workbench-body.connections-open .terminal-region {
   margin-left: calc(var(--rail-gap, 12px) * 2 + var(--connection-panel-width, 240px));
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .workbench-body.has-status-panel .terminal-region {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .workbench-body.has-status-panel .terminal-region {
   margin-right: 0;
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .terminal-dock.files-open .terminal-region {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .terminal-dock.files-open .terminal-region {
   margin-bottom: 0;
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .terminal-frame {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .terminal-frame {
   padding: 14px 14px 12px 18px;
 }
 
 /* Dashboard card (no session open) */
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .view-layer {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .view-layer {
   inset: var(--titlebar-safe, 34px) var(--rail-gap, 12px) var(--rail-gap, 12px);
   padding-top: 0;
   overflow: hidden;
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .workbench-body.connections-open .view-layer {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .workbench-body.connections-open .view-layer {
   margin-left: calc(var(--rail-gap, 12px) + var(--connection-panel-width, 240px));
 }
 
 /* Shared card surface */
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .terminal-region,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .view-layer,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .workbench-body .status-panel.open,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .workbench-body .files-region.open,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .workbench-body.files-open.has-status-panel .status-panel.open,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .workbench-body.files-open.has-status-panel .files-region.open {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .terminal-region,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .view-layer,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .workbench-body .status-panel.open,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .workbench-body .files-region.open,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .workbench-body.files-open.has-status-panel .status-panel.open,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .workbench-body.files-open.has-status-panel .files-region.open {
   border: 1px solid var(--card-border);
   border-radius: var(--card-radius);
   background: var(--card-surface);
@@ -1675,50 +1753,50 @@
 }
 
 /* Sidebar: flush with the chrome, the active row is a small raised card. */
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .connection-manager,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .connection-manager.open {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .connection-manager,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .connection-manager.open {
   border: 0;
   background: transparent;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   box-shadow: none;
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .connection-folder-row,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .connection-node {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .connection-folder-row,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .connection-node {
   border: 1px solid transparent;
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .connection-folder-row:hover,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .connection-node:hover {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .connection-folder-row:hover,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .connection-node:hover {
   background: rgba(var(--ink-rgb), 0.045);
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .connection-folder-row.on,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .connection-node.on,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .terminal-tab.active,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .dock-toggle.on {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .connection-folder-row.on,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .connection-node.on,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .terminal-tab.active,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .dock-toggle.on {
   border-color: var(--card-border);
   background: var(--card-surface);
   color: var(--text);
   box-shadow: 0 1px 2px rgba(var(--shadow-rgb), 0.08);
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .terminal-tab:hover,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .terminal-tab.active:hover {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .terminal-tab:hover,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .terminal-tab.active:hover {
   background: var(--card-surface);
   color: var(--text);
 }
-:root[data-theme="liquid-glass-dusk"] .connection-folder-row.on,
-:root[data-theme="liquid-glass-dusk"] .connection-node.on,
-:root[data-theme="liquid-glass-dusk"] .terminal-tab.active,
-:root[data-theme="liquid-glass-dusk"] .terminal-tab:hover,
-:root[data-theme="liquid-glass-dusk"] .dock-toggle.on {
+:root:is([data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .connection-folder-row.on,
+:root:is([data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .connection-node.on,
+:root:is([data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .terminal-tab.active,
+:root:is([data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .terminal-tab:hover,
+:root:is([data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .dock-toggle.on {
   background: rgba(var(--ink-rgb), 0.08);
 }
 
 /* Selections inside panels: a neutral tint, no accent bar. */
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .tool.on,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .entry.on,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .tree-row.current,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .tree-row.on,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .detail-row.on {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .tool.on,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .entry.on,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .tree-row.current,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .tree-row.on,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .detail-row.on {
   border-color: transparent;
   background: rgba(var(--ink-rgb), 0.07);
   color: var(--text);
@@ -1726,29 +1804,50 @@
 }
 
 /* Inner cards inside panels: quiet tinted wells instead of glass. */
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .recent-card,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .network-card,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .metric-row,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .process-card,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .mount-card,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .sftp-tree,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .sftp-detail,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .sftp-tool-rail,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .sftp-stage > .columns {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .recent-card,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .network-card,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .metric-row,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .process-card,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .mount-card,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .sftp-tree,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .sftp-detail,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .sftp-tool-rail,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .sftp-stage > .columns {
   border-color: rgba(var(--ink-rgb), 0.07);
   background: rgba(var(--ink-rgb), 0.025);
   box-shadow: none;
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .recent-card::before,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .network-card::before,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .metric-row::before,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .process-card::before,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .mount-card::before {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .recent-card::before,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .network-card::before,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .metric-row::before,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .process-card::before,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .mount-card::before {
   display: none;
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"]) .recent-card:hover {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .recent-card:hover {
   border-color: rgba(var(--ink-rgb), 0.12);
   background: rgba(var(--ink-rgb), 0.04);
+}
+
+/* Clay extras: the solid clay button and serif display headings. */
+:root[data-theme="liquid-glass-clay"] .btn-primary,
+:root[data-theme="liquid-glass-clay"] .solid-button {
+  border-color: #b4583a;
+  background: #c96442;
+  color: #fffaf5;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+:root[data-theme="liquid-glass-clay"] .btn-primary:hover,
+:root[data-theme="liquid-glass-clay"] .solid-button:hover:not(:disabled) {
+  border-color: #c96442;
+  background: #d97757;
+}
+:root[data-theme="liquid-glass-clay"] .start-head h1,
+:root[data-theme="liquid-glass-clay"] .settings-head h2,
+:root[data-theme="liquid-glass-clay"] .server-editor-head h2 {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  letter-spacing: 0;
 }
 
 @media (max-width: 1120px) {

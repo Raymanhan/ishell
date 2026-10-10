@@ -9,7 +9,8 @@ export type AppTheme =
   | "liquid-glass-onyx"
   | "liquid-glass-pearl"
   | "liquid-glass-cloud"
-  | "liquid-glass-dusk";
+  | "liquid-glass-dusk"
+  | "liquid-glass-clay";
 export type ThemeIcon = "layers" | "droplets";
 
 export interface NativeColor {
@@ -39,6 +40,7 @@ export const defaultAppTheme: AppTheme = "glass";
 export const appThemeOrder = [
   "liquid-glass-cloud",
   "liquid-glass-dusk",
+  "liquid-glass-clay",
   "glass",
   "liquid-glass",
   "liquid-glass-lagoon",
@@ -289,6 +291,42 @@ export const appThemeDefinitions = {
     },
     native: {
       backgroundColor: { red: 24, green: 24, blue: 36, alpha: 40 },
+      transparentChrome: true,
+      effect: "glass",
+    },
+  },
+  "liquid-glass-clay": {
+    id: "liquid-glass-clay",
+    label: "陶土橙",
+    icon: "droplets",
+    previewClassName: "liquid-glass liquid-glass-clay",
+    // Claude Code-style: warm ivory text on charcoal, a clay-orange cursor and
+    // the CLI's own accents (lavender, mint, amber, rose) softened slightly.
+    terminal: {
+      background: "#00000000",
+      foreground: "#ece9e0",
+      cursor: "#d97757",
+      cursorAccent: "#262624",
+      selectionBackground: "rgba(217, 119, 87, 0.28)",
+      black: "#3a3936",
+      red: "#e9787e",
+      green: "#8fc48a",
+      yellow: "#e5b567",
+      blue: "#9aa8f0",
+      magenta: "#d48fc4",
+      cyan: "#7fbfb3",
+      white: "#d6d3c9",
+      brightBlack: "#6b6963",
+      brightRed: "#f2959a",
+      brightGreen: "#a8d4a3",
+      brightYellow: "#edc788",
+      brightBlue: "#b1b9f9",
+      brightMagenta: "#e2a9d5",
+      brightCyan: "#9cd0c6",
+      brightWhite: "#f5f4ef",
+    },
+    native: {
+      backgroundColor: { red: 31, green: 30, blue: 29, alpha: 42 },
       transparentChrome: true,
       effect: "glass",
     },
