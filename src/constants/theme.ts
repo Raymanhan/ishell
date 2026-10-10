@@ -32,6 +32,13 @@ export interface AppThemeDefinition {
   label: string;
   icon: ThemeIcon;
   previewClassName: string;
+  /**
+   * The opaque color the transparent terminal visually sits on. The xterm
+   * background stays #00000000 for the glass effect, so this is what we report
+   * to programs that query the background (OSC 11): AI CLIs such as Codex or
+   * Claude Code pick their light/dark styling from it.
+   */
+  terminalSurface: string;
   terminal: ITheme;
   native: NativeTheme;
 }
@@ -61,6 +68,7 @@ export const appThemeDefinitions = {
     label: "石墨灰",
     icon: "layers",
     previewClassName: "glass",
+    terminalSurface: "#2c2e33",
     terminal: {
       background: "#00000000",
       foreground: "#f2f4f7",
@@ -95,6 +103,7 @@ export const appThemeDefinitions = {
     label: "午夜蓝",
     icon: "droplets",
     previewClassName: "liquid-glass",
+    terminalSurface: "#1f2840",
     terminal: {
       background: "#00000000",
       foreground: "#f4f2ed",
@@ -129,6 +138,7 @@ export const appThemeDefinitions = {
     label: "墨玉绿",
     icon: "droplets",
     previewClassName: "liquid-glass liquid-glass-lagoon",
+    terminalSurface: "#183530",
     terminal: {
       background: "#00000000",
       foreground: "#eef6f1",
@@ -163,6 +173,7 @@ export const appThemeDefinitions = {
     label: "曜石黑",
     icon: "droplets",
     previewClassName: "liquid-glass liquid-glass-onyx",
+    terminalSurface: "#1e1e1f",
     terminal: {
       background: "#00000000",
       foreground: "#f3f0ea",
@@ -197,6 +208,7 @@ export const appThemeDefinitions = {
     label: "象牙白",
     icon: "droplets",
     previewClassName: "liquid-glass liquid-glass-pearl",
+    terminalSurface: "#f4f0e8",
     terminal: {
       background: "#00000000",
       foreground: "#2b2f35",
@@ -234,6 +246,7 @@ export const appThemeDefinitions = {
     previewClassName: "liquid-glass liquid-glass-cloud",
     // Soft pastels in the spirit of Otty: gentle enough to feel airy on a
     // white card, deep enough that normal colors stay readable as text.
+    terminalSurface: "#ffffff",
     terminal: {
       background: "#00000000",
       foreground: "#4c4f69",
@@ -268,6 +281,7 @@ export const appThemeDefinitions = {
     label: "暮霭紫",
     icon: "droplets",
     previewClassName: "liquid-glass liquid-glass-dusk",
+    terminalSurface: "#1e1e2e",
     terminal: {
       background: "#00000000",
       foreground: "#cdd6f4",
@@ -304,6 +318,7 @@ export const appThemeDefinitions = {
     previewClassName: "liquid-glass liquid-glass-clay",
     // Claude Code desktop, dark: ivory text on charcoal, the clay-orange cursor
     // (the CLI's spinner color) and blue selection like the app's focus state.
+    terminalSurface: "#262624",
     terminal: {
       background: "#00000000",
       foreground: "#f3f1ea",
@@ -341,6 +356,7 @@ export const appThemeDefinitions = {
     // Claude Code desktop, light: near-black on white, the clay-orange cursor
     // and the CLI's light-mode status hues. "white" maps to a gray so it stays
     // visible.
+    terminalSurface: "#ffffff",
     terminal: {
       background: "#00000000",
       foreground: "#1f1e1d",
@@ -378,6 +394,13 @@ export function getThemeDefinition(theme: AppTheme) {
 
 export function getTerminalTheme(theme: AppTheme) {
   return getThemeDefinition(theme).terminal;
+}
+
+/** OSC 11 reply body (`rgb:rrrr/gggg/bbbb`) for the theme's terminal surface. */
+export function getTerminalSurfaceReport(theme: AppTheme) {
+  const hex = getThemeDefinition(theme).terminalSurface.slice(1);
+  const channel = (offset: number) => hex.slice(offset, offset + 2).repeat(2);
+  return `rgb:${channel(0)}/${channel(2)}/${channel(4)}`;
 }
 
 export function readSavedTheme(value: string | null): AppTheme {
