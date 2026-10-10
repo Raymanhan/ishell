@@ -1,52 +1,68 @@
 :root {
   color-scheme: dark;
 
-  --bg: rgba(20, 26, 36, 0.34);
-  --titlebar: rgba(16, 22, 32, 0.4);
-  --panel: rgba(16, 22, 32, 0.5);
-  --panel-2: rgba(28, 36, 48, 0.38);
-  --inset: rgba(18, 24, 34, 0.34);
-  --card: rgba(40, 50, 64, 0.26);
-  --card-hover: rgba(255, 255, 255, 0.1);
+  /* Default palette = Graphite (石墨灰): neutral cool graphite with a quiet
+     silver-periwinkle accent. Every theme overrides this same token set. */
+  --bg: rgba(30, 32, 36, 0.34);
+  --titlebar: rgba(26, 28, 32, 0.4);
+  --panel: rgba(30, 32, 37, 0.56);
+  --panel-2: rgba(42, 45, 51, 0.42);
+  --inset: rgba(24, 26, 30, 0.38);
+  --card: rgba(255, 255, 255, 0.045);
+  --card-hover: rgba(255, 255, 255, 0.085);
 
-  --hairline: rgba(255, 255, 255, 0.13);
-  --hairline-2: rgba(255, 255, 255, 0.2);
-  --hairline-3: rgba(255, 255, 255, 0.3);
+  --hairline: rgba(255, 255, 255, 0.1);
+  --hairline-2: rgba(255, 255, 255, 0.16);
+  --hairline-3: rgba(255, 255, 255, 0.26);
 
-  --text: #f7f9fb;
-  --dim: #dde4ec;
-  --faint: #b8c1cc;
+  --text: #f1f2f4;
+  --dim: #c4c8cf;
+  --faint: #8d929b;
 
-  --accent: #c7d5ff;
-  --accent-2: #96b8ff;
-  --accent-soft: rgba(199, 213, 255, 0.16);
-  --focus-ring: rgba(91, 157, 255, 0.55);
-  --focus-bg: rgba(91, 157, 255, 0.06);
-  --control-hover-bg: rgba(255, 255, 255, 0.08);
-  --control-active-bg: rgba(255, 255, 255, 0.06);
+  --accent-rgb: 180, 192, 216;
+  --accent: #b4c0d8;
+  --accent-2: #94a3c2;
+  --accent-soft: rgba(180, 192, 216, 0.15);
+  --focus-ring: rgba(180, 192, 216, 0.5);
+  --focus-bg: rgba(180, 192, 216, 0.07);
+  --control-hover-bg: rgba(255, 255, 255, 0.07);
+  --control-active-bg: rgba(255, 255, 255, 0.055);
   --row-hover-bg: rgba(255, 255, 255, 0.05);
   --row-active-bg: var(--accent-soft);
-  --row-busy-bg: rgba(79, 209, 197, 0.13);
+  --row-busy-bg: rgba(143, 196, 196, 0.12);
   --surface-soft-bg: rgba(255, 255, 255, 0.035);
   --surface-muted-bg: rgba(255, 255, 255, 0.026);
 
-  --ok: #9ee6b8;
-  --warn: #f7d58c;
-  --info: #b8caff;
-  --bad: #ff8f9d;
-  --danger: #ffb4b4;
-  --danger-strong: #ffd2d2;
-  --danger-soft: rgba(245, 107, 107, 0.08);
-  --danger-hover-bg: rgba(245, 107, 107, 0.15);
-  --violet: #d5bbff;
+  --ok: #93c9a4;
+  --warn: #dfc185;
+  --info: #9fb7dc;
+  --bad: #e2939a;
+  --danger: #ecb0b4;
+  --danger-strong: #f6d3d5;
+  --danger-soft: rgba(226, 147, 154, 0.08);
+  --danger-hover-bg: rgba(226, 147, 154, 0.15);
+  --violet: #bba8de;
+
+  --chart-rx: var(--info);
+  --chart-tx: var(--warn);
+  --meter-shade: #1b1d21;
+
+  --syntax-comment: #7d838d;
+  --syntax-keyword: #a4b6dc;
+  --syntax-string: #a3cba7;
+  --syntax-number: #dcb98c;
+  --syntax-literal: #c2a8dc;
+  --syntax-key: #93c1cc;
+  --syntax-type: #e0cb94;
+  --syntax-punct: #9aa1ac;
 
   --r: 10px;
   --r-sm: 7px;
   --tab-width: 150px;
-  --shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
-  --ctx-menu-bg: rgba(25, 28, 34, 0.98);
-  --ctx-menu-hover: rgba(91, 157, 255, 0.14);
-  --ctx-menu-danger-hover: rgba(245, 107, 107, 0.14);
+  --shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
+  --ctx-menu-bg: rgba(30, 32, 36, 0.96);
+  --ctx-menu-hover: rgba(180, 192, 216, 0.13);
+  --ctx-menu-danger-hover: rgba(226, 147, 154, 0.14);
   --ctx-menu-shadow: 0 14px 34px rgba(0, 0, 0, 0.38);
   --glass-blur: blur(40px) saturate(200%);
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI",

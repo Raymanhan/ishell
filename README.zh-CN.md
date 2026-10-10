@@ -12,7 +12,7 @@ iShell 是一个基于 Tauri + React + Rust 的轻量级 SSH 桌面工作台，�
 
 请从 GitHub Releases 下载最新版安装包：
 
-**[下载 iShell v1.1.20](https://github.com/Raymanhan/ishell/releases/tag/v1.1.20)**
+**[下载 iShell v1.2.0](https://github.com/Raymanhan/ishell/releases/tag/v1.2.0)**
 
 可用安装包：
 
@@ -31,7 +31,7 @@ iShell 是一个基于 Tauri + React + Rust 的轻量级 SSH 桌面工作台，�
 - **OpenSSH 与 russh 双后端**：macOS/Linux 使用系统 OpenSSH；Windows 使用纯 Rust `russh` 后端和连接池。
 - **SFTP 文件浏览器**：支持树形/多列视图、上传、下载、新建文件夹、重命名、删除、右键菜单、软链接识别、终端目录跳转、小文件远程编辑和独立日志滚动查看。
 - **实时主机监控**：展示 CPU、GPU、显存、内存、Swap、磁盘、负载、进程排行和网络吞吐，并支持一键复制主机/IP。
-- **玻璃灰桌面主题**：透明原生窗口、玻璃质感面板、透明终端背景和平台字体优化。
+- **多主题玻璃桌面界面**：透明原生窗口、9 套主题（含 Otty 风格与 Claude Code 风格的浮动卡片主题）、透明终端背景和平台字体优化。
 
 ## 快速开始
 
@@ -122,12 +122,12 @@ iShell 是一个基于 Tauri + React + Rust 的轻量级 SSH 桌面工作台，�
 
 当前设置包括：
 
-- 玻璃灰桌面主题
+- 主题：云雾白、暮霭紫、Claude 深色、Claude 浅色、石墨灰、午夜蓝、墨玉绿、曜石黑、象牙白
 - 顶部栏自动隐藏开关
 - 终端字号
 - 新建实时滚动查看窗口的默认加载行数
 
-玻璃主题会在可用平台上启用 Tauri 原生窗口效果，并配合透明 xterm 背景，让终端和面板呈现统一的桌面玻璃质感。
+所有主题都会在可用平台上启用 Tauri 原生窗口效果，并配合透明 xterm 背景，让终端和面板呈现统一的桌面玻璃质感。云雾白、暮霭紫和两套 Claude 主题会把终端、首页和停靠面板呈现为浮在毛玻璃底色上的圆角卡片；每套主题都带有独立的 16 色终端配色。
 
 ## 环境要求
 
@@ -190,8 +190,8 @@ npm run tauri -- build --target aarch64-apple-darwin
 推送 `v*` 标签后，GitHub Actions 会自动构建 Release。也可以在 GitHub Actions 页面手动运行 **Build installers** 工作流。
 
 ```bash
-git tag v1.1.20
-git push origin v1.1.20
+git tag v1.2.0
+git push origin v1.2.0
 ```
 
 发布工作流会构建 Windows、Linux、macOS Intel 和 macOS Apple Silicon 安装包，并把产物上传到 GitHub Release。
@@ -225,6 +225,7 @@ src-tauri/src/
 
 ## 最近更新
 
+- `v1.2.0` 重做主题系统：全部现有主题重新配色，新增四套浮动卡片主题（Otty 风格的云雾白、暮霭紫，以及 Claude 深色、Claude 浅色），每套主题配备完整 16 色终端配色，图表、进度条与语法高亮跟随主题，SFTP 详情列宽随面板自适应。
 - `v1.1.20` 新增远程日志独立实时滚动查看窗口，改进远程编辑器垂直拖拽滚动、SFTP 详情列宽调整，并优化柔白主题和新增服务器弹窗。
 - `v1.1.19` 扩展实时监控面板，新增 GPU/显存指标，并加入按 CPU 与内存排序的实时 Top 5 进程排行。
 - `v1.1.18` 新增顶部栏自动隐藏开关，并将新加入的上传/下载任务显示在队列顶部，方便追踪最新传输进度。

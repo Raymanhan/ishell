@@ -53,14 +53,23 @@ type SftpViewMode = "tree" | "columns";
 type SortKey = "name" | "type" | "size" | "modifiedAt";
 type SortDirection = "asc" | "desc";
 
-const DETAIL_COLUMN_WIDTHS = [170, 86, 164, 88, 96];
+// Columns are flexible tracks: each gets at least its minimum width and the
+// remaining space is shared by weight, so the table fills the panel at any
+// size. The name column carries most of the weight; after a manual resize the
+// weights become the dragged pixel widths, so the new proportions keep scaling.
+const DETAIL_COLUMN_WEIGHTS = [300, 90, 170, 110, 120];
 const DETAIL_COLUMN_MIN_WIDTHS = [120, 70, 144, 74, 84];
 const DETAIL_COLUMN_GAP = 10;
 const DETAIL_ROW_X_PADDING = 20;
+const DETAIL_TABLE_MIN_WIDTH =
+  DETAIL_COLUMN_MIN_WIDTHS.reduce((total, width) => total + width, 0)
+  + DETAIL_COLUMN_GAP * (DETAIL_COLUMN_MIN_WIDTHS.length - 1)
+  + DETAIL_ROW_X_PADDING;
 
 interface DetailResizeState {
   dividerIndex: number;
   startX: number;
+  /** Rendered pixel width of every column when the drag started. */
   widths: number[];
 }
 
@@ -163,7 +172,7 @@ function SftpBrowserBase({
   } | null>(null);
   const [renaming, setRenaming] = useState<RenameState | null>(null);
   const [creatingDir, setCreatingDir] = useState<CreateDirState | null>(null);
-  const [detailColumnWidths, setDetailColumnWidths] = useState(() => DETAIL_COLUMN_WIDTHS);
+  const [detailColumnWeights, setDetailColumnWeights] = useState(() => DETAIL_COLUMN_WEIGHTS);
   const [resizingDetailDivider, setResizingDetailDivider] = useState<number | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const uploadToolButtonRef = useRef<HTMLButtonElement>(null);
@@ -174,18 +183,14 @@ function SftpBrowserBase({
   const createStartedForRef = useRef<string | null>(null);
   const detailResizeRef = useRef<DetailResizeState | null>(null);
 
-  const detailTableMinWidth = useMemo(
-    () => detailColumnWidths.reduce((total, width) => total + width, 0)
-      + DETAIL_COLUMN_GAP * (detailColumnWidths.length - 1)
-      + DETAIL_ROW_X_PADDING,
-    [detailColumnWidths],
-  );
   const detailGridStyle = useMemo<CSSProperties>(
     () => ({
-      gridTemplateColumns: detailColumnWidths.map((width) => `${width}px`).join(" "),
-      minWidth: `${detailTableMinWidth}px`,
+      gridTemplateColumns: detailColumnWeights
+        .map((weight, index) => `minmax(${DETAIL_COLUMN_MIN_WIDTHS[index]}px, ${weight}fr)`)
+        .join(" "),
+      minWidth: `${DETAIL_TABLE_MIN_WIDTH}px`,
     }),
-    [detailColumnWidths, detailTableMinWidth],
+    [detailColumnWeights],
   );
 
   // Keep the most recently opened column in view as the browser overflows right.
@@ -256,7 +261,7 @@ function SftpBrowserBase({
       const next = [...drag.widths];
       next[leftIndex] = nextLeft;
       next[rightIndex] = pairWidth - nextLeft;
-      setDetailColumnWidths(next);
+      setDetailColumnWeights(next);
     };
     const onPointerUp = () => {
       detailResizeRef.current = null;
@@ -474,13 +479,17 @@ function SftpBrowserBase({
     });
   }
 
-  function startDetailResize(event: React.PointerEvent, dividerIndex: number) {
+  function startDetailResize(event: React.PointerEvent<HTMLElement>, dividerIndex: number) {
     event.preventDefault();
     event.stopPropagation();
+    const header = event.currentTarget.closest(".detail-header");
+    const measured = header
+      ? Array.from(header.children, (cell) => cell.getBoundingClientRect().width)
+      : [];
     detailResizeRef.current = {
       dividerIndex,
       startX: event.clientX,
-      widths: detailColumnWidths,
+      widths: measured.length === detailColumnWeights.length ? measured : detailColumnWeights,
     };
     setResizingDetailDivider(dividerIndex);
     document.documentElement.classList.add("resizing-detail-column");
