@@ -10,7 +10,8 @@ export type AppTheme =
   | "liquid-glass-pearl"
   | "liquid-glass-cloud"
   | "liquid-glass-dusk"
-  | "liquid-glass-clay";
+  | "liquid-glass-clay"
+  | "liquid-glass-clay-light";
 export type ThemeIcon = "layers" | "droplets";
 
 export interface NativeColor {
@@ -41,6 +42,7 @@ export const appThemeOrder = [
   "liquid-glass-cloud",
   "liquid-glass-dusk",
   "liquid-glass-clay",
+  "liquid-glass-clay-light",
   "glass",
   "liquid-glass",
   "liquid-glass-lagoon",
@@ -327,6 +329,42 @@ export const appThemeDefinitions = {
     },
     native: {
       backgroundColor: { red: 31, green: 30, blue: 29, alpha: 42 },
+      transparentChrome: true,
+      effect: "glass",
+    },
+  },
+  "liquid-glass-clay-light": {
+    id: "liquid-glass-clay-light",
+    label: "陶土白",
+    icon: "droplets",
+    previewClassName: "liquid-glass liquid-glass-clay-light",
+    // Claude Code light: warm ink on ivory, clay cursor, and the CLI's
+    // light-mode status hues. "white" maps to a warm gray so it stays visible.
+    terminal: {
+      background: "#00000000",
+      foreground: "#3d3929",
+      cursor: "#c96442",
+      cursorAccent: "#faf9f5",
+      selectionBackground: "rgba(217, 119, 87, 0.2)",
+      black: "#3d3929",
+      red: "#b8434f",
+      green: "#3f7f45",
+      yellow: "#9a6d1c",
+      blue: "#4f5fd6",
+      magenta: "#a64d8f",
+      cyan: "#2f7f78",
+      white: "#8a887f",
+      brightBlack: "#73726c",
+      brightRed: "#cc5a63",
+      brightGreen: "#57955b",
+      brightYellow: "#b5852f",
+      brightBlue: "#6f7ff0",
+      brightMagenta: "#bf68a8",
+      brightCyan: "#46978f",
+      brightWhite: "#a3a198",
+    },
+    native: {
+      backgroundColor: { red: 240, green: 238, blue: 230, alpha: 46 },
       transparentChrome: true,
       effect: "glass",
     },

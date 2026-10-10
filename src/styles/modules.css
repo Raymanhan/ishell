@@ -2355,6 +2355,13 @@ button.detail-row:hover {
   --preview-card: #30302e;
   --preview-bg: linear-gradient(180deg, #2b2a28, #1c1b1a);
 }
+.theme-preview.liquid-glass-clay-light {
+  --preview-line: rgba(61, 57, 41, 0.12);
+  --preview-highlight: rgba(255, 255, 255, 0.85);
+  --preview-accent: #d97757;
+  --preview-card: #faf9f5;
+  --preview-bg: linear-gradient(180deg, #f3f1ea, #e6e2d6);
+}
 .theme-option-text {
   display: flex;
   align-items: center;

@@ -1096,7 +1096,7 @@
 
 /* ===== Light liquid themes =====
    The shared liquid-glass rules are tuned for dark surfaces. Light themes
-   (Ivory, Cloud) share the contrast model below; each supplies its tint
+   (Ivory, Cloud, Clay Light) share the contrast model below; each supplies its tint
    through --ink-rgb, --shadow-rgb, --paper-rgb, --paper-2-rgb and the
    --solid-* / --accent-ink tokens. */
 
@@ -1281,32 +1281,122 @@
   --card-shadow: 0 1px 2px rgba(30, 34, 56, 0.05), 0 6px 20px rgba(30, 34, 56, 0.06);
 }
 
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) ::-webkit-scrollbar-thumb {
+/* Clay Light (陶土白): Claude Code-style light. Oat chrome, ivory cards,
+   warm ink text and clay accents; Claude Code's light-mode status colors. */
+:root[data-theme="liquid-glass-clay-light"] {
+  color-scheme: light;
+
+  --bg: rgba(240, 238, 230, 0.8);
+  --titlebar: rgba(243, 241, 234, 0.76);
+  --panel: rgba(250, 249, 245, 0.94);
+  --panel-2: rgba(245, 244, 237, 0.82);
+  --inset: rgba(240, 238, 230, 0.72);
+  --card: rgba(255, 255, 255, 0.62);
+  --card-hover: rgba(255, 255, 255, 0.86);
+
+  --hairline: rgba(61, 57, 41, 0.1);
+  --hairline-2: rgba(61, 57, 41, 0.16);
+  --hairline-3: rgba(61, 57, 41, 0.24);
+
+  --text: #2b2a27;
+  --dim: #5e5d59;
+  --faint: #87867f;
+  --accent-rgb: 201, 100, 66;
+  --accent: #c96442;
+  --accent-2: #d97757;
+  --accent-soft: rgba(201, 100, 66, 0.12);
+  --focus-ring: rgba(201, 100, 66, 0.45);
+  --focus-bg: rgba(201, 100, 66, 0.06);
+  --control-hover-bg: rgba(61, 57, 41, 0.055);
+  --control-active-bg: rgba(61, 57, 41, 0.07);
+  --row-hover-bg: rgba(61, 57, 41, 0.045);
+  --row-active-bg: rgba(61, 57, 41, 0.07);
+  --row-busy-bg: rgba(201, 100, 66, 0.1);
+  --surface-soft-bg: rgba(61, 57, 41, 0.025);
+  --surface-muted-bg: rgba(61, 57, 41, 0.02);
+
+  --ok: #2c7a39;
+  --warn: #966c1e;
+  --info: #5769f7;
+  --bad: #ab2b3f;
+  --danger: #ab2b3f;
+  --danger-strong: #7d1f2e;
+  --danger-soft: rgba(171, 43, 63, 0.07);
+  --danger-hover-bg: rgba(171, 43, 63, 0.11);
+  --violet: #7b5bd6;
+  --chart-rx: #6f7ff0;
+  --chart-tx: #d97757;
+  --meter-shade: #faf9f5;
+  --syntax-comment: #8a887f;
+  --syntax-keyword: #c96442;
+  --syntax-string: #4f7d3a;
+  --syntax-number: #a8701d;
+  --syntax-literal: #ab2b3f;
+  --syntax-key: #4f5fd6;
+  --syntax-type: #8a5a2b;
+  --syntax-punct: #6b6a63;
+
+  --shadow: 0 18px 50px rgba(61, 50, 30, 0.14);
+  --ctx-menu-bg: rgba(250, 249, 245, 0.98);
+  --ctx-menu-hover: rgba(61, 57, 41, 0.06);
+  --ctx-menu-danger-hover: rgba(171, 43, 63, 0.08);
+  --ctx-menu-shadow: 0 12px 34px rgba(61, 50, 30, 0.16);
+  --liquid-line-rgb: 61, 57, 41;
+  --liquid-surface: rgba(250, 249, 245, 0.95);
+  --liquid-surface-strong: rgba(250, 249, 245, 0.98);
+  --liquid-edge: rgba(201, 100, 66, 0.5);
+  --liquid-shadow: 0 1px 2px rgba(61, 50, 30, 0.05), 0 8px 24px rgba(61, 50, 30, 0.06);
+  --liquid-code-bg: rgba(245, 244, 237, 0.9);
+  --liquid-drop-bg: rgba(250, 249, 245, 0.72);
+  --liquid-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.24 0 0 0 0 0.22 0 0 0 0 0.16 0 0 0 0.045 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --liquid-app-bg: rgba(236, 234, 225, 0.8);
+  --liquid-body-bg: var(--liquid-grain), rgba(240, 238, 230, 0.64);
+  --liquid-body-files-bg: var(--liquid-grain), rgba(240, 238, 230, 0.64);
+  --liquid-body-glow: none;
+  --liquid-backdrop-bg: rgba(220, 216, 204, 0.42);
+  --ink-rgb: 61, 57, 41;
+  --shadow-rgb: 61, 50, 30;
+  --paper-rgb: 250, 249, 245;
+  --paper-2-rgb: 245, 244, 237;
+  --accent-ink: #9a4a2e;
+  --solid-bg: #c96442;
+  --solid-border: #b4583a;
+  --solid-hover-bg: #d97757;
+  --solid-hover-border: #c96442;
+  --solid-text: #fffaf5;
+  --card-surface: rgba(250, 249, 245, 0.98);
+  --card-border: rgba(61, 57, 41, 0.09);
+  --card-shadow: 0 1px 2px rgba(61, 50, 30, 0.05), 0 6px 20px rgba(61, 50, 30, 0.06);
+  --font-serif: "Tiempos Headline", "Copernicus", Georgia, "Songti SC", "Noto Serif SC",
+    "Source Han Serif SC", serif;
+}
+
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) ::-webkit-scrollbar-thumb {
   background: rgba(var(--ink-rgb), 0.18);
   background-clip: padding-box;
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) ::-webkit-scrollbar-thumb:hover {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) ::-webkit-scrollbar-thumb:hover {
   background: rgba(var(--ink-rgb), 0.3);
   background-clip: padding-box;
 }
 
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .app {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .app {
   box-shadow:
     inset 0 0 0 1px rgba(var(--ink-rgb), 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.68);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .workbench-body {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .workbench-body {
   backdrop-filter: blur(30px) saturate(118%);
   -webkit-backdrop-filter: blur(30px) saturate(118%);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .workbench-body::before {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .workbench-body::before {
   opacity: 0.28;
   filter: blur(24px);
 }
 
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .connection-manager,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .status-panel,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .files-region {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .connection-manager,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .status-panel,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .files-region {
   border-color: rgba(var(--ink-rgb), 0.14);
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.42), transparent 32%),
@@ -1318,13 +1408,13 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.78),
     inset 0 -1px 0 rgba(var(--ink-rgb), 0.06);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .workbench-body.files-open.has-status-panel .files-region.open {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .workbench-body.files-open.has-status-panel .files-region.open {
   box-shadow:
     0 6px 22px rgba(var(--shadow-rgb), 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.76),
     inset 0 -1px 0 rgba(var(--ink-rgb), 0.06);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .workbench-body.files-open.has-status-panel .status-panel.open {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .workbench-body.files-open.has-status-panel .status-panel.open {
   box-shadow:
     0 6px 22px rgba(var(--shadow-rgb), 0.1),
     inset -1px 0 0 rgba(var(--ink-rgb), 0.08),
@@ -1332,85 +1422,85 @@
     inset 0 -1px 0 rgba(var(--ink-rgb), 0.06);
 }
 
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .connection-manager::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .status-panel::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .settings-modal::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .editor-sheet::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .delete-confirm::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .file-editor::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-context-menu::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .tab-context-menu::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .ctx-menu::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .terminal-history-suggest::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .upload-queue::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .sftp-drop-card::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .recent-card::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .network-card::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .metric-row::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .process-card::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .mount-card::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .history-search::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .theme-option::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .settings-range::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .settings-number::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .editor-section::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .auth-switch::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .field input::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .field textarea::before {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .connection-manager::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .status-panel::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .settings-modal::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .editor-sheet::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .delete-confirm::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .file-editor::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-context-menu::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .tab-context-menu::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .ctx-menu::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .terminal-history-suggest::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .upload-queue::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .sftp-drop-card::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .recent-card::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .network-card::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .metric-row::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .process-card::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .mount-card::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .history-search::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .theme-option::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .settings-range::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .settings-number::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .editor-section::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .auth-switch::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .field input::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .field textarea::before {
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.28), transparent 46%);
   opacity: 0.42;
   mix-blend-mode: normal;
 }
 
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .dashboard,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .history-panel {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .dashboard,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .history-panel {
   background: transparent;
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .sftp-tree,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .sftp-detail,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .sftp-tool-rail,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .sftp-stage > .columns,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .detail-header,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .settings-head,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .terminal-history-suggest-head,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .uq-head {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .sftp-tree,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .sftp-detail,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .sftp-tool-rail,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .sftp-stage > .columns,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .detail-header,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .settings-head,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .terminal-history-suggest-head,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .uq-head {
   border-color: rgba(var(--ink-rgb), 0.14);
   background: rgba(255, 255, 255, 0.34);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .detail-body {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .detail-body {
   border-color: rgba(var(--ink-rgb), 0.14);
   background: rgba(var(--paper-rgb), 0.54);
 }
 
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .history-search,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .theme-option,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .settings-range,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .settings-number,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .recent-card,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .network-card,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .metric-row,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .process-card,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .mount-card,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .editor-section,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .field input,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .field textarea,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .connection-rename-input,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .auth-switch {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .history-search,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .theme-option,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .settings-range,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .settings-number,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .recent-card,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .network-card,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .metric-row,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .process-card,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .mount-card,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .editor-section,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .field input,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .field textarea,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .connection-rename-input,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .auth-switch {
   border-color: rgba(var(--ink-rgb), 0.14);
   background: rgba(255, 255, 255, 0.38);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.56);
 }
 
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .dock-toggle.on,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .connection-folder-row.on,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .connection-node.on,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .tool.on,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .entry.on,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .tree-row.current,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .tree-row.on,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .detail-row.on {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .dock-toggle.on,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .connection-folder-row.on,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .connection-node.on,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .tool.on,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .entry.on,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .tree-row.current,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .tree-row.on,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .detail-row.on {
   border-color: rgba(var(--accent-rgb), 0.3);
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.52), rgba(var(--accent-rgb), 0.12)),
@@ -1420,35 +1510,35 @@
     inset 3px 0 0 rgba(var(--accent-rgb), 0.7),
     inset 0 1px 0 rgba(255, 255, 255, 0.58);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .dock-toggle:hover,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .connection-folder-row:hover,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .connection-node:hover,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .history-row:hover,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .history-row:focus-visible,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .entry:hover,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .entry.trail,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .tree-row:hover,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) button.detail-row:hover,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .detail-row.trail,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .icon-button:hover,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .tool:hover:not(:disabled),
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .uq-clear:hover,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .uq-x:hover {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .dock-toggle:hover,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .connection-folder-row:hover,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .connection-node:hover,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .history-row:hover,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .history-row:focus-visible,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .entry:hover,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .entry.trail,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .tree-row:hover,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) button.detail-row:hover,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .detail-row.trail,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .icon-button:hover,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .tool:hover:not(:disabled),
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .uq-clear:hover,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .uq-x:hover {
   background: rgba(var(--ink-rgb), 0.08);
   color: var(--text);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .tree-row:focus-visible,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .detail-row:focus-visible,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .entry:focus-visible {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .tree-row:focus-visible,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .detail-row:focus-visible,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .entry:focus-visible {
   outline: 2px solid rgba(var(--accent-rgb), 0.58);
   outline-offset: -2px;
 }
 
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .history-search:focus-within,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .pathbar:focus-within,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .field input:focus,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .field textarea:focus,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .connection-rename-input:focus {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .history-search:focus-within,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .pathbar:focus-within,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .field input:focus,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .field textarea:focus,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .connection-rename-input:focus {
   border-color: rgba(var(--accent-rgb), 0.56);
   background: rgba(255, 255, 255, 0.62);
   box-shadow:
@@ -1456,8 +1546,8 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .btn-primary,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .solid-button {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .btn-primary,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .solid-button {
   border-color: rgba(var(--accent-rgb), 0.3);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.45), transparent),
@@ -1465,51 +1555,51 @@
   color: var(--accent-ink);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .btn-primary:hover,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .solid-button:hover:not(:disabled) {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .btn-primary:hover,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .solid-button:hover:not(:disabled) {
   border-color: rgba(var(--accent-rgb), 0.46);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.54), transparent),
     rgba(var(--accent-rgb), 0.18);
 }
 
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .connection-trigger,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .dock-toggle,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .topbar-new.icon-button {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .connection-trigger,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .dock-toggle,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .topbar-new.icon-button {
   --icon-control-color: var(--faint);
   --icon-control-hover-bg: rgba(var(--ink-rgb), 0.09);
   --icon-control-hover-color: var(--text);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .terminal-tab:hover,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .terminal-tab.active:hover {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .terminal-tab:hover,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .terminal-tab.active:hover {
   background: rgba(var(--accent-rgb), 0.13);
   color: var(--text);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .terminal-tab.active {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .terminal-tab.active {
   background: rgba(255, 255, 255, 0.48);
   color: var(--text);
   box-shadow: inset 0 0 0 1px rgba(var(--ink-rgb), 0.08);
 }
 
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .network-head > span,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .metric-label,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .process-card-title {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .network-head > span,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .metric-label,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .process-card-title {
   color: var(--dim);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .process-card-title svg {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .process-card-title svg {
   color: var(--accent);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .process-switch {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .process-switch {
   border-color: rgba(var(--ink-rgb), 0.13);
   background: rgba(var(--ink-rgb), 0.07);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .process-switch button.on {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .process-switch button.on {
   background: rgba(255, 255, 255, 0.72);
   color: var(--text);
   box-shadow: 0 1px 4px rgba(var(--shadow-rgb), 0.14);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .theme-option.on,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .auth-switch button.active {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .theme-option.on,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .auth-switch button.active {
   border-color: rgba(var(--accent-rgb), 0.38);
   background: rgba(var(--accent-rgb), 0.1);
   color: var(--text);
@@ -1517,29 +1607,29 @@
     inset 0 0 0 1px rgba(255, 255, 255, 0.42),
     0 3px 12px rgba(var(--shadow-rgb), 0.08);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .metric-track,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .mount-track,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .process-track,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .uq-track {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .metric-track,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .mount-track,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .process-track,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .uq-track {
   background: rgba(var(--ink-rgb), 0.13);
   box-shadow: inset 0 0 0 1px rgba(var(--ink-rgb), 0.03);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .wave-grid {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .wave-grid {
   stroke: rgba(var(--ink-rgb), 0.13);
 }
 
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .settings-modal,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .editor-sheet,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .delete-confirm,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .file-editor,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .tail-viewer,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-context-menu,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .tab-context-menu,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .ctx-menu,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .terminal-history-suggest,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .upload-queue,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .sftp-drop-card {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .settings-modal,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .editor-sheet,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .delete-confirm,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .file-editor,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .tail-viewer,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-context-menu,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .tab-context-menu,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .ctx-menu,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .terminal-history-suggest,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .upload-queue,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .sftp-drop-card {
   border-color: rgba(var(--ink-rgb), 0.18);
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.5), transparent 34%),
@@ -1551,15 +1641,15 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.8),
     inset 0 -1px 0 rgba(var(--ink-rgb), 0.07);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .file-editor-code,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .tail-viewer-output,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .entry-rename {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .file-editor-code,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .tail-viewer-output,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .entry-rename {
   border-color: rgba(var(--ink-rgb), 0.16);
   background: rgba(var(--paper-2-rgb), 0.74);
   box-shadow: inset 0 1px 2px rgba(var(--ink-rgb), 0.06);
 }
 
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet {
   border-color: rgba(var(--ink-rgb), 0.2);
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.34), transparent 34%),
@@ -1568,55 +1658,55 @@
     0 24px 64px rgba(var(--shadow-rgb), 0.22),
     inset 0 1px 0 rgba(255, 255, 255, 0.86);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-head {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-head {
   border-color: rgba(var(--ink-rgb), 0.13);
   background: rgba(255, 255, 255, 0.42);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-main .editor-section {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-main .editor-section {
   border-color: rgba(var(--ink-rgb), 0.13);
   background: rgba(var(--paper-2-rgb), 0.58);
   box-shadow: none;
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-main .editor-section::before,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .auth-switch::before {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-main .editor-section::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .auth-switch::before {
   display: none;
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .field span,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .field-group-label {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .field span,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .field-group-label {
   color: var(--dim);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .field input,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .field textarea {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .field input,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .field textarea {
   border-color: rgba(var(--ink-rgb), 0.18);
   background: rgba(255, 255, 255, 0.78);
   box-shadow:
     inset 0 1px 2px rgba(var(--shadow-rgb), 0.045),
     0 1px 0 rgba(255, 255, 255, 0.58);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .field input:hover,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .field textarea:hover {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .field input:hover,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .field textarea:hover {
   border-color: rgba(var(--ink-rgb), 0.28);
   background: rgba(255, 255, 255, 0.9);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .field input:focus,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .field textarea:focus,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .password-input-wrap:focus-within {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .field input:focus,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .field textarea:focus,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .password-input-wrap:focus-within {
   border-color: rgba(var(--accent-rgb), 0.62);
   background: rgba(255, 255, 255, 0.94);
   box-shadow:
     0 0 0 3px rgba(var(--accent-rgb), 0.12),
     inset 0 1px 2px rgba(var(--shadow-rgb), 0.04);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .auth-switch {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .auth-switch {
   border-color: rgba(var(--ink-rgb), 0.14);
   background: rgba(var(--ink-rgb), 0.065);
   box-shadow: inset 0 1px 2px rgba(var(--shadow-rgb), 0.035);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .auth-switch button:hover {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .auth-switch button:hover {
   background: rgba(255, 255, 255, 0.48);
   color: var(--text);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .auth-switch button.active {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .auth-switch button.active {
   border-color: rgba(var(--accent-rgb), 0.3);
   background: rgba(255, 255, 255, 0.8);
   color: var(--accent-ink);
@@ -1624,52 +1714,52 @@
     0 1px 4px rgba(var(--shadow-rgb), 0.12),
     inset 0 0 0 1px rgba(255, 255, 255, 0.5);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .password-input-wrap {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .password-input-wrap {
   border-color: rgba(var(--ink-rgb), 0.18);
   background: rgba(255, 255, 255, 0.78);
   box-shadow:
     inset 0 1px 2px rgba(var(--shadow-rgb), 0.045),
     0 1px 0 rgba(255, 255, 255, 0.58);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .password-input-wrap input,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .password-input-wrap input:hover,
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .password-input-wrap input:focus {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .password-input-wrap input,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .password-input-wrap input:hover,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .password-input-wrap input:focus {
   border-color: transparent;
   background: transparent;
   box-shadow: none;
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .password-toggle {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .password-toggle {
   color: var(--faint);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .password-toggle:hover {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .password-toggle:hover {
   background: rgba(var(--ink-rgb), 0.08);
   color: var(--text);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .swatches button.active {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .swatches button.active {
   border-color: rgba(255, 255, 255, 0.94);
   box-shadow:
     0 0 0 2px rgba(var(--paper-rgb), 0.92),
     0 0 0 4px rgba(var(--accent-rgb), 0.48);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .swatches button:focus-visible {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .swatches button:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 3px;
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .editor-actions {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .editor-actions {
   border-color: rgba(var(--ink-rgb), 0.14);
   background: rgba(var(--paper-2-rgb), 0.78);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .editor-actions .btn-ghost {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .editor-actions .btn-ghost {
   border-color: rgba(var(--ink-rgb), 0.16);
   background: rgba(255, 255, 255, 0.48);
   color: var(--dim);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .editor-actions .btn-ghost:hover:not(:disabled) {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .editor-actions .btn-ghost:hover:not(:disabled) {
   border-color: rgba(var(--ink-rgb), 0.26);
   background: rgba(255, 255, 255, 0.78);
   color: var(--text);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .editor-actions .solid-button {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .editor-actions .solid-button {
   border-color: var(--solid-border);
   background: var(--solid-bg);
   color: var(--solid-text);
@@ -1677,11 +1767,11 @@
     0 2px 6px rgba(var(--shadow-rgb), 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.24);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-sheet .editor-actions .solid-button:hover:not(:disabled) {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .editor-actions .solid-button:hover:not(:disabled) {
   border-color: var(--solid-hover-border);
   background: var(--solid-hover-bg);
 }
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"]) .server-editor-head .icon-button {
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-head .icon-button {
   --icon-control-border: 1px solid rgba(var(--ink-rgb), 0.15);
   --icon-control-bg: rgba(255, 255, 255, 0.46);
   --icon-control-color: var(--dim);
@@ -1689,61 +1779,61 @@
   --icon-control-hover-color: var(--text);
 }
 
-/* ===== Floating-card layout (Cloud, Dusk, Clay) =====
+/* ===== Floating-card layout (Cloud, Dusk, Clay, Clay Light) =====
    Otty-style composition: the window chrome is one frosted sheet, the
    connection list sits flush on it like a sidebar, and the terminal, the
    dashboard and the docked panels are rounded cards floating above it. */
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) {
   --card-radius: 12px;
 }
 
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .app {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .app {
   box-shadow: inset 0 0 0 1px rgba(var(--ink-rgb), 0.08);
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .workbench-body {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .workbench-body {
   backdrop-filter: blur(30px) saturate(120%);
   -webkit-backdrop-filter: blur(30px) saturate(120%);
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .workbench-body::before,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .connection-manager::before,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .status-panel::before {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .workbench-body::before,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .connection-manager::before,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .status-panel::before {
   display: none;
 }
 
 /* Terminal card */
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .terminal-region {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .terminal-region {
   margin: var(--titlebar-safe, 34px) var(--rail-gap, 12px) var(--rail-gap, 12px);
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .workbench-body.connections-open .terminal-region {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .workbench-body.connections-open .terminal-region {
   margin-left: calc(var(--rail-gap, 12px) * 2 + var(--connection-panel-width, 240px));
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .workbench-body.has-status-panel .terminal-region {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .workbench-body.has-status-panel .terminal-region {
   margin-right: 0;
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .terminal-dock.files-open .terminal-region {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .terminal-dock.files-open .terminal-region {
   margin-bottom: 0;
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .terminal-frame {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .terminal-frame {
   padding: 14px 14px 12px 18px;
 }
 
 /* Dashboard card (no session open) */
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .view-layer {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .view-layer {
   inset: var(--titlebar-safe, 34px) var(--rail-gap, 12px) var(--rail-gap, 12px);
   padding-top: 0;
   overflow: hidden;
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .workbench-body.connections-open .view-layer {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .workbench-body.connections-open .view-layer {
   margin-left: calc(var(--rail-gap, 12px) + var(--connection-panel-width, 240px));
 }
 
 /* Shared card surface */
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .terminal-region,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .view-layer,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .workbench-body .status-panel.open,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .workbench-body .files-region.open,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .workbench-body.files-open.has-status-panel .status-panel.open,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .workbench-body.files-open.has-status-panel .files-region.open {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .terminal-region,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .view-layer,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .workbench-body .status-panel.open,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .workbench-body .files-region.open,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .workbench-body.files-open.has-status-panel .status-panel.open,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .workbench-body.files-open.has-status-panel .files-region.open {
   border: 1px solid var(--card-border);
   border-radius: var(--card-radius);
   background: var(--card-surface);
@@ -1753,33 +1843,33 @@
 }
 
 /* Sidebar: flush with the chrome, the active row is a small raised card. */
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .connection-manager,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .connection-manager.open {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .connection-manager,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .connection-manager.open {
   border: 0;
   background: transparent;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   box-shadow: none;
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .connection-folder-row,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .connection-node {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .connection-folder-row,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .connection-node {
   border: 1px solid transparent;
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .connection-folder-row:hover,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .connection-node:hover {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .connection-folder-row:hover,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .connection-node:hover {
   background: rgba(var(--ink-rgb), 0.045);
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .connection-folder-row.on,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .connection-node.on,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .terminal-tab.active,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .dock-toggle.on {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .connection-folder-row.on,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .connection-node.on,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .terminal-tab.active,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .dock-toggle.on {
   border-color: var(--card-border);
   background: var(--card-surface);
   color: var(--text);
   box-shadow: 0 1px 2px rgba(var(--shadow-rgb), 0.08);
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .terminal-tab:hover,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .terminal-tab.active:hover {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .terminal-tab:hover,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .terminal-tab.active:hover {
   background: var(--card-surface);
   color: var(--text);
 }
@@ -1792,11 +1882,11 @@
 }
 
 /* Selections inside panels: a neutral tint, no accent bar. */
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .tool.on,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .entry.on,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .tree-row.current,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .tree-row.on,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .detail-row.on {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .tool.on,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .entry.on,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .tree-row.current,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .tree-row.on,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .detail-row.on {
   border-color: transparent;
   background: rgba(var(--ink-rgb), 0.07);
   color: var(--text);
@@ -1804,47 +1894,47 @@
 }
 
 /* Inner cards inside panels: quiet tinted wells instead of glass. */
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .recent-card,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .network-card,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .metric-row,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .process-card,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .mount-card,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .sftp-tree,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .sftp-detail,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .sftp-tool-rail,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .sftp-stage > .columns {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .recent-card,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .network-card,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .metric-row,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .process-card,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .mount-card,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .sftp-tree,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .sftp-detail,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .sftp-tool-rail,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .sftp-stage > .columns {
   border-color: rgba(var(--ink-rgb), 0.07);
   background: rgba(var(--ink-rgb), 0.025);
   box-shadow: none;
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .recent-card::before,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .network-card::before,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .metric-row::before,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .process-card::before,
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .mount-card::before {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .recent-card::before,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .network-card::before,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .metric-row::before,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .process-card::before,
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .mount-card::before {
   display: none;
 }
-:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"]) .recent-card:hover {
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .recent-card:hover {
   border-color: rgba(var(--ink-rgb), 0.12);
   background: rgba(var(--ink-rgb), 0.04);
 }
 
 /* Clay extras: the solid clay button and serif display headings. */
-:root[data-theme="liquid-glass-clay"] .btn-primary,
-:root[data-theme="liquid-glass-clay"] .solid-button {
+:root:is([data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .btn-primary,
+:root:is([data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .solid-button {
   border-color: #b4583a;
   background: #c96442;
   color: #fffaf5;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
-:root[data-theme="liquid-glass-clay"] .btn-primary:hover,
-:root[data-theme="liquid-glass-clay"] .solid-button:hover:not(:disabled) {
+:root:is([data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .btn-primary:hover,
+:root:is([data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .solid-button:hover:not(:disabled) {
   border-color: #c96442;
   background: #d97757;
 }
-:root[data-theme="liquid-glass-clay"] .start-head h1,
-:root[data-theme="liquid-glass-clay"] .settings-head h2,
-:root[data-theme="liquid-glass-clay"] .server-editor-head h2 {
+:root:is([data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .start-head h1,
+:root:is([data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .settings-head h2,
+:root:is([data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .server-editor-head h2 {
   font-family: var(--font-serif);
   font-weight: 500;
   letter-spacing: 0;
