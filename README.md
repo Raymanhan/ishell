@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.2.0](https://github.com/Raymanhan/ishell/releases/tag/v1.2.0)**
+**[Download iShell v1.2.1](https://github.com/Raymanhan/ishell/releases/tag/v1.2.1)**
 
 Available packages:
 
@@ -230,8 +230,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.2.0
-git push origin v1.2.0
+git tag v1.2.1
+git push origin v1.2.1
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -266,6 +266,9 @@ src-tauri/src/
 
 ## Recent Changes
 
+- `v1.2.1` brightens every theme (near-white text, readable secondary text,
+  lighter surface tints, livelier terminal colors) and gives the live
+  monitoring panel one fixed set of vivid system colors in every theme.
 - `v1.2.0` redesigns the theme system: refined palettes for all existing
   themes, four new floating-card themes (Otty-style Cloud and Dusk, Claude
   Dark and Claude Light), full 16-color terminal palettes per theme,
