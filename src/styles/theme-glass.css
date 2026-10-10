@@ -3,7 +3,7 @@
 :root[data-theme="glass"] .app {
   background:
     linear-gradient(90deg, rgba(255, 255, 255, 0.03), transparent 38%, rgba(255, 255, 255, 0.02)),
-    rgba(22, 24, 28, 0.12);
+    rgba(30, 32, 36, 0.06);
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.14),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
@@ -34,7 +34,7 @@
    around the floating panels read this single frosted gray, so it all feels
    like one sheet with the panels floating on top. */
 :root[data-theme="glass"] .workbench-body {
-  background: rgba(48, 50, 55, 0.56);
+  background: rgba(66, 68, 74, 0.44);
   backdrop-filter: saturate(150%);
   -webkit-backdrop-filter: saturate(150%);
 }
@@ -46,17 +46,17 @@
   border-top-color: rgba(255, 255, 255, 0.12);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 72px),
-    rgba(48, 50, 55, 0.56);
+    rgba(66, 68, 74, 0.44);
   backdrop-filter: blur(38px) saturate(144%);
   -webkit-backdrop-filter: blur(38px) saturate(144%);
 }
 :root[data-theme="glass"] .connection-manager {
-  background: rgba(48, 50, 55, 0.56);
+  background: rgba(66, 68, 74, 0.44);
   backdrop-filter: blur(38px) saturate(144%);
   -webkit-backdrop-filter: blur(38px) saturate(144%);
 }
 :root[data-theme="glass"] .status-panel {
-  background: rgba(48, 50, 55, 0.56);
+  background: rgba(66, 68, 74, 0.44);
   backdrop-filter: blur(38px) saturate(144%);
   -webkit-backdrop-filter: blur(38px) saturate(144%);
 }
@@ -334,9 +334,9 @@
   --hairline: rgba(var(--liquid-line-rgb), 0.12);
   --hairline-2: rgba(var(--liquid-line-rgb), 0.2);
   --hairline-3: rgba(var(--accent-rgb), 0.42);
-  --text: #f3f1ec;
-  --dim: #c9ccd6;
-  --faint: #8b92a5;
+  --text: #f8f7f3;
+  --dim: #dde1ec;
+  --faint: #a6aec4;
   --accent-rgb: 216, 191, 142;
   --accent: #d8bf8e;
   --accent-2: #c2a673;
@@ -350,18 +350,18 @@
   --row-busy-bg: rgba(157, 182, 230, 0.13);
   --surface-soft-bg: rgba(255, 255, 255, 0.04);
   --surface-muted-bg: rgba(255, 255, 255, 0.03);
-  --ok: #9ccba6;
-  --warn: #dec48e;
-  --info: #9db6e6;
-  --bad: #e5939a;
+  --ok: #66d99a;
+  --warn: #f4c66e;
+  --info: #7cb0ff;
+  --bad: #ff7f8c;
   --danger: #efb3b7;
   --danger-strong: #f8d6d8;
   --danger-soft: rgba(229, 147, 154, 0.09);
   --danger-hover-bg: rgba(229, 147, 154, 0.16);
-  --violet: #c3a9e0;
-  --chart-rx: #9db6e6;
-  --chart-tx: #d8bf8e;
-  --meter-shade: #141a2a;
+  --violet: #bd98ff;
+  --chart-rx: #7cb0ff;
+  --chart-tx: #ecc882;
+  --meter-shade: #26304a;
   --syntax-comment: #7c849a;
   --syntax-keyword: #a3b8ea;
   --syntax-string: #a6cfae;
@@ -377,8 +377,8 @@
   --ctx-menu-shadow: 0 18px 44px rgba(4, 8, 18, 0.42);
   --liquid-line-rgb: 214, 222, 240;
   --liquid-accent-rgb: var(--accent-rgb);
-  --liquid-surface: rgba(22, 30, 48, 0.56);
-  --liquid-surface-strong: rgba(18, 25, 41, 0.82);
+  --liquid-surface: rgba(30, 40, 64, 0.46);
+  --liquid-surface-strong: rgba(22, 30, 50, 0.8);
   --liquid-edge: rgba(var(--accent-rgb), 0.5);
   --liquid-shadow: 0 24px 74px rgba(4, 8, 18, 0.36);
   --liquid-code-bg: rgba(12, 17, 29, 0.44);
@@ -391,14 +391,14 @@
     radial-gradient(640px 360px at 14% -6%, rgba(120, 140, 190, 0.16), transparent 64%),
     radial-gradient(560px 360px at 92% 10%, rgba(216, 191, 142, 0.07), transparent 66%),
     linear-gradient(160deg, rgba(255, 255, 255, 0.05), transparent 36%),
-    rgba(16, 22, 38, 0.3);
+    rgba(26, 34, 56, 0.14);
   --liquid-body-bg:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 150px),
-    rgba(20, 27, 44, 0.5);
+    rgba(30, 40, 64, 0.36);
   --liquid-body-files-bg:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 150px),
     linear-gradient(0deg, rgba(var(--accent-rgb), 0.05), transparent 36px),
-    rgba(20, 27, 44, 0.5);
+    rgba(30, 40, 64, 0.36);
   --liquid-body-glow:
     radial-gradient(380px 180px at 22% 8%, rgba(132, 152, 204, 0.16), transparent 66%),
     radial-gradient(420px 210px at 84% 86%, rgba(216, 191, 142, 0.07), transparent 72%);
@@ -412,25 +412,25 @@
   --panel: rgba(16, 36, 32, 0.58);
   --panel-2: rgba(24, 48, 43, 0.44);
   --inset: rgba(10, 26, 23, 0.4);
-  --text: #eef4f0;
-  --dim: #c2d1c9;
-  --faint: #869a90;
+  --text: #f4f9f6;
+  --dim: #d6e5dd;
+  --faint: #9cb3a8;
   --accent-rgb: 159, 212, 188;
   --accent: #9fd4bc;
   --accent-2: #7bbfa2;
   --row-busy-bg: rgba(149, 188, 216, 0.13);
-  --ok: #a3d3a8;
-  --warn: #dcc78e;
-  --info: #95bcd8;
-  --bad: #e3969a;
+  --ok: #6edc96;
+  --warn: #f2cd72;
+  --info: #6fc4f0;
+  --bad: #ff8189;
   --danger: #eeb4b6;
   --danger-strong: #f7d7d8;
   --danger-soft: rgba(227, 150, 154, 0.09);
   --danger-hover-bg: rgba(227, 150, 154, 0.16);
-  --violet: #c6abd8;
-  --chart-rx: #9fd4bc;
-  --chart-tx: #dcc78e;
-  --meter-shade: #0f1e1b;
+  --violet: #c99df2;
+  --chart-rx: #6fe0bf;
+  --chart-tx: #f2cd72;
+  --meter-shade: #1c3a34;
   --syntax-comment: #7a9088;
   --syntax-keyword: #99c1dc;
   --syntax-string: #acd7a8;
@@ -444,8 +444,8 @@
   --ctx-menu-danger-hover: rgba(227, 150, 154, 0.14);
   --ctx-menu-shadow: 0 18px 44px rgba(2, 12, 10, 0.42);
   --liquid-line-rgb: 214, 236, 226;
-  --liquid-surface: rgba(18, 40, 36, 0.56);
-  --liquid-surface-strong: rgba(13, 31, 28, 0.84);
+  --liquid-surface: rgba(24, 54, 48, 0.46);
+  --liquid-surface-strong: rgba(16, 38, 34, 0.82);
   --liquid-shadow: 0 24px 74px rgba(2, 12, 10, 0.36);
   --liquid-code-bg: rgba(8, 22, 19, 0.44);
   --liquid-drop-bg: rgba(18, 40, 36, 0.42);
@@ -453,14 +453,14 @@
     radial-gradient(640px 360px at 14% -6%, rgba(110, 170, 145, 0.15), transparent 64%),
     radial-gradient(560px 360px at 92% 10%, rgba(214, 196, 150, 0.06), transparent 66%),
     linear-gradient(160deg, rgba(255, 255, 255, 0.05), transparent 36%),
-    rgba(12, 30, 27, 0.3);
+    rgba(20, 44, 40, 0.14);
   --liquid-body-bg:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 150px),
-    rgba(16, 36, 32, 0.5);
+    rgba(24, 52, 46, 0.36);
   --liquid-body-files-bg:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 150px),
     linear-gradient(0deg, rgba(var(--accent-rgb), 0.05), transparent 36px),
-    rgba(16, 36, 32, 0.5);
+    rgba(24, 52, 46, 0.36);
   --liquid-body-glow:
     radial-gradient(380px 180px at 22% 8%, rgba(120, 180, 155, 0.14), transparent 66%),
     radial-gradient(420px 210px at 84% 86%, rgba(200, 190, 140, 0.06), transparent 72%);
@@ -479,9 +479,9 @@
   --hairline: rgba(var(--liquid-line-rgb), 0.1);
   --hairline-2: rgba(var(--liquid-line-rgb), 0.17);
   --hairline-3: rgba(var(--accent-rgb), 0.36);
-  --text: #f3f1ec;
-  --dim: #c9c5bd;
-  --faint: #8d8982;
+  --text: #f8f6f1;
+  --dim: #dcd8d0;
+  --faint: #a6a199;
   --accent-rgb: 230, 223, 210;
   --accent: #e6dfd2;
   --accent-2: #c8bfae;
@@ -491,18 +491,18 @@
   --control-active-bg: rgba(var(--accent-rgb), 0.09);
   --row-active-bg: rgba(var(--accent-rgb), 0.12);
   --row-busy-bg: rgba(170, 196, 186, 0.11);
-  --ok: #a8c79d;
-  --warn: #d9c08c;
-  --info: #a9bccf;
-  --bad: #db9089;
+  --ok: #74d690;
+  --warn: #f2c36c;
+  --info: #8fbdf0;
+  --bad: #ff8679;
   --danger: #e9b2ab;
   --danger-strong: #f6d6d1;
   --danger-soft: rgba(219, 144, 137, 0.09);
   --danger-hover-bg: rgba(219, 144, 137, 0.16);
-  --violet: #c4aac6;
-  --chart-rx: #c9d3dc;
-  --chart-tx: #d9c08c;
-  --meter-shade: #121212;
+  --violet: #c9a6f2;
+  --chart-rx: #dfe7ef;
+  --chart-tx: #f2c36c;
+  --meter-shade: #2a2a2b;
   --syntax-comment: #85817a;
   --syntax-keyword: #b3c2d4;
   --syntax-string: #b4cca6;
@@ -516,8 +516,8 @@
   --ctx-menu-danger-hover: rgba(219, 144, 137, 0.14);
   --ctx-menu-shadow: 0 18px 44px rgba(0, 0, 0, 0.46);
   --liquid-line-rgb: 236, 230, 220;
-  --liquid-surface: rgba(24, 24, 25, 0.6);
-  --liquid-surface-strong: rgba(17, 17, 18, 0.86);
+  --liquid-surface: rgba(32, 32, 33, 0.52);
+  --liquid-surface-strong: rgba(20, 20, 21, 0.84);
   --liquid-edge: rgba(var(--accent-rgb), 0.42);
   --liquid-shadow: 0 24px 74px rgba(0, 0, 0, 0.4);
   --liquid-code-bg: rgba(8, 8, 9, 0.46);
@@ -529,14 +529,14 @@
     radial-gradient(640px 360px at 14% -6%, rgba(255, 248, 235, 0.08), transparent 64%),
     radial-gradient(560px 360px at 92% 10%, rgba(200, 190, 170, 0.05), transparent 66%),
     linear-gradient(160deg, rgba(255, 255, 255, 0.045), transparent 36%),
-    rgba(14, 14, 15, 0.32);
+    rgba(22, 22, 23, 0.16);
   --liquid-body-bg:
     linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 150px),
-    rgba(22, 22, 23, 0.54);
+    rgba(32, 32, 33, 0.42);
   --liquid-body-files-bg:
     linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 150px),
     linear-gradient(0deg, rgba(var(--accent-rgb), 0.04), transparent 36px),
-    rgba(22, 22, 23, 0.54);
+    rgba(32, 32, 33, 0.42);
   --liquid-body-glow:
     radial-gradient(380px 180px at 22% 8%, rgba(255, 246, 230, 0.08), transparent 66%),
     radial-gradient(420px 210px at 84% 86%, rgba(180, 170, 150, 0.05), transparent 72%);
@@ -573,8 +573,8 @@
   position: relative;
   isolation: isolate;
   background: var(--liquid-body-bg);
-  backdrop-filter: blur(34px) saturate(140%);
-  -webkit-backdrop-filter: blur(34px) saturate(140%);
+  backdrop-filter: blur(34px) saturate(170%);
+  -webkit-backdrop-filter: blur(34px) saturate(170%);
 }
 
 :root[data-theme^="liquid-glass"] .workbench-body.files-open.has-status-panel {
@@ -600,8 +600,8 @@
     linear-gradient(150deg, rgba(255, 255, 255, 0.07), transparent 28%),
     var(--liquid-surface);
   border-color: rgba(var(--liquid-line-rgb), 0.12);
-  backdrop-filter: blur(46px) saturate(140%);
-  -webkit-backdrop-filter: blur(46px) saturate(140%);
+  backdrop-filter: blur(46px) saturate(170%);
+  -webkit-backdrop-filter: blur(46px) saturate(170%);
   box-shadow:
     var(--liquid-shadow),
     inset 0 1px 0 rgba(255, 255, 255, 0.1),
@@ -712,8 +712,8 @@
 :root[data-theme^="liquid-glass"] .delete-confirm-backdrop,
 :root[data-theme^="liquid-glass"] .file-editor-backdrop {
   background: var(--liquid-backdrop-bg);
-  backdrop-filter: blur(24px) saturate(130%);
-  -webkit-backdrop-filter: blur(24px) saturate(130%);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
 }
 
 :root[data-theme^="liquid-glass"] .settings-modal,
@@ -732,8 +732,8 @@
   background:
     linear-gradient(150deg, rgba(255, 255, 255, 0.08), transparent 30%),
     var(--liquid-surface-strong);
-  backdrop-filter: blur(54px) saturate(150%);
-  -webkit-backdrop-filter: blur(54px) saturate(150%);
+  backdrop-filter: blur(54px) saturate(170%);
+  -webkit-backdrop-filter: blur(54px) saturate(170%);
   box-shadow:
     var(--shadow),
     inset 0 1px 0 rgba(255, 255, 255, 0.14),
@@ -881,8 +881,8 @@
 :root[data-theme^="liquid-glass"] .sftp-drop {
   border-color: rgba(var(--liquid-accent-rgb), 0.5);
   background: var(--liquid-drop-bg);
-  backdrop-filter: blur(28px) saturate(130%);
-  -webkit-backdrop-filter: blur(28px) saturate(130%);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
 }
 
 :root[data-theme^="liquid-glass"] .metric-track,
@@ -955,9 +955,9 @@
   --hairline: rgba(var(--liquid-line-rgb), 0.08);
   --hairline-2: rgba(var(--liquid-line-rgb), 0.14);
   --hairline-3: rgba(var(--accent-rgb), 0.4);
-  --text: #cdd6f4;
-  --dim: #a6adc8;
-  --faint: #7f849c;
+  --text: #e3e8fa;
+  --dim: #c3cae4;
+  --faint: #9aa0ba;
   --accent-rgb: 180, 190, 254;
   --accent: #b4befe;
   --accent-2: #9aa6f5;
@@ -982,7 +982,7 @@
   --violet: #cba6f7;
   --chart-rx: #89b4fa;
   --chart-tx: #fab387;
-  --meter-shade: #1e1e2e;
+  --meter-shade: #2a2a3e;
   --syntax-comment: #7f849c;
   --syntax-keyword: #cba6f7;
   --syntax-string: #a6e3a1;
@@ -1030,9 +1030,9 @@
   --hairline: rgba(var(--liquid-line-rgb), 0.09);
   --hairline-2: rgba(var(--liquid-line-rgb), 0.15);
   --hairline-3: rgba(var(--liquid-line-rgb), 0.24);
-  --text: #f5f4ef;
-  --dim: #b8b5ac;
-  --faint: #8a8780;
+  --text: #f8f7f3;
+  --dim: #d3d0c8;
+  --faint: #a3a098;
   --accent-rgb: 92, 156, 245;
   --accent: #5c9cf5;
   --accent-2: #80b3f7;
@@ -1046,18 +1046,18 @@
   --row-busy-bg: rgba(var(--accent-rgb), 0.12);
   --surface-soft-bg: rgba(250, 249, 245, 0.03);
   --surface-muted-bg: rgba(250, 249, 245, 0.022);
-  --ok: #5cb874;
-  --warn: #e0ac55;
-  --info: #5c9cf5;
-  --bad: #e8686a;
+  --ok: #5fd27f;
+  --warn: #f4b95c;
+  --info: #6aa8ff;
+  --bad: #ff7474;
   --danger: #ee8d8e;
   --danger-strong: #f8c9c9;
   --danger-soft: rgba(232, 104, 106, 0.09);
   --danger-hover-bg: rgba(232, 104, 106, 0.15);
-  --violet: #a98ff0;
-  --chart-rx: #5c9cf5;
+  --violet: #b39dff;
+  --chart-rx: #6aa8ff;
   --chart-tx: #d97757;
-  --meter-shade: #262624;
+  --meter-shade: #2f2f2d;
   --syntax-comment: #8a8780;
   --syntax-keyword: #e5826a;
   --syntax-string: #8cc78a;
@@ -1135,17 +1135,17 @@
   --surface-soft-bg: rgba(255, 255, 255, 0.56);
   --surface-muted-bg: rgba(250, 248, 243, 0.7);
 
-  --ok: #3f7d5a;
-  --warn: #94701e;
-  --info: #3d6a96;
-  --bad: #b0525a;
+  --ok: #2f8f58;
+  --warn: #b07d1c;
+  --info: #356fb0;
+  --bad: #c2454f;
   --danger: #a2434c;
   --danger-strong: #7e2f37;
   --danger-soft: rgba(162, 67, 76, 0.08);
   --danger-hover-bg: rgba(162, 67, 76, 0.13);
-  --violet: #74609a;
-  --chart-rx: #3d6a96;
-  --chart-tx: #b0812e;
+  --violet: #7a5bb8;
+  --chart-rx: #356fb0;
+  --chart-tx: #c98a2c;
   --meter-shade: #f3efe6;
   --syntax-comment: #8a8d92;
   --syntax-keyword: #3a5f9e;
@@ -1230,17 +1230,17 @@
   --surface-soft-bg: rgba(30, 32, 48, 0.025);
   --surface-muted-bg: rgba(30, 32, 48, 0.02);
 
-  --ok: #4d9f61;
-  --warn: #c48a2c;
-  --info: #5f7be0;
-  --bad: #d65a75;
+  --ok: #2fae63;
+  --warn: #e09a24;
+  --info: #4a74f0;
+  --bad: #e04f6c;
   --danger: #c4475f;
   --danger-strong: #9d2f45;
   --danger-soft: rgba(214, 90, 117, 0.08);
   --danger-hover-bg: rgba(214, 90, 117, 0.12);
-  --violet: #9466d8;
-  --chart-rx: #8c9cf8;
-  --chart-tx: #f5a97f;
+  --violet: #8a5ae8;
+  --chart-rx: #6f86f7;
+  --chart-tx: #f39a68;
   --meter-shade: #ffffff;
   --syntax-comment: #9ca0b0;
   --syntax-keyword: #8839ef;
