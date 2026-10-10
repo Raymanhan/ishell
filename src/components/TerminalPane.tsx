@@ -4,7 +4,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { RefreshCw } from "lucide-react";
 import { command, isTauri } from "../api/tauri";
-import { getTerminalTheme, type AppTheme } from "../constants/theme";
+import { getTerminalSurfaceReport, getTerminalTheme, type AppTheme } from "../constants/theme";
 import type { ShellTab } from "../features/shell/types";
 import type {
   TerminalClosedPayload,
@@ -70,6 +70,7 @@ function TerminalPaneBase({
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
+  const themeRef = useRef(theme);
   const fitRef = useRef<FitAddon | null>(null);
   const sessionRef = useRef<string | null>(tab.sessionId);
   const closedSessionRef = useRef<string | null>(null);
@@ -384,6 +385,15 @@ function TerminalPaneBase({
     });
 
     terminal.loadAddon(fit);
+    // The theme background is transparent, so xterm would answer a background
+    // query (OSC 11 "?") with black and CLIs that adapt to it (Codex, Claude
+    // Code, vim) would pick dark styling on light themes, e.g. dark ink on a
+    // dark input box. Answer with the surface the terminal actually sits on.
+    terminal.parser.registerOscHandler(11, (data) => {
+      if (data !== "?") return false;
+      terminal.input(`\x1b]11;${getTerminalSurfaceReport(themeRef.current)}\x1b\\`, false);
+      return true;
+    });
     terminal.open(containerRef.current);
     fit.fit();
     terminal.writeln(`iShell · ${tab.title}`);
@@ -503,6 +513,7 @@ function TerminalPaneBase({
   }, [commandRequest?.id, visible]);
 
   useEffect(() => {
+    themeRef.current = theme;
     if (!terminalRef.current) return;
     terminalRef.current.options.theme = getTerminalTheme(theme);
   }, [theme]);
