@@ -12,7 +12,7 @@ iShell 是一个基于 Tauri + React + Rust 的轻量级 SSH 桌面工作台，�
 
 请从 GitHub Releases 下载最新版安装包：
 
-**[下载 iShell v1.2.0](https://github.com/Raymanhan/ishell/releases/tag/v1.2.0)**
+**[下载 iShell v1.2.1](https://github.com/Raymanhan/ishell/releases/tag/v1.2.1)**
 
 可用安装包：
 
@@ -190,8 +190,8 @@ npm run tauri -- build --target aarch64-apple-darwin
 推送 `v*` 标签后，GitHub Actions 会自动构建 Release。也可以在 GitHub Actions 页面手动运行 **Build installers** 工作流。
 
 ```bash
-git tag v1.2.0
-git push origin v1.2.0
+git tag v1.2.1
+git push origin v1.2.1
 ```
 
 发布工作流会构建 Windows、Linux、macOS Intel 和 macOS Apple Silicon 安装包，并把产物上传到 GitHub Release。
@@ -225,6 +225,7 @@ src-tauri/src/
 
 ## 最近更新
 
+- `v1.2.1` 全部主题提亮：文字恢复明亮、次要文字更易读、背景底色更通透、终端配色更鲜明；实时监控面板改用一套固定的鲜艳系统色，在所有主题下保持一致。
 - `v1.2.0` 重做主题系统：全部现有主题重新配色，新增四套浮动卡片主题（Otty 风格的云雾白、暮霭紫，以及 Claude 深色、Claude 浅色），每套主题配备完整 16 色终端配色，图表、进度条与语法高亮跟随主题，SFTP 详情列宽随面板自适应。
 - `v1.1.20` 新增远程日志独立实时滚动查看窗口，改进远程编辑器垂直拖拽滚动、SFTP 详情列宽调整，并优化柔白主题和新增服务器弹窗。
 - `v1.1.19` 扩展实时监控面板，新增 GPU/显存指标，并加入按 CPU 与内存排序的实时 Top 5 进程排行。

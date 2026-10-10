@@ -15,9 +15,9 @@
   --hairline-2: rgba(255, 255, 255, 0.16);
   --hairline-3: rgba(255, 255, 255, 0.26);
 
-  --text: #f1f2f4;
-  --dim: #c4c8cf;
-  --faint: #8d929b;
+  --text: #f7f8fa;
+  --dim: #dadee5;
+  --faint: #aab0ba;
 
   --accent-rgb: 180, 192, 216;
   --accent: #b4c0d8;
@@ -33,28 +33,35 @@
   --surface-soft-bg: rgba(255, 255, 255, 0.035);
   --surface-muted-bg: rgba(255, 255, 255, 0.026);
 
-  --ok: #93c9a4;
-  --warn: #dfc185;
-  --info: #9fb7dc;
-  --bad: #e2939a;
+  --ok: #5fd896;
+  --warn: #f6bd57;
+  --info: #72b2ff;
+  --bad: #ff7a86;
   --danger: #ecb0b4;
   --danger-strong: #f6d3d5;
   --danger-soft: rgba(226, 147, 154, 0.08);
   --danger-hover-bg: rgba(226, 147, 154, 0.15);
-  --violet: #bba8de;
+  --violet: #b995ff;
 
-  --chart-rx: var(--info);
-  --chart-tx: var(--warn);
-  --meter-shade: #1b1d21;
+  /* Live-monitoring colors (meters, network curves, their icons). Fixed and
+     vivid on purpose: themes never override them. */
+  --vivid-green: #30d158;
+  --vivid-green-deep: #248a3d;
+  --vivid-orange: #ff9f0a;
+  --vivid-orange-deep: #c16a00;
+  --vivid-blue: #0a84ff;
+  --vivid-cyan: #64d2ff;
+  --vivid-purple: #bf5af2;
+  --vivid-purple-deep: #8b5cf6;
 
-  --syntax-comment: #7d838d;
-  --syntax-keyword: #a4b6dc;
-  --syntax-string: #a3cba7;
-  --syntax-number: #dcb98c;
-  --syntax-literal: #c2a8dc;
-  --syntax-key: #93c1cc;
-  --syntax-type: #e0cb94;
-  --syntax-punct: #9aa1ac;
+  --syntax-comment: #8d939d;
+  --syntax-keyword: #8fb4ff;
+  --syntax-string: #8fd9a0;
+  --syntax-number: #f2b97a;
+  --syntax-literal: #c9a4ff;
+  --syntax-key: #7fd0e0;
+  --syntax-type: #f0d27f;
+  --syntax-punct: #a7aeb9;
 
   --r: 10px;
   --r-sm: 7px;
