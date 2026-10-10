@@ -2334,6 +2334,20 @@ button.detail-row:hover {
     radial-gradient(48px 36px at 82% 80%, rgba(214, 196, 160, 0.26), transparent 70%),
     linear-gradient(135deg, #fbf8f1, #e4ddcf);
 }
+.theme-preview.liquid-glass-cloud {
+  --preview-line: rgba(30, 32, 48, 0.1);
+  --preview-highlight: rgba(255, 255, 255, 0.9);
+  --preview-accent: linear-gradient(90deg, #f38ba8 0 34%, #fab387 34% 62%, #b4befe 62%);
+  --preview-card: #ffffff;
+  --preview-bg: linear-gradient(180deg, #f6f6f8, #ececf0);
+}
+.theme-preview.liquid-glass-dusk {
+  --preview-line: rgba(205, 214, 244, 0.12);
+  --preview-highlight: rgba(205, 214, 244, 0.08);
+  --preview-accent: linear-gradient(90deg, #f38ba8 0 34%, #fab387 34% 62%, #b4befe 62%);
+  --preview-card: #1e1e2e;
+  --preview-bg: linear-gradient(180deg, #2a2a3c, #181825);
+}
 .theme-option-text {
   display: flex;
   align-items: center;

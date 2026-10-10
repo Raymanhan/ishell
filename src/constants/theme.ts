@@ -7,7 +7,9 @@ export type AppTheme =
   | "liquid-glass"
   | "liquid-glass-lagoon"
   | "liquid-glass-onyx"
-  | "liquid-glass-pearl";
+  | "liquid-glass-pearl"
+  | "liquid-glass-cloud"
+  | "liquid-glass-dusk";
 export type ThemeIcon = "layers" | "droplets";
 
 export interface NativeColor {
@@ -35,6 +37,8 @@ export interface AppThemeDefinition {
 export const defaultAppTheme: AppTheme = "glass";
 
 export const appThemeOrder = [
+  "liquid-glass-cloud",
+  "liquid-glass-dusk",
   "glass",
   "liquid-glass",
   "liquid-glass-lagoon",
@@ -215,6 +219,76 @@ export const appThemeDefinitions = {
     },
     native: {
       backgroundColor: { red: 240, green: 236, blue: 228, alpha: 46 },
+      transparentChrome: true,
+      effect: "glass",
+    },
+  },
+  "liquid-glass-cloud": {
+    id: "liquid-glass-cloud",
+    label: "云雾白",
+    icon: "droplets",
+    previewClassName: "liquid-glass liquid-glass-cloud",
+    // Soft pastels in the spirit of Otty: gentle enough to feel airy on a
+    // white card, deep enough that normal colors stay readable as text.
+    terminal: {
+      background: "#00000000",
+      foreground: "#4c4f69",
+      cursor: "#7287fd",
+      cursorAccent: "#ffffff",
+      selectionBackground: "rgba(114, 135, 253, 0.2)",
+      black: "#5c5f77",
+      red: "#e06c8a",
+      green: "#4fa35a",
+      yellow: "#c98a1e",
+      blue: "#5f7fe8",
+      magenta: "#a46ee0",
+      cyan: "#2f9e9a",
+      white: "#a8abba",
+      brightBlack: "#8c8fa1",
+      brightRed: "#f38ba8",
+      brightGreen: "#7cc47f",
+      brightYellow: "#e5b45a",
+      brightBlue: "#89a2f5",
+      brightMagenta: "#c49cf0",
+      brightCyan: "#6cc5c0",
+      brightWhite: "#ccd0da",
+    },
+    native: {
+      backgroundColor: { red: 240, green: 240, blue: 243, alpha: 46 },
+      transparentChrome: true,
+      effect: "glass",
+    },
+  },
+  "liquid-glass-dusk": {
+    id: "liquid-glass-dusk",
+    label: "暮霭紫",
+    icon: "droplets",
+    previewClassName: "liquid-glass liquid-glass-dusk",
+    terminal: {
+      background: "#00000000",
+      foreground: "#cdd6f4",
+      cursor: "#f5e0dc",
+      cursorAccent: "#1e1e2e",
+      selectionBackground: "rgba(180, 190, 254, 0.22)",
+      black: "#45475a",
+      red: "#f38ba8",
+      green: "#a6e3a1",
+      yellow: "#f9e2af",
+      blue: "#89b4fa",
+      magenta: "#f5c2e7",
+      cyan: "#94e2d5",
+      white: "#bac2de",
+      brightBlack: "#585b70",
+      brightRed: "#f5a3b8",
+      brightGreen: "#b8e8b4",
+      brightYellow: "#fae8be",
+      brightBlue: "#a1c3fb",
+      brightMagenta: "#cba6f7",
+      brightCyan: "#a8e8de",
+      brightWhite: "#e6e9f7",
+    },
+    native: {
+      backgroundColor: { red: 24, green: 24, blue: 36, alpha: 40 },
       transparentChrome: true,
       effect: "glass",
     },
