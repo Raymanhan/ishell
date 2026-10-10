@@ -299,17 +299,17 @@ export const appThemeDefinitions = {
   },
   "liquid-glass-clay": {
     id: "liquid-glass-clay",
-    label: "陶土橙",
+    label: "Claude 深色",
     icon: "droplets",
     previewClassName: "liquid-glass liquid-glass-clay",
-    // Claude Code-style: warm ivory text on charcoal, a clay-orange cursor and
-    // the CLI's own accents (lavender, mint, amber, rose) softened slightly.
+    // Claude Code desktop, dark: ivory text on charcoal, the clay-orange cursor
+    // (the CLI's spinner color) and blue selection like the app's focus state.
     terminal: {
       background: "#00000000",
       foreground: "#ece9e0",
       cursor: "#d97757",
       cursorAccent: "#262624",
-      selectionBackground: "rgba(217, 119, 87, 0.28)",
+      selectionBackground: "rgba(92, 156, 245, 0.26)",
       black: "#3a3936",
       red: "#e9787e",
       green: "#8fc48a",
@@ -335,18 +335,19 @@ export const appThemeDefinitions = {
   },
   "liquid-glass-clay-light": {
     id: "liquid-glass-clay-light",
-    label: "陶土白",
+    label: "Claude 浅色",
     icon: "droplets",
     previewClassName: "liquid-glass liquid-glass-clay-light",
-    // Claude Code light: warm ink on ivory, clay cursor, and the CLI's
-    // light-mode status hues. "white" maps to a warm gray so it stays visible.
+    // Claude Code desktop, light: near-black on white, the clay-orange cursor
+    // and the CLI's light-mode status hues. "white" maps to a gray so it stays
+    // visible.
     terminal: {
       background: "#00000000",
-      foreground: "#3d3929",
-      cursor: "#c96442",
-      cursorAccent: "#faf9f5",
-      selectionBackground: "rgba(217, 119, 87, 0.2)",
-      black: "#3d3929",
+      foreground: "#1f1e1d",
+      cursor: "#d97757",
+      cursorAccent: "#ffffff",
+      selectionBackground: "rgba(46, 125, 230, 0.18)",
+      black: "#1f1e1d",
       red: "#b8434f",
       green: "#3f7f45",
       yellow: "#9a6d1c",
@@ -364,7 +365,7 @@ export const appThemeDefinitions = {
       brightWhite: "#a3a198",
     },
     native: {
-      backgroundColor: { red: 240, green: 238, blue: 230, alpha: 46 },
+      backgroundColor: { red: 246, green: 245, blue: 242, alpha: 46 },
       transparentChrome: true,
       effect: "glass",
     },

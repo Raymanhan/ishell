@@ -2349,18 +2349,18 @@ button.detail-row:hover {
   --preview-bg: linear-gradient(180deg, #2a2a3c, #181825);
 }
 .theme-preview.liquid-glass-clay {
-  --preview-line: rgba(245, 244, 239, 0.12);
-  --preview-highlight: rgba(245, 244, 239, 0.08);
-  --preview-accent: #d97757;
-  --preview-card: #30302e;
-  --preview-bg: linear-gradient(180deg, #2b2a28, #1c1b1a);
+  --preview-line: rgba(250, 249, 245, 0.12);
+  --preview-highlight: rgba(250, 249, 245, 0.06);
+  --preview-accent: linear-gradient(90deg, #d97757 0 22%, #5c9cf5 22%);
+  --preview-card: #262624;
+  --preview-bg: linear-gradient(180deg, #232221, #1c1b1a);
 }
 .theme-preview.liquid-glass-clay-light {
-  --preview-line: rgba(61, 57, 41, 0.12);
-  --preview-highlight: rgba(255, 255, 255, 0.85);
-  --preview-accent: #d97757;
-  --preview-card: #faf9f5;
-  --preview-bg: linear-gradient(180deg, #f3f1ea, #e6e2d6);
+  --preview-line: rgba(31, 30, 29, 0.12);
+  --preview-highlight: rgba(255, 255, 255, 0.9);
+  --preview-accent: linear-gradient(90deg, #d97757 0 22%, #2e7de6 22%);
+  --preview-card: #ffffff;
+  --preview-bg: linear-gradient(180deg, #f7f6f3, #eeede9);
 }
 .theme-option-text {
   display: flex;
