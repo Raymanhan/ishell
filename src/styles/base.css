@@ -43,9 +43,16 @@
   --danger-hover-bg: rgba(226, 147, 154, 0.15);
   --violet: #b995ff;
 
-  --chart-rx: var(--info);
-  --chart-tx: var(--warn);
-  --meter-shade: #2a2d33;
+  /* Live-monitoring colors (meters, network curves, their icons). Fixed and
+     vivid on purpose: themes never override them. */
+  --vivid-green: #30d158;
+  --vivid-green-deep: #248a3d;
+  --vivid-orange: #ff9f0a;
+  --vivid-orange-deep: #c16a00;
+  --vivid-blue: #0a84ff;
+  --vivid-cyan: #64d2ff;
+  --vivid-purple: #bf5af2;
+  --vivid-purple-deep: #8b5cf6;
 
   --syntax-comment: #8d939d;
   --syntax-keyword: #8fb4ff;

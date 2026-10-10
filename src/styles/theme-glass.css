@@ -359,9 +359,6 @@
   --danger-soft: rgba(229, 147, 154, 0.09);
   --danger-hover-bg: rgba(229, 147, 154, 0.16);
   --violet: #bd98ff;
-  --chart-rx: #7cb0ff;
-  --chart-tx: #ecc882;
-  --meter-shade: #26304a;
   --syntax-comment: #7c849a;
   --syntax-keyword: #a3b8ea;
   --syntax-string: #a6cfae;
@@ -428,9 +425,6 @@
   --danger-soft: rgba(227, 150, 154, 0.09);
   --danger-hover-bg: rgba(227, 150, 154, 0.16);
   --violet: #c99df2;
-  --chart-rx: #6fe0bf;
-  --chart-tx: #f2cd72;
-  --meter-shade: #1c3a34;
   --syntax-comment: #7a9088;
   --syntax-keyword: #99c1dc;
   --syntax-string: #acd7a8;
@@ -500,9 +494,6 @@
   --danger-soft: rgba(219, 144, 137, 0.09);
   --danger-hover-bg: rgba(219, 144, 137, 0.16);
   --violet: #c9a6f2;
-  --chart-rx: #dfe7ef;
-  --chart-tx: #f2c36c;
-  --meter-shade: #2a2a2b;
   --syntax-comment: #85817a;
   --syntax-keyword: #b3c2d4;
   --syntax-string: #b4cca6;
@@ -980,9 +971,6 @@
   --danger-soft: rgba(243, 139, 168, 0.09);
   --danger-hover-bg: rgba(243, 139, 168, 0.15);
   --violet: #cba6f7;
-  --chart-rx: #89b4fa;
-  --chart-tx: #fab387;
-  --meter-shade: #2a2a3e;
   --syntax-comment: #7f849c;
   --syntax-keyword: #cba6f7;
   --syntax-string: #a6e3a1;
@@ -1055,9 +1043,6 @@
   --danger-soft: rgba(232, 104, 106, 0.09);
   --danger-hover-bg: rgba(232, 104, 106, 0.15);
   --violet: #b39dff;
-  --chart-rx: #6aa8ff;
-  --chart-tx: #d97757;
-  --meter-shade: #2f2f2d;
   --syntax-comment: #8a8780;
   --syntax-keyword: #e5826a;
   --syntax-string: #8cc78a;
@@ -1144,9 +1129,6 @@
   --danger-soft: rgba(162, 67, 76, 0.08);
   --danger-hover-bg: rgba(162, 67, 76, 0.13);
   --violet: #7a5bb8;
-  --chart-rx: #356fb0;
-  --chart-tx: #c98a2c;
-  --meter-shade: #f3efe6;
   --syntax-comment: #8a8d92;
   --syntax-keyword: #3a5f9e;
   --syntax-string: #4a7d52;
@@ -1239,9 +1221,6 @@
   --danger-soft: rgba(214, 90, 117, 0.08);
   --danger-hover-bg: rgba(214, 90, 117, 0.12);
   --violet: #8a5ae8;
-  --chart-rx: #6f86f7;
-  --chart-tx: #f39a68;
-  --meter-shade: #ffffff;
   --syntax-comment: #9ca0b0;
   --syntax-keyword: #8839ef;
   --syntax-string: #40a02b;
@@ -1327,9 +1306,6 @@
   --danger-soft: rgba(200, 66, 63, 0.07);
   --danger-hover-bg: rgba(200, 66, 63, 0.11);
   --violet: #7b5bd6;
-  --chart-rx: #2e7de6;
-  --chart-tx: #d97757;
-  --meter-shade: #ffffff;
   --syntax-comment: #8c8b86;
   --syntax-keyword: #b4402d;
   --syntax-string: #2e7d4f;
@@ -1585,9 +1561,6 @@
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .metric-label,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .process-card-title {
   color: var(--dim);
-}
-:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .process-card-title svg {
-  color: var(--accent);
 }
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .process-switch {
   border-color: rgba(var(--ink-rgb), 0.13);

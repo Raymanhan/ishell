@@ -1000,10 +1000,10 @@ button.detail-row:hover {
   white-space: nowrap;
 }
 .speed-pill:first-child svg {
-  color: var(--chart-rx);
+  color: var(--vivid-cyan);
 }
 .speed-pill:last-child svg {
-  color: var(--chart-tx);
+  color: var(--vivid-orange);
 }
 .network-wave {
   display: block;
@@ -1028,10 +1028,10 @@ button.detail-row:hover {
   opacity: 0.12;
 }
 .wave-area-rx {
-  fill: var(--chart-rx);
+  fill: var(--vivid-cyan);
 }
 .wave-area-tx {
-  fill: var(--chart-tx);
+  fill: var(--vivid-orange);
   opacity: 0.08;
 }
 .wave-rx {
@@ -1042,16 +1042,16 @@ button.detail-row:hover {
   opacity: 0.72;
 }
 .net-stop-rx-from {
-  stop-color: color-mix(in srgb, var(--chart-rx) 62%, var(--violet));
+  stop-color: var(--vivid-blue);
 }
 .net-stop-rx-to {
-  stop-color: var(--chart-rx);
+  stop-color: var(--vivid-cyan);
 }
 .net-stop-tx-from {
-  stop-color: color-mix(in srgb, var(--chart-tx) 62%, var(--bad));
+  stop-color: var(--vivid-purple);
 }
 .net-stop-tx-to {
-  stop-color: var(--chart-tx);
+  stop-color: var(--vivid-orange);
 }
 .metric-list {
   display: grid;
@@ -1111,16 +1111,16 @@ button.detail-row:hover {
   transition: width 420ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .tone-ok .metric-fill {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--ok) 78%, var(--meter-shade)), var(--ok));
+  background: linear-gradient(90deg, var(--vivid-green-deep), var(--vivid-green));
 }
 .tone-warn .metric-fill {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--warn) 78%, var(--meter-shade)), var(--warn));
+  background: linear-gradient(90deg, var(--vivid-orange-deep), var(--vivid-orange));
 }
 .tone-violet .metric-fill {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--violet) 78%, var(--meter-shade)), var(--violet));
+  background: linear-gradient(90deg, var(--vivid-purple-deep), var(--vivid-purple));
 }
 .tone-info .metric-fill {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--info) 78%, var(--meter-shade)), var(--info));
+  background: linear-gradient(90deg, var(--vivid-blue), var(--vivid-cyan));
 }
 .process-card {
   overflow: hidden;
@@ -1147,7 +1147,7 @@ button.detail-row:hover {
   white-space: nowrap;
 }
 .process-card-title svg {
-  color: var(--chart-rx);
+  color: var(--vivid-cyan);
 }
 .process-switch {
   display: inline-grid;
@@ -1235,11 +1235,11 @@ button.detail-row:hover {
   height: 100%;
   min-width: 3px;
   border-radius: inherit;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--ok) 78%, var(--meter-shade)), var(--ok));
+  background: linear-gradient(90deg, var(--vivid-green-deep), var(--vivid-green));
   transition: width 420ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .process-card-memory .process-fill {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--warn) 78%, var(--meter-shade)), var(--warn));
+  background: linear-gradient(90deg, var(--vivid-orange-deep), var(--vivid-orange));
 }
 .process-value {
   color: var(--text);
