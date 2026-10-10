@@ -74,9 +74,9 @@
 .server-context-menu button:focus-visible,
 .tab-context-menu button:focus-visible,
 .ctx-menu button:focus-visible {
-  outline: 1px solid rgba(199, 213, 255, 0.62);
+  outline: 1px solid rgba(var(--accent-rgb), 0.62);
   outline-offset: -1px;
-  background: rgba(199, 213, 255, 0.12);
+  background: rgba(var(--accent-rgb), 0.12);
   color: var(--text);
 }
 .server-context-menu button:disabled,
@@ -355,13 +355,13 @@
   color: var(--text);
 }
 .connection-folder-row.on {
-  border-color: rgba(91, 157, 255, 0.2);
+  border-color: rgba(var(--accent-rgb), 0.2);
   background: var(--focus-bg);
   color: var(--text);
 }
 .connection-folder-row.creating-folder {
   margin-bottom: 4px;
-  border-color: rgba(91, 157, 255, 0.18);
+  border-color: rgba(var(--accent-rgb), 0.18);
   background: var(--focus-bg);
 }
 .connection-folder-row.renaming-folder {
@@ -428,7 +428,7 @@
   background: var(--surface-soft-bg);
 }
 .connection-node.on {
-  border-color: rgba(91, 157, 255, 0.22);
+  border-color: rgba(var(--accent-rgb), 0.22);
   background: var(--focus-bg);
 }
 .connection-node-main {
@@ -478,7 +478,7 @@
   min-width: 0;
   height: 20px;
   padding: 0 4px;
-  border: 1px solid rgba(91, 157, 255, 0.34);
+  border: 1px solid rgba(var(--accent-rgb), 0.34);
   border-radius: 5px;
   outline: 0;
   background: var(--input-bg);
@@ -488,7 +488,7 @@
 }
 .connection-rename-input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(91, 157, 255, 0.16);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.16);
 }
 .connection-meta small {
   flex: 1 1 auto;
@@ -870,7 +870,7 @@
 }
 .history-row:hover,
 .history-row:focus-visible {
-  border-color: rgba(91, 157, 255, 0.2);
+  border-color: rgba(var(--accent-rgb), 0.2);
   background: var(--focus-bg);
   color: var(--text);
   outline: 0;
@@ -1085,8 +1085,8 @@
   pointer-events: auto;
 }
 .terminal-tab:hover {
-  background: rgba(91, 157, 255, 0.18);
-  color: #eef6ff;
+  background: rgba(var(--accent-rgb), 0.12);
+  color: var(--text);
 }
 .terminal-tab.active {
   background: var(--control-active-bg);
@@ -1094,7 +1094,7 @@
   box-shadow: none;
 }
 .terminal-tab.active:hover {
-  background: rgba(91, 157, 255, 0.22);
+  background: rgba(var(--accent-rgb), 0.16);
 }
 @media (prefers-reduced-motion: reduce) {
   .terminal-tab,
@@ -1361,7 +1361,7 @@
   width: min(420px, calc(100% - 24px));
   max-height: 248px;
   overflow: hidden;
-  border: 1px solid rgba(91, 157, 255, 0.2);
+  border: 1px solid rgba(var(--accent-rgb), 0.2);
   border-radius: 8px;
   background: rgba(14, 17, 22, 0.96);
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.42);
@@ -1415,8 +1415,8 @@
 }
 .terminal-history-suggest-row:hover,
 .terminal-history-suggest-row.selected {
-  border-color: rgba(91, 157, 255, 0.24);
-  background: rgba(91, 157, 255, 0.12);
+  border-color: rgba(var(--accent-rgb), 0.24);
+  background: rgba(var(--accent-rgb), 0.12);
 }
 .terminal-history-suggest-row code {
   min-width: 0;

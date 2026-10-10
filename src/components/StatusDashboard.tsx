@@ -307,12 +307,12 @@ function NetworkWave({ history }: { history: ShellTab["networkHistory"] }) {
     <svg className="network-wave" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
       <defs>
         <linearGradient id="net-rx" x1="0" x2="1" y1="0" y2="0">
-          <stop offset="0%" stopColor="#0a84ff" />
-          <stop offset="100%" stopColor="#64d2ff" />
+          <stop offset="0%" className="net-stop-rx-from" />
+          <stop offset="100%" className="net-stop-rx-to" />
         </linearGradient>
         <linearGradient id="net-tx" x1="0" x2="1" y1="0" y2="0">
-          <stop offset="0%" stopColor="#bf5af2" />
-          <stop offset="100%" stopColor="#ff9f0a" />
+          <stop offset="0%" className="net-stop-tx-from" />
+          <stop offset="100%" className="net-stop-tx-to" />
         </linearGradient>
       </defs>
       <path className="wave-grid" d={`M0 ${height - 12} H${width} M0 ${height / 2} H${width}`} />
