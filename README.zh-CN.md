@@ -206,6 +206,12 @@ git push origin v1.2.2
 - `TAURI_SIGNING_PRIVATE_KEY`：私钥文件的内容
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`：私钥密码
 
+生成密钥对（在项目目录下运行，会提示设置密码）：
+
+```bash
+npm run tauri signer generate -- -w ~/.tauri/ishell.key
+```
+
 配置好后，发布工作流会为更新包签名（macOS 的 `.app.tar.gz`、Windows 的 NSIS 安装包、Linux 的 AppImage），并把 `latest.json` 和安装包一起发布。未配置时 Release 仍会正常构建，只是不包含更新包。请妥善保管私钥：换用其他密钥签名的版本会被已安装的应用拒绝。
 
 ## 项目结构

@@ -254,6 +254,12 @@ kept as repository secrets:
 - `TAURI_SIGNING_PRIVATE_KEY`: contents of the private key file
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: its password
 
+To generate the key pair, run this in the project directory (it asks for a password):
+
+```bash
+npm run tauri signer generate -- -w ~/.tauri/ishell.key
+```
+
 With these set, the release workflow signs the update packages (`.app.tar.gz`
 for macOS, the NSIS installer for Windows, the AppImage for Linux) and publishes
 `latest.json` alongside the installers. Without them the release still builds,
