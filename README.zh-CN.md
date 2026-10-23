@@ -12,7 +12,7 @@ iShell 是一个基于 Tauri + React + Rust 的轻量级 SSH 桌面工作台，�
 
 请从 GitHub Releases 下载最新版安装包：
 
-**[下载 iShell v1.2.2](https://github.com/Raymanhan/ishell/releases/tag/v1.2.2)**
+**[下载 iShell v1.3.0](https://github.com/Raymanhan/ishell/releases/tag/v1.3.0)**
 
 可用安装包：
 
@@ -193,8 +193,8 @@ npm run tauri -- build --target aarch64-apple-darwin
 推送 `v*` 标签后，GitHub Actions 会自动构建 Release。也可以在 GitHub Actions 页面手动运行 **Build installers** 工作流。
 
 ```bash
-git tag v1.2.2
-git push origin v1.2.2
+git tag v1.3.0
+git push origin v1.3.0
 ```
 
 发布工作流会构建 Windows、Linux、macOS Intel 和 macOS Apple Silicon 安装包，并把产物上传到 GitHub Release。
@@ -243,6 +243,7 @@ src-tauri/src/
 
 ## 最近更新
 
+- `v1.3.0` 新增应用内自动更新：启动后及每 6 小时在后台检查新版本，发现更新时在右下角提示，可一键下载、安装并重启；设置中新增“关于与更新”，可手动检查或关闭自动检查。更新包经签名校验后才会安装。
 - `v1.2.2` 终端会向查询背景色的程序如实报告当前主题的背景，Codex、Claude Code 等 AI 命令行能自动选用匹配的浅色或深色样式，浅色主题下输入文字不再看不见。
 - `v1.2.1` 全部主题提亮：文字恢复明亮、次要文字更易读、背景底色更通透、终端配色更鲜明；实时监控面板改用一套固定的鲜艳系统色，在所有主题下保持一致。
 - `v1.2.0` 重做主题系统：全部现有主题重新配色，新增四套浮动卡片主题（Otty 风格的云雾白、暮霭紫，以及 Claude 深色、Claude 浅色），每套主题配备完整 16 色终端配色，图表、进度条与语法高亮跟随主题，SFTP 详情列宽随面板自适应。
