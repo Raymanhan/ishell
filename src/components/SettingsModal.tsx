@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Droplets, Layers, X } from "lucide-react";
+import { Download, Droplets, Layers, RefreshCw, X } from "lucide-react";
 import {
   clampTailViewerLines,
   MAX_TAIL_VIEWER_LINES,
@@ -11,6 +11,7 @@ import {
   type AppTheme,
   type ThemeIcon,
 } from "../constants/theme";
+import type { UpdaterState } from "../features/updater/useUpdater";
 
 const themeIcons: Record<ThemeIcon, typeof Layers> = {
   droplets: Droplets,
@@ -22,20 +23,30 @@ export function SettingsModal({
   terminalFontSize,
   tailViewerDefaultLines,
   autoHideTopBar,
+  updater,
+  autoCheckUpdates,
   onThemeChange,
   onTerminalFontSizeChange,
   onTailViewerDefaultLinesChange,
   onAutoHideTopBarChange,
+  onAutoCheckUpdatesChange,
+  onCheckUpdates,
+  onInstallUpdate,
   onClose,
 }: {
   theme: AppTheme;
   terminalFontSize: number;
   tailViewerDefaultLines: number;
   autoHideTopBar: boolean;
+  updater: UpdaterState;
+  autoCheckUpdates: boolean;
   onThemeChange: (theme: AppTheme) => void;
   onTerminalFontSizeChange: (size: number) => void;
   onTailViewerDefaultLinesChange: (lines: number) => void;
   onAutoHideTopBarChange: (autoHide: boolean) => void;
+  onAutoCheckUpdatesChange: (enabled: boolean) => void;
+  onCheckUpdates: () => void;
+  onInstallUpdate: () => void;
   onClose: () => void;
 }) {
   const [tailLinesDraft, setTailLinesDraft] = useState(String(tailViewerDefaultLines));
@@ -169,8 +180,87 @@ export function SettingsModal({
               </span>
             </label>
           </div>
+
+          <div className="settings-section">
+            <div className="settings-section-copy">
+              <h3>关于与更新</h3>
+              <p>新版本发布后可以在应用内直接下载安装，安装完成会自动重启。</p>
+            </div>
+
+            <div className="settings-update">
+              <div className="settings-update-copy">
+                <span>
+                  当前版本 {updater.currentVersion ? `v${updater.currentVersion}` : "—"}
+                </span>
+                <UpdateStatusLine updater={updater} />
+              </div>
+              {updater.status === "available" && updater.update ? (
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => {
+                    onInstallUpdate();
+                    closeSettings();
+                  }}
+                >
+                  <Download size={14} />
+                  立即更新
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  onClick={onCheckUpdates}
+                  disabled={updater.status === "checking" || updater.status === "downloading" || updater.status === "installing"}
+                >
+                  <RefreshCw size={14} className={updater.status === "checking" ? "spin" : undefined} />
+                  检查更新
+                </button>
+              )}
+            </div>
+
+            <label className="settings-toggle">
+              <span>
+                自动检查更新
+                <small>启动后及每 6 小时检查一次</small>
+              </span>
+              <input
+                type="checkbox"
+                checked={autoCheckUpdates}
+                onChange={(event) => onAutoCheckUpdatesChange(event.target.checked)}
+              />
+            </label>
+          </div>
         </div>
       </section>
     </div>
   );
+}
+
+function UpdateStatusLine({ updater }: { updater: UpdaterState }) {
+  let text = "";
+  let tone = "";
+  switch (updater.status) {
+    case "checking":
+      text = "正在检查更新…";
+      break;
+    case "up-to-date":
+      text = "已是最新版本";
+      tone = "ok";
+      break;
+    case "available":
+      text = updater.update ? `发现新版本 v${updater.update.version}` : "";
+      tone = "accent";
+      break;
+    case "downloading":
+    case "installing":
+      text = "正在更新…";
+      break;
+    case "error":
+      text = updater.error ?? "";
+      tone = "bad";
+      break;
+  }
+  if (!text) return null;
+  return <small className={`settings-update-status ${tone}`}>{text}</small>;
 }

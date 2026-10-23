@@ -22,6 +22,7 @@ import { ServerEditor, type ServerForm } from "./components/ServerEditor";
 import { SettingsModal } from "./components/SettingsModal";
 import { StatusDashboard } from "./components/StatusDashboard";
 import { TabBar } from "./components/TabBar";
+import { UpdateNotice } from "./components/UpdateNotice";
 import { UploadQueue } from "./components/UploadQueue";
 import {
   readSavedTailViewerLines,
@@ -34,6 +35,7 @@ import {
   type AppTheme,
 } from "./constants/theme";
 import { createTabId, type ShellTab } from "./features/shell/types";
+import { AUTO_CHECK_UPDATES_KEY, readAutoCheckUpdates, useUpdater } from "./features/updater/useUpdater";
 import { demoFiles, demoServers, demoStatus } from "./mocks/demoData";
 import type {
   AuthType,
@@ -209,6 +211,8 @@ export default function App() {
   const [tailViewerDefaultLines, setTailViewerDefaultLines] = useState(
     () => readSavedTailViewerLines(window.localStorage.getItem(TAIL_VIEWER_DEFAULT_LINES_KEY)),
   );
+  const [autoCheckUpdates, setAutoCheckUpdates] = useState(readAutoCheckUpdates);
+  const updater = useUpdater(autoCheckUpdates);
   const [autoHideTopBar, setAutoHideTopBar] = useState(
     () => window.localStorage.getItem(AUTO_HIDE_TOP_BAR_KEY) !== "false",
   );
@@ -550,6 +554,10 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem(AUTO_HIDE_TOP_BAR_KEY, String(autoHideTopBar));
   }, [autoHideTopBar]);
+
+  useEffect(() => {
+    window.localStorage.setItem(AUTO_CHECK_UPDATES_KEY, String(autoCheckUpdates));
+  }, [autoCheckUpdates]);
 
   useEffect(() => {
     window.localStorage.setItem(CONNECTION_FOLDERS_KEY, JSON.stringify(connectionFolders));
@@ -2662,13 +2670,25 @@ export default function App() {
           terminalFontSize={terminalFontSize}
           tailViewerDefaultLines={tailViewerDefaultLines}
           autoHideTopBar={autoHideTopBar}
+          updater={updater.state}
+          autoCheckUpdates={autoCheckUpdates}
           onThemeChange={setTheme}
           onTerminalFontSizeChange={setTerminalFontSize}
           onTailViewerDefaultLinesChange={setTailViewerDefaultLines}
           onAutoHideTopBarChange={setAutoHideTopBar}
+          onAutoCheckUpdatesChange={setAutoCheckUpdates}
+          onCheckUpdates={() => void updater.checkForUpdate({ silent: false })}
+          onInstallUpdate={() => void updater.installUpdate()}
           onClose={() => setSettingsOpen(false)}
         />
       )}
+
+      <UpdateNotice
+        state={updater.state}
+        openSessions={tabs.length}
+        onInstall={() => void updater.installUpdate()}
+        onDismiss={updater.dismiss}
+      />
 
       {folderUploadReplaceConfirm && (
         <div
