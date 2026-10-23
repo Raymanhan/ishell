@@ -126,6 +126,9 @@ iShell 是一个基于 Tauri + React + Rust 的轻量级 SSH 桌面工作台，�
 - 顶部栏自动隐藏开关
 - 终端字号
 - 新建实时滚动查看窗口的默认加载行数
+- 关于与更新：查看当前版本、手动检查更新、自动检查更新（启动后及每 6 小时）
+
+有新版本时，iShell 会弹出提示，可直接下载、校验并安装，完成后自动重启。Linux 上应用内更新适用于 AppImage；`.deb` 和 `.rpm` 安装请从 Release 页面下载新安装包。
 
 所有主题都会在可用平台上启用 Tauri 原生窗口效果，并配合透明 xterm 背景，让终端和面板呈现统一的桌面玻璃质感。云雾白、暮霭紫和两套 Claude 主题会把终端、首页和停靠面板呈现为浮在毛玻璃底色上的圆角卡片；每套主题都带有独立的 16 色终端配色。
 
@@ -195,6 +198,15 @@ git push origin v1.2.2
 ```
 
 发布工作流会构建 Windows、Linux、macOS Intel 和 macOS Apple Silicon 安装包，并把产物上传到 GitHub Release。
+
+### 应用内更新
+
+应用内更新会从最新的 GitHub Release 下载 `latest.json`，并且只安装用项目更新密钥签名过的更新包。公钥写在 `src-tauri/tauri.conf.json` 的 `plugins.updater.pubkey`；私钥保存在仓库的 Actions Secrets：
+
+- `TAURI_SIGNING_PRIVATE_KEY`：私钥文件的内容
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`：私钥密码
+
+配置好后，发布工作流会为更新包签名（macOS 的 `.app.tar.gz`、Windows 的 NSIS 安装包、Linux 的 AppImage），并把 `latest.json` 和安装包一起发布。未配置时 Release 仍会正常构建，只是不包含更新包。请妥善保管私钥：换用其他密钥签名的版本会被已安装的应用拒绝。
 
 ## 项目结构
 

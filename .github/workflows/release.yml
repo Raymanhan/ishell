@@ -84,15 +84,35 @@ jobs:
         if: runner.os == 'Linux'
         run: cargo test --manifest-path src-tauri/Cargo.toml --features force-russh
 
+      # In-app updates need every update package signed with the key whose public
+      # half is in tauri.conf.json. Until the key is added as a repository secret
+      # the release still builds, just without update packages.
+      - name: Configure updater signing
+        id: updater
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [[ -z "${TAURI_SIGNING_PRIVATE_KEY}" ]]; then
+            echo "::warning::TAURI_SIGNING_PRIVATE_KEY is not set; building without in-app update packages."
+            echo "build-args=--config src-tauri/tauri.no-updater.conf.json" >> "${GITHUB_OUTPUT}"
+          fi
+
       - name: Build installer
         if: runner.os != 'macOS'
-        run: npm run tauri -- build --target ${{ matrix.target }}
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run tauri -- build --target ${{ matrix.target }} ${{ steps.updater.outputs.build-args }}
 
       - name: Build macOS app bundle
         if: runner.os == 'macOS'
-        run: npm run tauri -- build --target ${{ matrix.target }} --bundles app
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run tauri -- build --target ${{ matrix.target }} --bundles app ${{ steps.updater.outputs.build-args }}
 
-      - name: Create macOS DMG
+      - name: Create macOS DMG and name the update package
         if: runner.os == 'macOS'
         shell: bash
         run: |
@@ -111,6 +131,14 @@ jobs:
           mkdir -p "${DMG_DIR}"
           hdiutil create -volname "iShell" -srcfolder "${APP_PATH}" -ov -format UDZO "${DMG_PATH}"
 
+          # Both macOS jobs emit iShell.app.tar.gz; give each architecture its own name.
+          UPDATE_DIR="src-tauri/target/${{ matrix.target }}/release/bundle/macos"
+          if [[ -f "${UPDATE_DIR}/iShell.app.tar.gz" ]]; then
+            UPDATE_NAME="iShell_${VERSION}_${ARCH_SUFFIX}.app.tar.gz"
+            mv "${UPDATE_DIR}/iShell.app.tar.gz" "${UPDATE_DIR}/${UPDATE_NAME}"
+            mv "${UPDATE_DIR}/iShell.app.tar.gz.sig" "${UPDATE_DIR}/${UPDATE_NAME}.sig"
+          fi
+
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
@@ -122,6 +150,8 @@ jobs:
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.exe
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.msi
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.rpm
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.app.tar.gz
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.sig
           if-no-files-found: error
 
   release:
@@ -130,10 +160,23 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download installer artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+
+      - name: Build updater manifest
+        if: hashFiles('artifacts/**/*.sig') != ''
+        run: >-
+          node scripts/build-updater-manifest.mjs
+          --dir artifacts
+          --tag "${GITHUB_REF_NAME}"
+          --repo "${GITHUB_REPOSITORY}"
+          --changelog README.zh-CN.md
+          --out artifacts/latest.json
 
       - name: Create release
         uses: softprops/action-gh-release@v2

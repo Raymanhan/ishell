@@ -160,6 +160,13 @@ Settings currently include:
 - Auto-hide top bar toggle
 - Terminal font size
 - Default line count for new live tail viewer windows
+- About and updates: current version, a manual update check, and automatic
+  checks (on launch and every 6 hours)
+
+When a newer release is available, iShell offers it in a small prompt; it
+downloads, verifies and installs the update, then restarts. On Linux, in-app
+updates apply to the AppImage; `.deb` and `.rpm` installs update through a new
+package from the release page.
 
 Every theme uses Tauri native window effects where available, with a
 transparent xterm background so the terminal and panels share one desktop
@@ -236,6 +243,22 @@ git push origin v1.2.2
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
 packages and attaches the installer files to the GitHub release.
+
+### In-app updates
+
+The in-app updater downloads `latest.json` from the latest GitHub release and
+only installs packages signed with the project's updater key. The public key is
+in `src-tauri/tauri.conf.json` (`plugins.updater.pubkey`); the private key is
+kept as repository secrets:
+
+- `TAURI_SIGNING_PRIVATE_KEY`: contents of the private key file
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: its password
+
+With these set, the release workflow signs the update packages (`.app.tar.gz`
+for macOS, the NSIS installer for Windows, the AppImage for Linux) and publishes
+`latest.json` alongside the installers. Without them the release still builds,
+just without update packages. Keep the private key safe: releases signed with a
+different key are rejected by installed copies.
 
 ## Project Structure
 
