@@ -21,6 +21,7 @@ import { ServerDetail } from "./components/ServerDetail";
 import { ServerEditor } from "./components/ServerEditor";
 import { useConnections } from "./features/connections/useConnections";
 import { SettingsModal } from "./components/SettingsModal";
+import { SnippetsPanel } from "./components/SnippetsPanel";
 import { StatusDashboard } from "./components/StatusDashboard";
 import { TabBar } from "./components/TabBar";
 import { UpdateNotice } from "./components/UpdateNotice";
@@ -75,6 +76,7 @@ import {
   type TabDropPoint,
 } from "./features/shell/windowHandoff";
 import { applyNativeWindowTheme } from "./features/theme/nativeWindowTheme";
+import { snippetInput, useSnippets } from "./features/snippets/useSnippets";
 import { AUTO_CHECK_UPDATES_KEY, readAutoCheckUpdates, useUpdater } from "./features/updater/useUpdater";
 import { demoStatus } from "./mocks/demoData";
 import { loadDemoFiles } from "./mocks/demoSftp";
@@ -85,6 +87,7 @@ import type {
   ServerRecord,
   ServerStatus,
   SftpEntry,
+  Snippet,
   TailViewerConfig,
 } from "./types";
 import { startPointerDrag } from "./utils/pointerDrag";
@@ -116,6 +119,7 @@ interface DeleteConfirmState {
 }
 
 type UploadPickerKind = "files" | "folder";
+type SidePanel = "status" | "history" | "snippets";
 
 export default function App() {
   const tabGhost = useMemo(() => readTabGhostFromUrl(), []);
@@ -147,8 +151,8 @@ export default function App() {
   const [filesOpen, setFilesOpen] = useState(false);
   const [filesRatio, setFilesRatio] = useState(FILES_PANEL_RATIO);
   const [filesDragging, setFilesDragging] = useState(false);
-  const [statusOpen, setStatusOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
+  const [sidePanel, setSidePanel] = useState<SidePanel | null>(null);
+  const statusOpen = sidePanel === "status";
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [statusPanelWidth, setStatusPanelWidth] = useState(STATUS_PANEL_WIDTH);
   const [pasteRequest, setPasteRequest] = useState<{ tabId: string; id: number; command: string } | null>(null);
@@ -357,10 +361,7 @@ export default function App() {
   }, [tabs]);
 
   useEffect(() => {
-    if (!activeTab) {
-      setStatusOpen(false);
-      setHistoryOpen(false);
-    }
+    if (!activeTab) setSidePanel(null);
   }, [activeTab]);
 
   // Native OS file/folder drop onto the docked file panel → enqueue uploads.
@@ -471,20 +472,23 @@ export default function App() {
     });
   }
 
-  function toggleStatusPanel() {
-    setStatusOpen((open) => {
-      const next = !open;
-      if (next) setHistoryOpen(false);
-      return next;
-    });
+  function toggleSidePanel(panel: SidePanel) {
+    setSidePanel((current) => (current === panel ? null : panel));
   }
 
-  function toggleHistoryPanel() {
-    setHistoryOpen((open) => {
-      const next = !open;
-      if (next) setStatusOpen(false);
-      return next;
-    });
+  function sendSnippet(snippet: Snippet) {
+    if (!activeTab) return;
+    setPasteRequest({ tabId: activeTab.id, id: Date.now() + Math.random(), command: snippetInput(snippet) });
+    showNotice(snippet.run ? `已执行片段：${snippet.name}` : `已发送片段：${snippet.name}`);
+  }
+
+  async function deleteSnippet(snippet: Snippet) {
+    if (!window.confirm(`删除片段「${snippet.name}」？`)) return;
+    try {
+      await snippets.remove(snippet.id);
+    } catch (error) {
+      showNotice(String(error));
+    }
   }
 
   function handleCommandSubmitted(commandText: string) {
@@ -592,6 +596,7 @@ export default function App() {
     onUploaded: (item) => refreshVisibleFiles(item.tabId, item.serverId, item.remoteDir),
   });
   const downloadQueue = useDownloadQueue({ showNotice, beginBusy: beginSftpBusy, endBusy: endSftpBusy });
+  const snippets = useSnippets(showNotice);
   const connections = useConnections({
     showNotice,
     onServerRenamed: (serverId, name) =>
@@ -996,8 +1001,7 @@ export default function App() {
       const tabIds = tabsRef.current.map((tab) => tab.id);
       if (tabIds.length > 0) await closeShells(tabIds);
       setFilesOpen(false);
-      setStatusOpen(false);
-      setHistoryOpen(false);
+      setSidePanel(null);
       setFileEditor(null);
       setDeleteConfirm(null);
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
@@ -1618,16 +1622,14 @@ export default function App() {
           activeTabId={activeGroupId}
           activeTabTitle={activeTab?.title ?? null}
           filesOpen={filesOpen}
-          statusOpen={statusOpen}
-          historyOpen={historyOpen}
+          sidePanel={sidePanel}
           broadcastActive={broadcastTargets !== null}
           onToggleBroadcast={toggleBroadcast}
           serverCount={connections.servers.length}
           onOpenConnections={() => setConnectionsOpen((open) => !open)}
           onOpenSettings={() => setSettingsOpen(true)}
           onToggleFiles={() => setFilesOpen((open) => !open)}
-          onToggleStatus={toggleStatusPanel}
-          onToggleHistory={toggleHistoryPanel}
+          onToggleSidePanel={toggleSidePanel}
           onActivate={activateGroup}
           onClone={(groupId) => cloneShell(focusedPaneOf(groupId))}
           onReconnect={(groupId) => paneIdsOf(paneLayoutsRef.current, groupId).forEach((id) => void reconnectShell(id))}
@@ -1644,7 +1646,7 @@ export default function App() {
           className={`workbench-body ${connectionsOpen ? "connections-open" : ""} ${
             filesOpen && activeTab ? "files-open" : ""
           } ${
-            (statusOpen || historyOpen) && activeTab ? "has-status-panel" : ""
+            sidePanel && activeTab ? "has-status-panel" : ""
           }`}
           style={{
             "--connection-panel-width": "240px",
@@ -1694,7 +1696,7 @@ export default function App() {
                             inputRegistry={paneInputsRef.current}
                             theme={theme}
                             fontSize={terminalFontSize}
-                            layoutSignal={`${filesOpen}:${filesRatio}:${filesDragging}:${connectionsOpen}:${statusOpen}:${historyOpen}:${statusPanelWidth}:${tabs.length}`}
+                            layoutSignal={`${filesOpen}:${filesRatio}:${filesDragging}:${connectionsOpen}:${sidePanel}:${statusPanelWidth}:${tabs.length}`}
                             setNotice={showNotice}
                             onReady={() => handleTerminalReady(tab.id, tab.serverId, tab.title)}
                             onCommandSubmitted={handleCommandSubmitted}
@@ -1795,24 +1797,34 @@ export default function App() {
           {activeTab && (
             <>
               <div
-                className={`status-divider ${statusOpen || historyOpen ? "open" : ""}`}
+                className={`status-divider ${sidePanel ? "open" : ""}`}
                 onPointerDown={startStatusDrag}
                 title="拖动调整面板宽度"
               />
               <aside
                 ref={statusPanelRef}
-                className={`status-panel ${statusOpen || historyOpen ? "open" : ""}`}
+                className={`status-panel ${sidePanel ? "open" : ""}`}
                 style={{ "--status-panel-width": `${statusPanelWidth}px` } as CSSProperties}
               >
-                {(statusOpen || historyOpen) && (
+                {sidePanel && (
                   <div
-                    key={statusOpen ? "status" : "history"}
+                    key={sidePanel}
                     className={`status-panel-content ${statusOpen ? "status-view" : "history-view"}`}
                   >
-                    {statusOpen ? (
+                    {sidePanel === "status" && (
                       <StatusDashboard tab={activeTab} onHostCopied={(host) => showNotice(`已复制 ${host}`)} />
-                    ) : (
+                    )}
+                    {sidePanel === "history" && (
                       <CommandHistoryPanel commands={commandHistory} onPick={pasteHistoryCommand} />
+                    )}
+                    {sidePanel === "snippets" && (
+                      <SnippetsPanel
+                        snippets={snippets.snippets}
+                        broadcasting={broadcastTargets !== null && broadcastTargets.size > 1 && broadcastTargets.has(activeTab.id)}
+                        onSend={sendSnippet}
+                        onSave={snippets.save}
+                        onDelete={(snippet) => void deleteSnippet(snippet)}
+                      />
                     )}
                   </div>
                 )}

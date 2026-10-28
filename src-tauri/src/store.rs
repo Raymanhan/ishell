@@ -8,7 +8,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use tauri::{AppHandle, Manager};
 
 use crate::{
-    models::{ServerInput, ServerRecord},
+    models::{ServerInput, ServerRecord, Snippet, SnippetInput},
     time::now,
 };
 
@@ -42,6 +42,17 @@ const COMMAND_HISTORY_SCHEMA: &str = "CREATE TABLE IF NOT EXISTS command_history
     created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_command_history_created_at ON command_history(created_at DESC);";
+
+const SNIPPETS_SCHEMA: &str = "CREATE TABLE IF NOT EXISTS snippets (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    command TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    run INTEGER NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);";
 
 const COLUMNS: &str = "id,name,host,port,username,\"group\",tags,auth_type,key_path,color,notes,created_at,updated_at,last_connected_at,sort_order";
 
@@ -221,6 +232,120 @@ pub fn append_command_history(app: &AppHandle, command_text: &str) -> Result<(),
     Ok(())
 }
 
+pub fn list_snippets(app: &AppHandle) -> Result<Vec<Snippet>, String> {
+    let conn = open_db(app)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, name, command, description, run, sort_order, created_at, updated_at
+             FROM snippets
+             ORDER BY sort_order, created_at",
+        )
+        .map_err(db_err)?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(Snippet {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                command: row.get(2)?,
+                description: row.get(3)?,
+                run: row.get::<_, i64>(4)? != 0,
+                sort_order: row.get::<_, i64>(5)? as u64,
+                created_at: row.get::<_, i64>(6)? as u64,
+                updated_at: row.get::<_, i64>(7)? as u64,
+            })
+        })
+        .map_err(db_err)?;
+
+    let mut snippets = Vec::new();
+    for row in rows {
+        snippets.push(row.map_err(db_err)?);
+    }
+    Ok(snippets)
+}
+
+/// Insert a new snippet (at the end of the list) or update an existing one.
+pub fn save_snippet(app: &AppHandle, input: SnippetInput) -> Result<Snippet, String> {
+    let name = input.name.trim().to_string();
+    let command = input.command.trim_end().to_string();
+    if command.trim().is_empty() {
+        return Err("命令不能为空".into());
+    }
+    let name = if name.is_empty() {
+        command
+            .lines()
+            .next()
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+    } else {
+        name
+    };
+
+    let conn = open_db(app)?;
+    let stamp = now();
+    let existing = match input.id.as_deref().filter(|id| !id.is_empty()) {
+        Some(id) => conn
+            .query_row(
+                "SELECT sort_order, created_at FROM snippets WHERE id = ?1",
+                [id],
+                |row| Ok((row.get::<_, i64>(0)? as u64, row.get::<_, i64>(1)? as u64)),
+            )
+            .optional()
+            .map_err(db_err)?,
+        None => None,
+    };
+    let (id, sort_order, created_at) = match (input.id, existing) {
+        (Some(id), Some((sort_order, created_at))) => (id, sort_order, created_at),
+        _ => {
+            let next_order: i64 = conn
+                .query_row(
+                    "SELECT COALESCE(MAX(sort_order) + 1, 0) FROM snippets",
+                    [],
+                    |row| row.get(0),
+                )
+                .map_err(db_err)?;
+            (uuid::Uuid::new_v4().to_string(), next_order as u64, stamp)
+        }
+    };
+
+    let snippet = Snippet {
+        id,
+        name,
+        command,
+        description: input.description.trim().to_string(),
+        run: input.run,
+        sort_order,
+        created_at,
+        updated_at: stamp,
+    };
+    conn.execute(
+        "INSERT INTO snippets (id, name, command, description, run, sort_order, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+         ON CONFLICT(id) DO UPDATE SET
+           name=excluded.name, command=excluded.command, description=excluded.description,
+           run=excluded.run, updated_at=excluded.updated_at",
+        params![
+            snippet.id,
+            snippet.name,
+            snippet.command,
+            snippet.description,
+            snippet.run as i64,
+            snippet.sort_order as i64,
+            snippet.created_at as i64,
+            snippet.updated_at as i64,
+        ],
+    )
+    .map_err(db_err)?;
+    Ok(snippet)
+}
+
+pub fn delete_snippet(app: &AppHandle, id: &str) -> Result<(), String> {
+    let conn = open_db(app)?;
+    conn.execute("DELETE FROM snippets WHERE id = ?1", [id])
+        .map_err(db_err)?;
+    Ok(())
+}
+
 pub fn normalize_tags(tags: Vec<String>) -> Vec<String> {
     tags.into_iter()
         .map(|tag| tag.trim().to_string())
@@ -280,6 +405,7 @@ fn open_db(app: &AppHandle) -> Result<Connection, String> {
     conn.execute_batch(SCHEMA).map_err(db_err)?;
     ensure_sort_order_column(&conn)?;
     conn.execute_batch(COMMAND_HISTORY_SCHEMA).map_err(db_err)?;
+    conn.execute_batch(SNIPPETS_SCHEMA).map_err(db_err)?;
     migrate_legacy_json(app, &conn)?;
     Ok(conn)
 }

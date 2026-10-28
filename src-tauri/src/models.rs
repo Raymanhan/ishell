@@ -47,6 +47,33 @@ pub struct ServerOrderInput {
     pub sort_order: u64,
 }
 
+/// A saved command that can be sent to a terminal from the snippets panel.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Snippet {
+    pub id: String,
+    pub name: String,
+    pub command: String,
+    #[serde(default)]
+    pub description: String,
+    /// Press Enter after sending, so the command runs right away.
+    pub run: bool,
+    pub sort_order: u64,
+    pub created_at: u64,
+    pub updated_at: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SnippetInput {
+    pub id: Option<String>,
+    pub name: String,
+    pub command: String,
+    #[serde(default)]
+    pub description: String,
+    pub run: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionExport {

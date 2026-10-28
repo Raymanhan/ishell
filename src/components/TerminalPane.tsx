@@ -384,10 +384,8 @@ function TerminalPaneBase({
         if (terminalRef.current) terminalRef.current.options.disableStdin = true;
       });
     } else if (!isTauri) {
-      terminalRef.current?.write(data);
-      if (data === "\r") {
-        terminalRef.current?.write("\r\n$ ");
-      }
+      // Browser demo: echo locally and fake a prompt after every Enter.
+      terminalRef.current?.write(data.replace(/\r/g, "\r\n$ "));
     }
   }
 

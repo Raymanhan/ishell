@@ -6,7 +6,7 @@ import {
   type MouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { Activity, Clock3, Columns2, Copy, FolderTree, PanelLeft, PanelsTopLeft, Plus, Radio, RefreshCw, Rows2, Settings, X } from "lucide-react";
+import { Activity, Clock3, Columns2, Copy, FolderTree, PanelLeft, PanelsTopLeft, Plus, Radio, RefreshCw, Rows2, Settings, SquareCode, X } from "lucide-react";
 import type { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { MAX_PANES, splitShortcutLabel, type SplitDirection } from "../features/shell/panes";
 import type { ShellTab } from "../features/shell/types";
@@ -37,16 +37,14 @@ export function TabBar({
   activeTabId,
   activeTabTitle,
   filesOpen,
-  statusOpen,
-  historyOpen,
+  sidePanel,
   broadcastActive,
   onToggleBroadcast,
   serverCount,
   onOpenConnections,
   onOpenSettings,
   onToggleFiles,
-  onToggleStatus,
-  onToggleHistory,
+  onToggleSidePanel,
   onActivate,
   onClone,
   onReconnect,
@@ -64,16 +62,14 @@ export function TabBar({
   activeTabId: string | null;
   activeTabTitle: string | null;
   filesOpen: boolean;
-  statusOpen: boolean;
-  historyOpen: boolean;
+  sidePanel: "status" | "history" | "snippets" | null;
   broadcastActive: boolean;
   onToggleBroadcast: () => void;
   serverCount: number;
   onOpenConnections: () => void;
   onOpenSettings: () => void;
   onToggleFiles: () => void;
-  onToggleStatus: () => void;
-  onToggleHistory: () => void;
+  onToggleSidePanel: (panel: "status" | "history" | "snippets") => void;
   onActivate: (id: string) => void;
   onClone: (id: string) => void;
   onReconnect: (id: string) => void;
@@ -538,11 +534,11 @@ export function TabBar({
               </button>
               <button
                 type="button"
-                className={`dock-toggle ${statusOpen ? "on" : ""}`}
-                onClick={onToggleStatus}
+                className={`dock-toggle ${sidePanel === "status" ? "on" : ""}`}
+                onClick={() => onToggleSidePanel("status")}
                 title="监控面板"
                 aria-label="监控面板"
-                aria-pressed={statusOpen}
+                aria-pressed={sidePanel === "status"}
               >
                 <span className="dock-toggle-icon">
                   <Activity size={14} />
@@ -550,14 +546,26 @@ export function TabBar({
               </button>
               <button
                 type="button"
-                className={`dock-toggle ${historyOpen ? "on" : ""}`}
-                onClick={onToggleHistory}
+                className={`dock-toggle ${sidePanel === "history" ? "on" : ""}`}
+                onClick={() => onToggleSidePanel("history")}
                 title="历史命令"
                 aria-label="历史命令"
-                aria-pressed={historyOpen}
+                aria-pressed={sidePanel === "history"}
               >
                 <span className="dock-toggle-icon">
                   <Clock3 size={14} />
+                </span>
+              </button>
+              <button
+                type="button"
+                className={`dock-toggle ${sidePanel === "snippets" ? "on" : ""}`}
+                onClick={() => onToggleSidePanel("snippets")}
+                title="命令片段"
+                aria-label="命令片段"
+                aria-pressed={sidePanel === "snippets"}
+              >
+                <span className="dock-toggle-icon">
+                  <SquareCode size={14} />
                 </span>
               </button>
               <button

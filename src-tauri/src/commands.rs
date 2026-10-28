@@ -18,7 +18,7 @@ use crate::{
     models::{
         ConnectionExport, ConnectionExportServer, ConnectionImport, ConnectionImportServer,
         EncryptedExportSecret, NetworkSample, ServerInput, ServerOrderInput, ServerRecord,
-        ServerStatus, SftpEntry, TerminalSnapshotPayload,
+        ServerStatus, SftpEntry, Snippet, SnippetInput, TerminalSnapshotPayload,
     },
     pool::SshPool,
     process_monitor::ProcessMonitorRegistry,
@@ -28,9 +28,11 @@ use crate::{
         upload_file, upload_folder, write_text_file,
     },
     store::{
-        append_command_history, delete_server as remove_server, get_server,
-        list_command_history as load_command_history, list_servers as load_servers, normalize_tags,
-        read_secret, reorder_servers as save_server_order, upsert_server, validate_server,
+        append_command_history, delete_server as remove_server, delete_snippet as remove_snippet,
+        get_server, list_command_history as load_command_history, list_servers as load_servers,
+        list_snippets as load_snippets, normalize_tags, read_secret,
+        reorder_servers as save_server_order, save_snippet as store_snippet, upsert_server,
+        validate_server,
     },
     tail_monitor::TailMonitorRegistry,
     terminal::{self, TerminalRegistry},
@@ -404,6 +406,21 @@ pub fn list_command_history(app: AppHandle) -> Result<Vec<String>, String> {
 #[tauri::command]
 pub fn save_command_history(app: AppHandle, command_text: String) -> Result<(), String> {
     append_command_history(&app, &command_text)
+}
+
+#[tauri::command]
+pub fn list_snippets(app: AppHandle) -> Result<Vec<Snippet>, String> {
+    load_snippets(&app)
+}
+
+#[tauri::command]
+pub fn save_snippet(app: AppHandle, input: SnippetInput) -> Result<Snippet, String> {
+    store_snippet(&app, input)
+}
+
+#[tauri::command]
+pub fn delete_snippet(app: AppHandle, id: String) -> Result<(), String> {
+    remove_snippet(&app, &id)
 }
 
 #[tauri::command]

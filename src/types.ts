@@ -206,3 +206,23 @@ export interface TerminalClosedPayload {
   sessionId: string;
   reason: string;
 }
+
+export interface Snippet {
+  id: string;
+  name: string;
+  command: string;
+  description: string;
+  /** Press Enter after sending, so the command runs right away. */
+  run: boolean;
+  sortOrder: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface SnippetInput {
+  id?: string | null;
+  name: string;
+  command: string;
+  description: string;
+  run: boolean;
+}
