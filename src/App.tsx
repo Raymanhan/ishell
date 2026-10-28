@@ -47,6 +47,21 @@ import {
 } from "./features/sftp/paths";
 import { useDownloadQueue } from "./features/sftp/useDownloadQueue";
 import { useUploadQueue, type UploadTargetContext } from "./features/sftp/useUploadQueue";
+import {
+  addPane,
+  groupIdOf,
+  layoutGeometry,
+  leafIds,
+  MAX_PANES,
+  nextActivePane,
+  paneIdsOf,
+  removePanes,
+  resizePanes,
+  secondaryPaneIds,
+  type PaneDivider,
+  type PaneLayouts,
+  type SplitDirection,
+} from "./features/shell/panes";
 import { createTabId, type ShellTab } from "./features/shell/types";
 import {
   closeCurrentWindowIfPeerExists,
@@ -125,6 +140,7 @@ export default function App() {
   );
   const [tabs, setTabs] = useState<ShellTab[]>(() => handedOffInitialTab ? [handedOffInitialTab] : []);
   const [activeTabId, setActiveTabId] = useState<string | null>(() => handedOffInitialTab?.id ?? null);
+  const [paneLayouts, setPaneLayouts] = useState<PaneLayouts>({});
   const [filesOpen, setFilesOpen] = useState(false);
   const [filesRatio, setFilesRatio] = useState(FILES_PANEL_RATIO);
   const [filesDragging, setFilesDragging] = useState(false);
@@ -165,10 +181,29 @@ export default function App() {
   const activeTabIdRef = useRef<string | null>(null);
   const nativeCloseInFlightRef = useRef(false);
   const terminalReadyTabs = useRef<Set<string>>(new Set());
+  const paneLayoutsRef = useRef<PaneLayouts>({});
+  const lastFocusedPaneRef = useRef<Record<string, string>>({});
+  const serversRef = useRef<ServerRecord[]>([]);
+  const terminalStackRef = useRef<HTMLDivElement>(null);
+  const paneDragCleanupRef = useRef<(() => void) | null>(null);
 
   const activeTab = useMemo(
     () => tabs.find((tab) => tab.id === activeTabId) ?? null,
     [activeTabId, tabs],
+  );
+  // The tab bar shows one tab per pane group; `activeTabId` is the focused pane.
+  const activeGroupId = activeTabId ? groupIdOf(paneLayouts, activeTabId) : null;
+  const barTabs = useMemo(() => {
+    const hidden = secondaryPaneIds(paneLayouts);
+    return tabs.filter((tab) => !hidden.has(tab.id));
+  }, [paneLayouts, tabs]);
+  const paneCounts = useMemo(
+    () => Object.fromEntries(Object.entries(paneLayouts).map(([groupId, root]) => [groupId, leafIds(root).length])),
+    [paneLayouts],
+  );
+  const paneGeometry = useMemo(
+    () => Object.fromEntries(Object.entries(paneLayouts).map(([groupId, root]) => [groupId, layoutGeometry(root)])),
+    [paneLayouts],
   );
 
 
@@ -178,6 +213,8 @@ export default function App() {
   statusOpenRef.current = statusOpen;
   tabsRef.current = tabs;
   activeTabIdRef.current = activeTabId;
+  paneLayoutsRef.current = paneLayouts;
+  if (activeTabId && activeGroupId) lastFocusedPaneRef.current[activeGroupId] = activeTabId;
 
   useEffect(() => {
     connections.refreshServers();
@@ -296,6 +333,7 @@ export default function App() {
     return () => {
       dockDragCleanupRef.current?.();
       statusDragCleanupRef.current?.();
+      paneDragCleanupRef.current?.();
       if (sftpBusyTimer.current !== null) window.clearTimeout(sftpBusyTimer.current);
       if (noticeTimer.current !== null) window.clearTimeout(noticeTimer.current);
     };
@@ -544,6 +582,7 @@ export default function App() {
     onServersDeleted: (serverIds) =>
       setTabs((current) => current.filter((tab) => !serverIds.has(tab.serverId))),
   });
+  serversRef.current = connections.servers;
 
   function beginSftpBusy() {
     if (sftpBusyTimer.current !== null) {
@@ -568,7 +607,11 @@ export default function App() {
     }, remaining);
   }
 
-  async function openShell(server: ServerRecord | null = connections.selectedServer) {
+  /** Open a terminal to `server` in a new tab, or in a new pane beside `split.paneId`. */
+  async function openShell(
+    server: ServerRecord | null = connections.selectedServer,
+    split?: { paneId: string; direction: SplitDirection },
+  ) {
     if (!server) return;
     const tabId = createTabId(server.id);
     const nextTab: ShellTab = {
@@ -591,7 +634,22 @@ export default function App() {
       cache: {},
     };
 
-    setTabs((current) => [...current, nextTab]);
+    if (split) {
+      const groupId = groupIdOf(paneLayoutsRef.current, split.paneId);
+      const groupPanes = paneIdsOf(paneLayoutsRef.current, groupId);
+      // Keep a group's panes next to each other so a promoted pane keeps the tab's place.
+      setTabs((current) => {
+        const lastIndex = Math.max(...groupPanes.map((id) => current.findIndex((tab) => tab.id === id)));
+        const next = [...current];
+        next.splice(lastIndex + 1, 0, nextTab);
+        return next;
+      });
+      const nextLayouts = addPane(paneLayoutsRef.current, groupId, split.paneId, tabId, split.direction);
+      paneLayoutsRef.current = nextLayouts;
+      setPaneLayouts(nextLayouts);
+    } else {
+      setTabs((current) => [...current, nextTab]);
+    }
     setActiveTabId(tabId);
     showNotice(`正在连接 ${server.name}…`);
 
@@ -608,6 +666,66 @@ export default function App() {
       patchTab(tabId, { state: "closed" });
       showNotice(String(error));
     }
+  }
+
+  /**
+   * Split the pane's tab and connect the new pane to `server`, or to the same
+   * server as the pane. Reads refs only: memoized terminal panes keep the
+   * callback from their first render.
+   */
+  function splitShell(paneId: string, direction: SplitDirection, server?: ServerRecord) {
+    const layouts = paneLayoutsRef.current;
+    if (paneIdsOf(layouts, groupIdOf(layouts, paneId)).length >= MAX_PANES) {
+      showNotice(`一个标签最多分成 ${MAX_PANES} 个窗格`);
+      return;
+    }
+    const source = tabsRef.current.find((tab) => tab.id === paneId);
+    const target = server ?? serversRef.current.find((item) => item.id === source?.serverId);
+    if (!target) return;
+    void openShell(target, { paneId, direction });
+  }
+
+  /** The pane of a group that was focused last, or the group's first pane. */
+  function focusedPaneOf(groupId: string) {
+    const last = lastFocusedPaneRef.current[groupId];
+    return last && paneIdsOf(paneLayoutsRef.current, groupId).includes(last) ? last : groupId;
+  }
+
+  function activateGroup(groupId: string) {
+    setActiveTabId(focusedPaneOf(groupId));
+  }
+
+  function closeGroups(groupIds: string[]) {
+    return closeShells(groupIds.flatMap((groupId) => paneIdsOf(paneLayoutsRef.current, groupId)));
+  }
+
+  function startPaneResize(event: ReactPointerEvent<HTMLDivElement>, groupId: string, divider: PaneDivider) {
+    const stack = terminalStackRef.current;
+    if (!stack || !paneLayoutsRef.current[groupId]) return;
+    paneDragCleanupRef.current?.();
+
+    const bounds = stack.getBoundingClientRect();
+    const horizontal = divider.direction === "row";
+    let fraction: number | null = null;
+    paneDragCleanupRef.current = startPointerDrag(event, {
+      cursor: horizontal ? "col-resize" : "row-resize",
+      onMove: (move) => {
+        const position = horizontal
+          ? ((move.clientX - bounds.left) / bounds.width) * 100
+          : ((move.clientY - bounds.top) / bounds.height) * 100;
+        fraction = (position - divider.pairStart) / divider.pairSize;
+      },
+      onFrame: () => {
+        if (fraction === null) return;
+        const nextFraction = fraction;
+        setPaneLayouts((current) =>
+          current[groupId] ? { ...current, [groupId]: resizePanes(current[groupId], divider, nextFraction) } : current,
+        );
+      },
+      onEnd: () => {
+        paneDragCleanupRef.current = null;
+      },
+    });
   }
 
   async function reconnectShell(tabId: string) {
@@ -646,6 +764,10 @@ export default function App() {
   }
 
   async function detachShell(tabId: string, dropPoint?: TabDropPoint) {
+    if (paneIdsOf(paneLayoutsRef.current, tabId).length > 1) {
+      showNotice("分屏的标签不能移到其他窗口，请先关闭多余的窗格");
+      return;
+    }
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab || !tab.sessionId) {
       showNotice("连接建立后才能拖出为新窗口");
@@ -805,14 +927,29 @@ export default function App() {
     }
     closingTabs.forEach((tab) => terminalReadyTabs.current.delete(tab.id));
     const latestTabs = tabsRef.current;
-    const firstClosedIndex = latestTabs.findIndex((tab) => ids.has(tab.id));
-    const remaining = latestTabs.filter((tab) => !ids.has(tab.id));
+    const layoutsBefore = paneLayoutsRef.current;
+    const { layouts: nextLayouts, renamed } = removePanes(layoutsBefore, ids);
+    let remaining = latestTabs.filter((tab) => !ids.has(tab.id));
+    // A pane that now leads its group takes over the closed tab's place in the tab bar.
+    for (const [oldGroupId, newGroupId] of renamed) {
+      const promoted = remaining.find((tab) => tab.id === newGroupId);
+      if (!promoted) continue;
+      const anchor = latestTabs.findIndex((tab) => tab.id === oldGroupId);
+      const others = remaining.filter((tab) => tab.id !== newGroupId);
+      const insertAt = others.filter((tab) => latestTabs.indexOf(tab) < anchor).length;
+      others.splice(insertAt, 0, promoted);
+      remaining = others;
+      const lastFocused = lastFocusedPaneRef.current[oldGroupId];
+      delete lastFocusedPaneRef.current[oldGroupId];
+      if (lastFocused && !ids.has(lastFocused)) lastFocusedPaneRef.current[newGroupId] = lastFocused;
+    }
     tabsRef.current = remaining;
+    paneLayoutsRef.current = nextLayouts;
     setTabs(remaining);
+    setPaneLayouts(nextLayouts);
     setActiveTabId((current) => {
-      if (current && !ids.has(current)) return current;
-      if (remaining.length === 0) return null;
-      return remaining[Math.min(Math.max(0, firstClosedIndex), remaining.length - 1)]?.id ?? null;
+      const next = nextActivePane(current, ids, layoutsBefore, nextLayouts, latestTabs, remaining);
+      return next && nextLayouts[next] ? focusedPaneOf(next) : next;
     });
   }
 
@@ -1442,8 +1579,8 @@ export default function App() {
           autoHide={autoHideTopBar}
           connectionsOpen={connectionsOpen}
           onNewServer={() => connections.newServer()}
-          tabs={tabs}
-          activeTabId={activeTabId}
+          tabs={barTabs}
+          activeTabId={activeGroupId}
           activeTabTitle={activeTab?.title ?? null}
           filesOpen={filesOpen}
           statusOpen={statusOpen}
@@ -1454,12 +1591,14 @@ export default function App() {
           onToggleFiles={() => setFilesOpen((open) => !open)}
           onToggleStatus={toggleStatusPanel}
           onToggleHistory={toggleHistoryPanel}
-          onActivate={setActiveTabId}
-          onClone={cloneShell}
-          onReconnect={reconnectShell}
+          onActivate={activateGroup}
+          onClone={(groupId) => cloneShell(focusedPaneOf(groupId))}
+          onReconnect={(groupId) => paneIdsOf(paneLayoutsRef.current, groupId).forEach((id) => void reconnectShell(id))}
           onDetach={detachShell}
-          onClose={closeShell}
-          onCloseTabs={closeShells}
+          onSplit={(groupId, direction) => splitShell(focusedPaneOf(groupId), direction)}
+          paneCounts={paneCounts}
+          onClose={(groupId) => void closeGroups([groupId])}
+          onCloseTabs={(groupIds) => void closeGroups(groupIds)}
           onReorder={reorderShellTabs}
         />
 
@@ -1480,6 +1619,7 @@ export default function App() {
             grouped={connections.grouped}
             onSelect={(server) => connections.setSelectedServerId(server.id)}
             onConnect={openShell}
+            onConnectSplit={activeTabId ? (server) => splitShell(activeTabId, "row", server) : undefined}
             onClone={connections.cloneServer}
             onEdit={connections.editServer}
             onRenameServer={connections.renameServer}
@@ -1498,30 +1638,51 @@ export default function App() {
             {tabs.length > 0 && (
               <div className={`terminal-dock ${filesOpen ? "files-open" : ""} ${filesDragging ? "dragging" : ""}`} ref={terminalDockRef}>
                 <div className="terminal-region">
-                  <div className="terminal-stack">
+                  <div className="terminal-stack" ref={terminalStackRef}>
                     <Suspense fallback={null}>
-                      {tabs.map((tab) => (
-                        <TerminalPane
-                          key={tab.id}
-                          tab={tab}
-                          visible={tab.id === activeTabId}
-                          theme={theme}
-                          fontSize={terminalFontSize}
-                          layoutSignal={`${filesOpen}:${filesRatio}:${filesDragging}:${connectionsOpen}:${statusOpen}:${historyOpen}:${statusPanelWidth}:${tabs.length}`}
-                          setNotice={showNotice}
-                          onReady={() => handleTerminalReady(tab.id, tab.serverId, tab.title)}
-                          onCommandSubmitted={handleCommandSubmitted}
-                          pasteRequest={pasteRequest?.tabId === tab.id ? pasteRequest : null}
-                          commandRequest={commandRequest?.tabId === tab.id ? commandRequest : null}
-                          commandHistory={commandHistory}
-                          onClosed={() => {
-                            terminalReadyTabs.current.delete(tab.id);
-                            patchTab(tab.id, { state: "closed" });
-                          }}
-                          onReconnect={() => reconnectShell(tab.id)}
-                        />
-                      ))}
+                      {tabs.map((tab) => {
+                        const groupId = groupIdOf(paneLayouts, tab.id);
+                        const paneRect = paneGeometry[groupId]?.panes[tab.id];
+                        return (
+                          <TerminalPane
+                            key={tab.id}
+                            tab={tab}
+                            visible={groupId === activeGroupId}
+                            pane={paneRect ? { rect: paneRect, focused: tab.id === activeTabId } : undefined}
+                            onFocusPane={() => setActiveTabId(tab.id)}
+                            onClosePane={() => void closeShell(tab.id)}
+                            onSplit={(direction) => splitShell(tab.id, direction)}
+                            theme={theme}
+                            fontSize={terminalFontSize}
+                            layoutSignal={`${filesOpen}:${filesRatio}:${filesDragging}:${connectionsOpen}:${statusOpen}:${historyOpen}:${statusPanelWidth}:${tabs.length}`}
+                            setNotice={showNotice}
+                            onReady={() => handleTerminalReady(tab.id, tab.serverId, tab.title)}
+                            onCommandSubmitted={handleCommandSubmitted}
+                            pasteRequest={pasteRequest?.tabId === tab.id ? pasteRequest : null}
+                            commandRequest={commandRequest?.tabId === tab.id ? commandRequest : null}
+                            commandHistory={commandHistory}
+                            onClosed={() => {
+                              terminalReadyTabs.current.delete(tab.id);
+                              patchTab(tab.id, { state: "closed" });
+                            }}
+                            onReconnect={() => reconnectShell(tab.id)}
+                          />
+                        );
+                      })}
                     </Suspense>
+                    {activeGroupId && paneGeometry[activeGroupId]?.dividers.map((divider) => (
+                      <div
+                        key={`${activeGroupId}:${divider.path.join(".")}:${divider.index}`}
+                        className={`pane-divider ${divider.direction === "row" ? "vertical" : "horizontal"}`}
+                        style={divider.direction === "row"
+                          ? { left: `${divider.rect.left}%`, top: `${divider.rect.top}%`, height: `${divider.rect.height}%` }
+                          : { top: `${divider.rect.top}%`, left: `${divider.rect.left}%`, width: `${divider.rect.width}%` }}
+                        role="separator"
+                        aria-orientation={divider.direction === "row" ? "vertical" : "horizontal"}
+                        title="拖动调整窗格大小"
+                        onPointerDown={(event) => startPaneResize(event, activeGroupId, divider)}
+                      />
+                    ))}
                   </div>
                 </div>
 

@@ -3,9 +3,10 @@ import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { Terminal } from "@xterm/xterm";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, X } from "lucide-react";
 import { command, isTauri } from "../api/tauri";
 import { getTerminalSurfaceReport, getTerminalTheme, type AppTheme } from "../constants/theme";
+import { splitShortcutDirection, type PaneRect, type SplitDirection } from "../features/shell/panes";
 import type { ShellTab } from "../features/shell/types";
 import { isTerminalSearchShortcut, TerminalSearchBar } from "./TerminalSearchBar";
 import type {
@@ -32,6 +33,12 @@ interface HistorySuggestState {
   maxHeight: number;
 }
 
+/** Where a pane sits when its tab is split; absent for a tab that fills the terminal area. */
+export interface PanePlacement {
+  rect: PaneRect;
+  focused: boolean;
+}
+
 const closedHistorySuggest: HistorySuggestState = {
   active: false,
   query: "",
@@ -55,6 +62,10 @@ function TerminalPaneBase({
   pasteRequest,
   commandRequest,
   commandHistory,
+  pane,
+  onFocusPane,
+  onClosePane,
+  onSplit,
 }: {
   tab: ShellTab;
   visible: boolean;
@@ -69,6 +80,10 @@ function TerminalPaneBase({
   pasteRequest?: { id: number; command: string } | null;
   commandRequest?: { id: number; command: string; requirePromptStart?: boolean; blockedNotice?: string } | null;
   commandHistory: string[];
+  pane?: PanePlacement;
+  onFocusPane?: () => void;
+  onClosePane?: () => void;
+  onSplit?: (direction: SplitDirection) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -85,6 +100,8 @@ function TerminalPaneBase({
   const onReadyRef = useRef(onReady);
   const onClosedRef = useRef(onClosed);
   const onCommandSubmittedRef = useRef(onCommandSubmitted);
+  const onSplitRef = useRef(onSplit);
+  onSplitRef.current = onSplit;
   const commandDraftRef = useRef("");
   const sensitiveInputRef = useRef(false);
   const commandHistoryRef = useRef(commandHistory);
@@ -409,6 +426,13 @@ function TerminalPaneBase({
     terminal.writeln("");
 
     terminal.attachCustomKeyEventHandler((event) => {
+      const splitDirection = splitShortcutDirection(event);
+      if (splitDirection && onSplitRef.current) {
+        onSplitRef.current(splitDirection);
+        event.preventDefault();
+        return false;
+      }
+
       if (isTerminalSearchShortcut(event)) {
         closeHistorySuggest();
         setSearchSignal((signal) => signal + 1);
@@ -667,7 +691,22 @@ function TerminalPaneBase({
   }, [historySuggest.active, historySuggest.selectedIndex, suggestedCommands.length]);
 
   return (
-    <section className={`terminal-panel ${visible ? "active" : ""}`} aria-hidden={!visible}>
+    <section
+      className={`terminal-panel ${visible ? "active" : ""} ${pane ? "split" : ""} ${pane?.focused ? "focused" : ""} ${
+        pane && pane.rect.top > 0 ? "pane-below" : ""
+      }`}
+      style={pane ? {
+        inset: "auto",
+        left: `${pane.rect.left}%`,
+        top: `${pane.rect.top}%`,
+        width: `${pane.rect.width}%`,
+        height: `${pane.rect.height}%`,
+      } : undefined}
+      aria-hidden={!visible}
+      data-pane-id={tab.id}
+      onPointerDownCapture={pane && !pane.focused ? onFocusPane : undefined}
+      onFocusCapture={pane && !pane.focused ? onFocusPane : undefined}
+    >
       <div className="terminal-frame">
         <div className="terminal-host" ref={containerRef} />
         {searchSignal > 0 && searchAddon && (
@@ -720,6 +759,15 @@ function TerminalPaneBase({
             </div>
           </div>
         )}
+        {pane && (
+          <div className="pane-label">
+            <span className={`tab-dot ${tab.state}`} style={{ color: tab.color }} />
+            <span className="pane-label-title" title={`${tab.title} · ${tab.subtitle}`}>{tab.title}</span>
+            <button type="button" title="关闭窗格" aria-label={`关闭窗格 ${tab.title}`} onClick={onClosePane}>
+              <X size={12} />
+            </button>
+          </div>
+        )}
       </div>
       {tab.state === "closed" && (
         <button type="button" className="terminal-reconnect" onClick={onReconnect}>
@@ -745,6 +793,12 @@ export const TerminalPane = memo(TerminalPaneBase, (previous, next) => {
     previous.layoutSignal === next.layoutSignal &&
     previous.pasteRequest?.id === next.pasteRequest?.id &&
     previous.commandRequest?.id === next.commandRequest?.id &&
-    previous.commandHistory === next.commandHistory
+    previous.commandHistory === next.commandHistory &&
+    previous.pane?.focused === next.pane?.focused &&
+    previous.pane?.rect.left === next.pane?.rect.left &&
+    previous.pane?.rect.top === next.pane?.rect.top &&
+    previous.pane?.rect.width === next.pane?.rect.width &&
+    previous.pane?.rect.height === next.pane?.rect.height &&
+    Boolean(previous.onSplit) === Boolean(next.onSplit)
   );
 });

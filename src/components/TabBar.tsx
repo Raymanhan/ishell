@@ -6,8 +6,9 @@ import {
   type MouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { Activity, Clock3, Copy, FolderTree, PanelLeft, PanelsTopLeft, Plus, RefreshCw, Settings, X } from "lucide-react";
+import { Activity, Clock3, Columns2, Copy, FolderTree, PanelLeft, PanelsTopLeft, Plus, RefreshCw, Rows2, Settings, X } from "lucide-react";
 import type { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { MAX_PANES, splitShortcutLabel, type SplitDirection } from "../features/shell/panes";
 import type { ShellTab } from "../features/shell/types";
 
 interface TabDropPoint {
@@ -48,6 +49,8 @@ export function TabBar({
   onClone,
   onReconnect,
   onDetach,
+  onSplit,
+  paneCounts,
   onClose,
   onCloseTabs,
   onReorder,
@@ -71,6 +74,9 @@ export function TabBar({
   onClone: (id: string) => void;
   onReconnect: (id: string) => void;
   onDetach: (id: string, dropPoint?: TabDropPoint) => void;
+  onSplit: (id: string, direction: SplitDirection) => void;
+  /** Number of panes in each split tab; tabs that are not split are absent. */
+  paneCounts: Record<string, number>;
   onClose: (id: string) => void;
   onCloseTabs: (ids: string[]) => void;
   onReorder: (draggedId: string, targetId: string) => void;
@@ -164,8 +170,8 @@ export function TabBar({
     event.stopPropagation();
     setMenu({
       tabId,
-      x: Math.min(event.clientX, window.innerWidth - 188),
-      y: Math.min(event.clientY, window.innerHeight - 224),
+      x: Math.min(event.clientX, window.innerWidth - 220),
+      y: Math.min(event.clientY, window.innerHeight - 320),
     });
   }
 
@@ -484,6 +490,11 @@ export function TabBar({
                 >
                   <span className={`tab-dot ${tab.state}`} style={{ color: tab.color }} />
                   <span className="terminal-tab-title">{tab.title}</span>
+                  {paneCounts[tab.id] && (
+                    <span className="terminal-tab-panes" title={`${paneCounts[tab.id]} 个分屏窗格`}>
+                      {paneCounts[tab.id]}
+                    </span>
+                  )}
                 </button>
                 <button
                   type="button"
@@ -577,7 +588,28 @@ export function TabBar({
             <RefreshCw size={14} />
             重连
           </button>
-          {tabs.length > 1 && (
+          <div className="ctx-sep" role="separator" />
+          <button
+            type="button"
+            role="menuitem"
+            disabled={(paneCounts[menu.tabId] ?? 1) >= MAX_PANES}
+            onClick={() => runMenu(() => onSplit(menu.tabId, "row"))}
+          >
+            <Columns2 size={14} />
+            向右分屏
+            <kbd>{splitShortcutLabel.row}</kbd>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={(paneCounts[menu.tabId] ?? 1) >= MAX_PANES}
+            onClick={() => runMenu(() => onSplit(menu.tabId, "column"))}
+          >
+            <Rows2 size={14} />
+            向下分屏
+            <kbd>{splitShortcutLabel.column}</kbd>
+          </button>
+          {tabs.length > 1 && !paneCounts[menu.tabId] && (
             <button type="button" role="menuitem" onClick={() => runMenu(() => onDetach(menu.tabId))}>
               <PanelsTopLeft size={14} />
               移至新窗口
