@@ -22,6 +22,9 @@ pub fn test_connection(
         key_path: input.key_path.filter(|path| !path.trim().is_empty()),
         color: input.color,
         notes: input.notes,
+        jump_server_id: input
+            .jump_server_id
+            .filter(|jump_id| !jump_id.trim().is_empty()),
         sort_order: input.sort_order.unwrap_or_else(now),
         created_at: now(),
         updated_at: now(),
@@ -35,38 +38,23 @@ pub fn test_connection(
                 .and_then(|server_id| read_secret(app, server_id).ok())
         })
         .filter(|value| !value.is_empty());
-    test_connection_with_server(&server, secret.as_deref())
+    test_connection_with_server(app, &server, secret.as_deref())
 }
 
 #[cfg(not(russh_backend))]
 pub(super) fn test_connection_with_server(
+    app: &AppHandle,
     server: &ServerRecord,
     secret: Option<&str>,
 ) -> Result<(), String> {
-    let helper_path = if secret.is_some() {
-        Some(create_askpass_helper(&server.id)?)
-    } else {
-        None
-    };
+    let hops = jump_hops(app, server)?;
+    let invocation =
+        openssh::SshInvocation::prepare(server, secret, &hops, true, true, &server.id)?;
     let mut command = Command::new(openssh::ssh_binary());
-    if let (Some(secret), Some(path)) = (secret, helper_path.as_ref()) {
-        command.env("SSH_ASKPASS", path);
-        command.env("SSH_ASKPASS_REQUIRE", "force");
-        command.env("ISHELL_SSH_PASSWORD", secret);
-        command.env("DISPLAY", "ishell:0");
-    }
-    for arg in openssh::common_ssh_args(server, true) {
-        command.arg(arg);
-    }
-    for arg in openssh::auth_ssh_args(server, secret.is_some()) {
-        command.arg(arg);
-    }
+    command.envs(invocation.env.iter().cloned());
+    command.args(&invocation.args);
     command.arg("-o");
     command.arg("ConnectTimeout=10");
-    if secret.is_none() {
-        command.arg("-o");
-        command.arg("BatchMode=yes");
-    }
     command.arg(&server.host);
     command.arg("printf ishell-test");
     command.stdin(Stdio::null());
@@ -75,7 +63,7 @@ pub(super) fn test_connection_with_server(
     let output = command
         .output()
         .map_err(|err| format!("无法启动 OpenSSH：{err}"));
-    cleanup_askpass_helper(helper_path.as_ref());
+    invocation.cleanup();
     let output = output?;
     if !output.status.success() {
         return Err(format_process_error("测试连接失败", &output.stderr));
@@ -85,6 +73,7 @@ pub(super) fn test_connection_with_server(
 
 #[cfg(russh_backend)]
 pub(super) fn test_connection_with_server(
+    _app: &AppHandle,
     server: &ServerRecord,
     secret: Option<&str>,
 ) -> Result<(), String> {
@@ -202,28 +191,19 @@ pub(super) fn spawn_remote_ex(
 ) -> Result<(std::process::Child, Option<PathBuf>), String> {
     let server = get_server(app, id)?;
     let saved_secret = read_secret(app, id).ok().filter(|value| !value.is_empty());
-    let helper_path = if saved_secret.is_some() {
-        Some(create_askpass_helper(id)?)
-    } else {
-        None
-    };
+    let hops = jump_hops(app, &server)?;
+    let invocation = openssh::SshInvocation::prepare(
+        &server,
+        saved_secret.as_deref(),
+        &hops,
+        multiplex,
+        true,
+        id,
+    )?;
+    let helper_path = invocation.askpass.clone();
     let mut command = Command::new(openssh::ssh_binary());
-    if let (Some(secret), Some(path)) = (saved_secret.as_deref(), helper_path.as_ref()) {
-        command.env("SSH_ASKPASS", path);
-        command.env("SSH_ASKPASS_REQUIRE", "force");
-        command.env("ISHELL_SSH_PASSWORD", secret);
-        command.env("DISPLAY", "ishell:0");
-    }
-    for arg in openssh::common_ssh_args(&server, multiplex) {
-        command.arg(arg);
-    }
-    for arg in openssh::auth_ssh_args(&server, saved_secret.is_some()) {
-        command.arg(arg);
-    }
-    if saved_secret.is_none() {
-        command.arg("-o");
-        command.arg("BatchMode=yes");
-    }
+    command.envs(invocation.env.iter().cloned());
+    command.args(&invocation.args);
     command.arg(&server.host);
     command.arg(remote_command);
     command.stdin(if stdin_piped {
@@ -249,49 +229,6 @@ pub(super) fn spawn_remote_ex(
             Err(format!("无法启动 OpenSSH：{err}"))
         }
     }
-}
-
-#[cfg(not(russh_backend))]
-pub(super) fn create_askpass_helper(id: &str) -> Result<PathBuf, String> {
-    let slug: String = id
-        .chars()
-        .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '-' || *ch == '_')
-        .take(32)
-        .collect();
-    let slug = if slug.is_empty() { "server" } else { &slug };
-
-    for _ in 0..4 {
-        let path = std::env::temp_dir().join(format!(
-            "ishell-ssh-askpass-{slug}-{}.sh",
-            uuid::Uuid::new_v4()
-        ));
-        let mut file = match fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&path)
-        {
-            Ok(file) => file,
-            Err(err) if err.kind() == io::ErrorKind::AlreadyExists => continue,
-            Err(err) => return Err(format!("无法创建 SSH_ASKPASS helper：{err}")),
-        };
-        if let Err(err) = file.write_all(b"#!/bin/sh\nprintf '%s\\n' \"$ISHELL_SSH_PASSWORD\"\n") {
-            let _ = fs::remove_file(&path);
-            return Err(format!("无法写入 SSH_ASKPASS helper：{err}"));
-        }
-        drop(file);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let permissions = fs::Permissions::from_mode(0o700);
-            if let Err(err) = fs::set_permissions(&path, permissions) {
-                let _ = fs::remove_file(&path);
-                return Err(format!("无法设置 SSH_ASKPASS helper 权限：{err}"));
-            }
-        }
-        return Ok(path);
-    }
-
-    Err("无法创建唯一的 SSH_ASKPASS helper".to_string())
 }
 
 #[cfg(not(russh_backend))]
@@ -369,8 +306,8 @@ mod tests {
     #[cfg(not(russh_backend))]
     #[test]
     fn askpass_helpers_are_unique_per_ssh_invocation() {
-        let first = create_askpass_helper("same-server").unwrap();
-        let second = create_askpass_helper("same-server").unwrap();
+        let first = openssh::create_askpass_helper("same-server").unwrap();
+        let second = openssh::create_askpass_helper("same-server").unwrap();
         assert_ne!(first, second);
         assert!(first.exists());
         assert!(second.exists());

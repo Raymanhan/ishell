@@ -11,6 +11,7 @@ import {
   defaultForm,
   ensureFolder,
   groupServersForTree,
+  jumpHostCandidates,
   moveConnectionFolders,
   moveConnectionServers,
   orderedConnectionFolders,
@@ -118,6 +119,7 @@ export function useConnections({
       keyPath: server.keyPath ?? "",
       color: server.color || swatches[0],
       notes: server.notes,
+      jumpServerId: server.jumpServerId ?? null,
       password: "",
     });
     setEditing(true);
@@ -138,6 +140,7 @@ export function useConnections({
       keyPath: server.keyPath ?? "",
       color: server.color || swatches[0],
       notes: server.notes,
+      jumpServerId: server.jumpServerId ?? null,
       password: "",
     });
     setEditing(true);
@@ -468,6 +471,7 @@ export function useConnections({
     editor: {
       open: editing,
       form,
+      jumpHostCandidates: jumpHostCandidates(servers, form.id),
       saving,
       testing: testingConnection,
       testFeedback: connectionTestFeedback,

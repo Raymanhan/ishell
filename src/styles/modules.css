@@ -1987,6 +1987,7 @@ button.detail-row:hover {
 .server-editor-sheet .field:last-child {
   margin-bottom: 0;
 }
+.server-editor-sheet .field select,
 .server-editor-sheet .field input,
 .server-editor-sheet .field textarea {
   border: 1px solid var(--hairline);
@@ -1994,6 +1995,7 @@ button.detail-row:hover {
   background: var(--surface-muted-bg);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
 }
+.server-editor-sheet .field select,
 .server-editor-sheet .field input {
   height: 32px;
   padding: 0 10px;
@@ -2060,6 +2062,7 @@ button.detail-row:hover {
 .server-editor-sheet .field textarea {
   min-height: 50px;
 }
+.server-editor-sheet .field select:hover,
 .server-editor-sheet .field input:hover,
 .server-editor-sheet .field textarea:hover {
   border-color: var(--hairline-2);
@@ -2579,4 +2582,48 @@ button.detail-row:hover {
   color: var(--faint);
   font-size: 11.5px;
   font-weight: 500;
+}
+
+/* Native select styled like the other editor fields. */
+.field select {
+  width: 100%;
+  height: 28px;
+  padding: 0 22px 0 0;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0;
+  outline: 0;
+  appearance: none;
+  background-color: transparent;
+  /* The chevron survives the themes' background shorthands. */
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--dim) 50%),
+    linear-gradient(135deg, var(--dim) 50%, transparent 50%) !important;
+  background-position: right 9px center, right 4px center !important;
+  background-size: 5px 5px !important;
+  background-repeat: no-repeat !important;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.field select:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+.field select:focus {
+  border-color: rgba(var(--accent-rgb), 0.34);
+}
+.field select option {
+  background: var(--inset);
+  color: var(--text);
+}
+.field-hint {
+  display: block;
+  margin-top: 5px;
+  color: var(--faint);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.server-editor-sheet .field select {
+  padding-right: 30px;
+  background-position: right 17px center, right 12px center !important;
 }

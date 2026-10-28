@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use russh::{client, ChannelMsg};
 use tokio::runtime::Runtime;
 
-use crate::models::ServerRecord;
+use crate::models::{JumpHop, ServerRecord};
 use crate::terminal::TerminalControl;
 
 type Session = client::Handle<ClientHandler>;
@@ -232,6 +232,9 @@ async fn recover_upload_transport_failure(
 struct ClientHandler {
     host: String,
     port: u16,
+    /// The jump host session this connection is tunnelled through, kept alive
+    /// for as long as this connection.
+    _jump: Option<Arc<Session>>,
 }
 
 impl client::Handler for ClientHandler {
@@ -255,6 +258,23 @@ impl client::Handler for ClientHandler {
             }
             Err(err) => Err(err.into()),
         }
+    }
+}
+
+type JumpResolver = Box<dyn Fn(&ServerRecord) -> Result<Vec<JumpHop>, String> + Send + Sync>;
+
+static JUMP_RESOLVER: OnceLock<JumpResolver> = OnceLock::new();
+
+/// Install the lookup of a server's jump hosts (from the app database). Set
+/// once at startup; without it every server is reached directly.
+pub fn set_jump_resolver(resolver: JumpResolver) {
+    let _ = JUMP_RESOLVER.set(resolver);
+}
+
+fn jump_hops(server: &ServerRecord) -> Result<Vec<JumpHop>, String> {
+    match JUMP_RESOLVER.get() {
+        Some(resolve) => resolve(server),
+        None => Ok(Vec::new()),
     }
 }
 
@@ -343,6 +363,46 @@ async fn isolated_channel(
     Ok((handle, channel))
 }
 
+/// Open a `direct-tcpip` channel to the server through its last jump host,
+/// whose (pooled) session in turn goes through any earlier hops.
+async fn tunnel_through(
+    jump: &JumpHop,
+    server: &ServerRecord,
+) -> Result<(Arc<Session>, russh::Channel<client::Msg>), String> {
+    let hop_error = |err: String| format!("跳板机 {}：{err}", jump.server.name);
+    let open = |session: Arc<Session>| async move {
+        let channel = tokio::time::timeout(
+            CONNECT_TIMEOUT,
+            session.channel_open_direct_tcpip(
+                server.host.clone(),
+                u32::from(server.port),
+                "127.0.0.1",
+                0,
+            ),
+        )
+        .await
+        .map_err(|_| format!("经跳板机连接 {}:{} 超时", server.host, server.port))?
+        .map_err(|err| format!("跳板机无法连接到 {}:{}：{err}", server.host, server.port))?;
+        Ok::<_, String>((session, channel))
+    };
+
+    // Recursion through the pool: the jump host's own jump hosts are resolved there.
+    let session = Box::pin(get_or_connect(&jump.server, jump.secret.as_deref()))
+        .await
+        .map_err(hop_error)?;
+    match open(session).await {
+        Ok(tunnel) => Ok(tunnel),
+        Err(_) => {
+            // The pooled jump session may be stale: reconnect it once.
+            invalidate(&jump.server.id);
+            let session = Box::pin(get_or_connect(&jump.server, jump.secret.as_deref()))
+                .await
+                .map_err(hop_error)?;
+            open(session).await
+        }
+    }
+}
+
 async fn connect(
     server: &ServerRecord,
     secret: Option<&str>,
@@ -352,24 +412,46 @@ async fn connect(
         nodelay: true,
         ..client::Config::default()
     });
-    let handler = ClientHandler {
-        host: server.host.clone(),
-        port: server.port,
-    };
-    let mut handle = tokio::time::timeout(
-        CONNECT_TIMEOUT,
-        client::connect(config, (server.host.as_str(), server.port), handler),
-    )
-    .await
-    .map_err(|_| {
+    let hops = jump_hops(server)?;
+    let connect_timeout = |_| {
         format!(
             "连接 {}:{} 超时（{} 秒）",
             server.host,
             server.port,
             CONNECT_TIMEOUT.as_secs()
         )
-    })?
-    .map_err(|err| format!("无法连接 {}:{}：{err}", server.host, server.port))?;
+    };
+    let mut handle = match hops.last() {
+        None => {
+            let handler = ClientHandler {
+                host: server.host.clone(),
+                port: server.port,
+                _jump: None,
+            };
+            tokio::time::timeout(
+                CONNECT_TIMEOUT,
+                client::connect(config, (server.host.as_str(), server.port), handler),
+            )
+            .await
+            .map_err(connect_timeout)?
+            .map_err(|err| format!("无法连接 {}:{}：{err}", server.host, server.port))?
+        }
+        Some(jump) => {
+            let (jump_session, channel) = tunnel_through(jump, server).await?;
+            let handler = ClientHandler {
+                host: server.host.clone(),
+                port: server.port,
+                _jump: Some(jump_session),
+            };
+            tokio::time::timeout(
+                CONNECT_TIMEOUT,
+                client::connect_stream(config, channel.into_stream(), handler),
+            )
+            .await
+            .map_err(connect_timeout)?
+            .map_err(|err| format!("无法连接 {}:{}：{err}", server.host, server.port))?
+        }
+    };
 
     if server.auth_type == "key" {
         let key_path = server

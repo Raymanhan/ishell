@@ -14,6 +14,9 @@ pub struct ServerRecord {
     pub key_path: Option<String>,
     pub color: String,
     pub notes: String,
+    /// Another saved server to connect through (ProxyJump), if any.
+    #[serde(default)]
+    pub jump_server_id: Option<String>,
     #[serde(default)]
     pub sort_order: u64,
     pub created_at: u64,
@@ -36,7 +39,17 @@ pub struct ServerInput {
     pub color: String,
     pub notes: String,
     #[serde(default)]
+    pub jump_server_id: Option<String>,
+    #[serde(default)]
     pub sort_order: Option<u64>,
+}
+
+/// One jump host on the way to a server, with its saved password or key
+/// passphrase. Routes list hops from the one the client dials first.
+#[derive(Debug, Clone)]
+pub struct JumpHop {
+    pub server: ServerRecord,
+    pub secret: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

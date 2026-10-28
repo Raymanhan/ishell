@@ -117,6 +117,7 @@
 :root[data-theme="glass"] .process-card,
 :root[data-theme="glass"] .mount-card,
 :root[data-theme="glass"] .editor-section,
+:root[data-theme="glass"] .field select,
 :root[data-theme="glass"] .field input,
 :root[data-theme="glass"] .field textarea,
 :root[data-theme="glass"] .auth-switch {
@@ -137,6 +138,7 @@
 }
 :root[data-theme="glass"] .history-search:focus-within,
 :root[data-theme="glass"] .pathbar:focus-within,
+:root[data-theme="glass"] .field select:focus,
 :root[data-theme="glass"] .field input:focus,
 :root[data-theme="glass"] .field textarea:focus {
   border-color: rgba(var(--accent-rgb), 0.58);
@@ -274,6 +276,7 @@
   border-color: transparent;
   background: transparent;
 }
+:root[data-theme="glass"] .server-editor-sheet .field select,
 :root[data-theme="glass"] .server-editor-sheet .field input,
 :root[data-theme="glass"] .server-editor-sheet .field textarea {
   border-color: rgba(255, 255, 255, 0.08);
@@ -290,11 +293,13 @@
 :root[data-theme="glass"] .server-editor-sheet .password-input-wrap input:focus {
   border-color: transparent;
 }
+:root[data-theme="glass"] .server-editor-sheet .field select:hover,
 :root[data-theme="glass"] .server-editor-sheet .field input:hover,
 :root[data-theme="glass"] .server-editor-sheet .field textarea:hover {
   border-color: rgba(255, 255, 255, 0.16);
   background: transparent;
 }
+:root[data-theme="glass"] .server-editor-sheet .field select:focus,
 :root[data-theme="glass"] .server-editor-sheet .field input:focus,
 :root[data-theme="glass"] .server-editor-sheet .field textarea:focus {
   border-color: rgba(var(--accent-rgb), 0.36);
@@ -620,6 +625,7 @@
 :root[data-theme^="liquid-glass"] .settings-number,
 :root[data-theme^="liquid-glass"] .editor-section,
 :root[data-theme^="liquid-glass"] .auth-switch,
+:root[data-theme^="liquid-glass"] .field select,
 :root[data-theme^="liquid-glass"] .field input,
 :root[data-theme^="liquid-glass"] .field textarea {
   position: relative;
@@ -776,6 +782,7 @@
 :root[data-theme^="liquid-glass"] .process-card,
 :root[data-theme^="liquid-glass"] .mount-card,
 :root[data-theme^="liquid-glass"] .editor-section,
+:root[data-theme^="liquid-glass"] .field select,
 :root[data-theme^="liquid-glass"] .field input,
 :root[data-theme^="liquid-glass"] .field textarea,
 :root[data-theme^="liquid-glass"] .connection-rename-input,
@@ -830,6 +837,7 @@
 
 :root[data-theme^="liquid-glass"] .history-search:focus-within,
 :root[data-theme^="liquid-glass"] .pathbar:focus-within,
+:root[data-theme^="liquid-glass"] .field select:focus,
 :root[data-theme^="liquid-glass"] .field input:focus,
 :root[data-theme^="liquid-glass"] .field textarea:focus,
 :root[data-theme^="liquid-glass"] .connection-rename-input:focus {
@@ -892,6 +900,7 @@
 
 :root[data-theme^="liquid-glass"] .server-editor-sheet .editor-section,
 :root[data-theme^="liquid-glass"] .server-editor-sheet .auth-switch,
+:root[data-theme^="liquid-glass"] .server-editor-sheet .field select,
 :root[data-theme^="liquid-glass"] .server-editor-sheet .field input,
 :root[data-theme^="liquid-glass"] .server-editor-sheet .field textarea,
 :root[data-theme^="liquid-glass"] .server-editor-sheet .password-input-wrap {
@@ -910,6 +919,7 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
+:root[data-theme^="liquid-glass"] .server-editor-sheet .field select:focus,
 :root[data-theme^="liquid-glass"] .server-editor-sheet .field input:focus,
 :root[data-theme^="liquid-glass"] .server-editor-sheet .field textarea:focus,
 :root[data-theme^="liquid-glass"] .server-editor-sheet .password-input-wrap:focus-within {
@@ -1465,6 +1475,7 @@
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .process-card,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .mount-card,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .editor-section,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .field select,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .field input,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .field textarea,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .connection-rename-input,
@@ -1517,6 +1528,7 @@
 
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .history-search:focus-within,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .pathbar:focus-within,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .field select:focus,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .field input:focus,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .field textarea:focus,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .connection-rename-input:focus {
@@ -1654,6 +1666,7 @@
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .field-group-label {
   color: var(--dim);
 }
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .field select,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .field input,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .field textarea {
   border-color: rgba(var(--ink-rgb), 0.18);
@@ -1662,11 +1675,13 @@
     inset 0 1px 2px rgba(var(--shadow-rgb), 0.045),
     0 1px 0 rgba(255, 255, 255, 0.58);
 }
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .field select:hover,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .field input:hover,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .field textarea:hover {
   border-color: rgba(var(--ink-rgb), 0.28);
   background: rgba(255, 255, 255, 0.9);
 }
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .field select:focus,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .field input:focus,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .field textarea:focus,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .server-editor-sheet .password-input-wrap:focus-within {

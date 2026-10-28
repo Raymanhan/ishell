@@ -29,8 +29,8 @@ use crate::{
     },
     store::{
         append_command_history, delete_server as remove_server, delete_snippet as remove_snippet,
-        get_server, list_command_history as load_command_history, list_servers as load_servers,
-        list_snippets as load_snippets, normalize_tags, read_secret,
+        get_server, jump_hops, list_command_history as load_command_history,
+        list_servers as load_servers, list_snippets as load_snippets, normalize_tags, read_secret,
         reorder_servers as save_server_order, save_snippet as store_snippet, upsert_server,
         validate_server,
     },
@@ -171,6 +171,7 @@ fn server_record_to_input(server: ServerRecord) -> ServerInput {
         key_path: server.key_path,
         color: server.color,
         notes: server.notes,
+        jump_server_id: server.jump_server_id,
         sort_order: Some(server.sort_order),
     }
 }
@@ -272,6 +273,9 @@ pub fn save_server(
         key_path: input.key_path.filter(|path| !path.trim().is_empty()),
         color: input.color,
         notes: input.notes.trim().to_string(),
+        jump_server_id: input
+            .jump_server_id
+            .filter(|jump_id| !jump_id.trim().is_empty()),
         sort_order: input
             .sort_order
             .or_else(|| current.as_ref().map(|server| server.sort_order))
@@ -280,6 +284,11 @@ pub fn save_server(
         updated_at: now(),
         last_connected_at: current.as_ref().and_then(|server| server.last_connected_at),
     };
+
+    if record.jump_server_id.as_deref() == Some(record.id.as_str()) {
+        return Err("服务器不能把自己设为跳板机".into());
+    }
+    jump_hops(&app, &record)?;
 
     let secret = password.as_deref().filter(|value| !value.is_empty());
     upsert_server(&app, &record, secret)?;

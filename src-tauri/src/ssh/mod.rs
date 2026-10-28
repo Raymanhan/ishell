@@ -15,6 +15,8 @@ use std::{
 };
 use tauri::{AppHandle, Emitter, Manager};
 
+#[cfg(not(russh_backend))]
+use crate::store::jump_hops;
 use crate::{
     models::{
         DiskMount, NetworkSample, ProcessUsage, ServerInput, ServerRecord, ServerStatus, SftpEntry,

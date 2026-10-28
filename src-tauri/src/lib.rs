@@ -30,6 +30,18 @@ pub fn run() {
         .manage(Arc::new(TailMonitorRegistry::default()))
         .manage(Arc::new(commands::UploadCancelRegistry::default()))
         .manage(Arc::new(commands::DownloadCancelRegistry::default()))
+        .setup(|app| {
+            #[cfg(russh_backend)]
+            {
+                let handle = app.handle().clone();
+                russh_transport::set_jump_resolver(Box::new(move |server| {
+                    store::jump_hops(&handle, server)
+                }));
+            }
+            #[cfg(not(russh_backend))]
+            let _ = app;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::list_servers,
             commands::save_server,

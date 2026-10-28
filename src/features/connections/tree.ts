@@ -17,6 +17,7 @@ export const defaultForm: ServerForm = {
   keyPath: "",
   color: swatches[0],
   notes: "",
+  jumpServerId: null,
   password: "",
 };
 
@@ -40,6 +41,7 @@ export function serverInputFromForm(form: ServerForm): ServerInput {
     keyPath: form.authType === "key" ? form.keyPath || null : null,
     color: form.color,
     notes: form.notes,
+    jumpServerId: form.jumpServerId || null,
   };
 }
 
@@ -56,8 +58,28 @@ export function serverInputFromRecord(server: ServerRecord): ServerInput {
     keyPath: server.keyPath ?? null,
     color: server.color,
     notes: server.notes,
+    jumpServerId: server.jumpServerId ?? null,
     sortOrder: server.sortOrder,
   };
+}
+
+/**
+ * Servers that the server being edited may use as its jump host: any other
+ * server that does not itself (directly or further up) go through it.
+ */
+export function jumpHostCandidates(servers: ServerRecord[], editingId: string | null | undefined) {
+  const byId = new Map(servers.map((server) => [server.id, server]));
+  const passesThroughEditing = (server: ServerRecord) => {
+    const seen = new Set<string>();
+    let next = server.jumpServerId;
+    while (next && !seen.has(next)) {
+      if (next === editingId) return true;
+      seen.add(next);
+      next = byId.get(next)?.jumpServerId;
+    }
+    return false;
+  };
+  return servers.filter((server) => server.id !== editingId && !(editingId && passesThroughEditing(server)));
 }
 
 export function ensureFolder(current: string[], folder: string) {

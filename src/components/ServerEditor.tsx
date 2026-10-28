@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Eye, EyeOff, PlugZap, X } from "lucide-react";
 import { swatches } from "../constants/theme";
-import type { ServerInput } from "../types";
+import type { ServerInput, ServerRecord } from "../types";
 
 export type ServerForm = ServerInput & { password: string; tagsText: string };
 
@@ -11,6 +11,7 @@ export function ServerEditor({
   saving,
   testing,
   testFeedback,
+  jumpHostCandidates,
   onSave,
   onTest,
   onClose,
@@ -21,6 +22,8 @@ export function ServerEditor({
   saving: boolean;
   testing: boolean;
   testFeedback: { kind: "info" | "success" | "error"; message: string } | null;
+  /** Saved servers this one can connect through. */
+  jumpHostCandidates: ServerRecord[];
   onSave: () => void;
   onTest: () => void;
   onClose: () => void;
@@ -81,6 +84,25 @@ export function ServerEditor({
                   <input type="number" inputMode="numeric" min={1} max={65535} value={form.port} onChange={(event) => update("port", Number(event.target.value))} />
                 </label>
               </div>
+              <label className="field">
+                <span>跳板机</span>
+                <select
+                  value={form.jumpServerId ?? ""}
+                  onChange={(event) => update("jumpServerId", event.target.value || null)}
+                >
+                  <option value="">直接连接</option>
+                  {jumpHostCandidates.map((server) => (
+                    <option key={server.id} value={server.id}>
+                      {server.name}（{server.username}@{server.host}）
+                    </option>
+                  ))}
+                </select>
+                {form.jumpServerId && (
+                  <small className="field-hint">
+                    先连接跳板机，再从跳板机连到这台服务器；跳板机使用它自己保存的账号和密码或私钥。
+                  </small>
+                )}
+              </label>
             </section>
 
             <section className="editor-section">

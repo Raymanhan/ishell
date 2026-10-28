@@ -636,11 +636,16 @@ export default function App() {
   ) {
     if (!server) return;
     const tabId = createTabId(server.id);
+    const jumpName = server.jumpServerId
+      ? serversRef.current.find((item) => item.id === server.jumpServerId)?.name
+      : undefined;
     const nextTab: ShellTab = {
       id: tabId,
       serverId: server.id,
       title: server.name,
-      subtitle: `${server.username}@${server.host}:${server.port}`,
+      subtitle: `${server.username}@${server.host}:${server.port}${
+        jumpName ? ` · 经 ${jumpName}` : ""
+      }`,
       host: server.host,
       color: server.color,
       sessionId: null,
@@ -1935,6 +1940,7 @@ export default function App() {
           saving={connections.editor.saving}
           testing={connections.editor.testing}
           testFeedback={connections.editor.testFeedback}
+          jumpHostCandidates={connections.editor.jumpHostCandidates}
           onSave={connections.editor.save}
           onTest={connections.editor.test}
           onClose={connections.editor.close}

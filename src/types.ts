@@ -12,6 +12,8 @@ export interface ServerRecord {
   keyPath?: string | null;
   color: string;
   notes: string;
+  /** Another saved server to connect through (jump host), if any. */
+  jumpServerId?: string | null;
   sortOrder: number;
   createdAt: number;
   updatedAt: number;
@@ -30,6 +32,7 @@ export interface ServerInput {
   keyPath?: string | null;
   color: string;
   notes: string;
+  jumpServerId?: string | null;
   sortOrder?: number | null;
 }
 
