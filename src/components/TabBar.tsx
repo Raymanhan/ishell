@@ -6,7 +6,7 @@ import {
   type MouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { Activity, Clock3, Columns2, Copy, FolderTree, PanelLeft, PanelsTopLeft, Plus, RefreshCw, Rows2, Settings, X } from "lucide-react";
+import { Activity, Clock3, Columns2, Copy, FolderTree, PanelLeft, PanelsTopLeft, Plus, Radio, RefreshCw, Rows2, Settings, X } from "lucide-react";
 import type { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { MAX_PANES, splitShortcutLabel, type SplitDirection } from "../features/shell/panes";
 import type { ShellTab } from "../features/shell/types";
@@ -39,6 +39,8 @@ export function TabBar({
   filesOpen,
   statusOpen,
   historyOpen,
+  broadcastActive,
+  onToggleBroadcast,
   serverCount,
   onOpenConnections,
   onOpenSettings,
@@ -64,6 +66,8 @@ export function TabBar({
   filesOpen: boolean;
   statusOpen: boolean;
   historyOpen: boolean;
+  broadcastActive: boolean;
+  onToggleBroadcast: () => void;
   serverCount: number;
   onOpenConnections: () => void;
   onOpenSettings: () => void;
@@ -554,6 +558,18 @@ export function TabBar({
               >
                 <span className="dock-toggle-icon">
                   <Clock3 size={14} />
+                </span>
+              </button>
+              <button
+                type="button"
+                className={`dock-toggle ${broadcastActive ? "on broadcast-on" : ""}`}
+                onClick={onToggleBroadcast}
+                title="广播输入：同时向多个会话输入"
+                aria-label="广播输入"
+                aria-pressed={broadcastActive}
+              >
+                <span className="dock-toggle-icon">
+                  <Radio size={14} />
                 </span>
               </button>
             </>

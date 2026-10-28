@@ -66,6 +66,9 @@ function TerminalPaneBase({
   onFocusPane,
   onClosePane,
   onSplit,
+  broadcasting = false,
+  onBroadcastInput,
+  inputRegistry,
 }: {
   tab: ShellTab;
   visible: boolean;
@@ -84,6 +87,11 @@ function TerminalPaneBase({
   onFocusPane?: () => void;
   onClosePane?: () => void;
   onSplit?: (direction: SplitDirection) => void;
+  /** This session is a broadcast target: input typed here is mirrored to the other targets. */
+  broadcasting?: boolean;
+  onBroadcastInput?: (sourceTabId: string, data: string) => void;
+  /** Where the pane registers a function that types into it, for broadcasts from other panes. */
+  inputRegistry?: Map<string, (data: string) => void>;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -102,6 +110,10 @@ function TerminalPaneBase({
   const onCommandSubmittedRef = useRef(onCommandSubmitted);
   const onSplitRef = useRef(onSplit);
   onSplitRef.current = onSplit;
+  const broadcastingRef = useRef(broadcasting);
+  broadcastingRef.current = broadcasting;
+  const onBroadcastInputRef = useRef(onBroadcastInput);
+  onBroadcastInputRef.current = onBroadcastInput;
   const commandDraftRef = useRef("");
   const sensitiveInputRef = useRef(false);
   const commandHistoryRef = useRef(commandHistory);
@@ -356,9 +368,15 @@ function TerminalPaneBase({
     rawSendTerminalInput(data);
   }
 
-  function rawSendTerminalInput(data: string) {
+  /**
+   * Send input as if typed. `broadcast` mirrors it to the other broadcast
+   * targets when this pane is one; input that arrived from a broadcast, or that
+   * only makes sense for this session, passes false.
+   */
+  function rawSendTerminalInput(data: string, broadcast = true) {
     const currentSession = sessionRef.current;
     if (currentSession && closedSessionRef.current === currentSession) return;
+    if (broadcast && broadcastingRef.current) onBroadcastInputRef.current?.(tab.id, data);
     updateCommandDraft(data);
     if (isTauri && currentSession) {
       command("terminal_input", { sessionId: currentSession, data }).catch((error) => {
@@ -417,7 +435,14 @@ function TerminalPaneBase({
     // dark input box. Answer with the surface the terminal actually sits on.
     terminal.parser.registerOscHandler(11, (data) => {
       if (data !== "?") return false;
-      terminal.input(`\x1b]11;${getTerminalSurfaceReport(themeRef.current)}\x1b\\`, false);
+      // Reply to this session only, never through the (possibly broadcast) input path.
+      const sessionId = sessionRef.current;
+      if (isTauri && sessionId) {
+        command("terminal_input", {
+          sessionId,
+          data: `\x1b]11;${getTerminalSurfaceReport(themeRef.current)}\x1b\\`,
+        }).catch(() => undefined);
+      }
       return true;
     });
     terminal.open(containerRef.current);
@@ -551,8 +576,17 @@ function TerminalPaneBase({
       return;
     }
     terminalRef.current?.focus();
-    rawSendTerminalInput(commandRequest.command);
+    rawSendTerminalInput(commandRequest.command, false);
   }, [commandRequest?.id, visible]);
+
+  useEffect(() => {
+    if (!inputRegistry) return;
+    const tabId = tab.id;
+    inputRegistry.set(tabId, (data) => rawSendTerminalInput(data, false));
+    return () => {
+      inputRegistry.delete(tabId);
+    };
+  }, [inputRegistry, tab.id]);
 
   useEffect(() => {
     themeRef.current = theme;
@@ -694,7 +728,7 @@ function TerminalPaneBase({
     <section
       className={`terminal-panel ${visible ? "active" : ""} ${pane ? "split" : ""} ${pane?.focused ? "focused" : ""} ${
         pane && pane.rect.top > 0 ? "pane-below" : ""
-      }`}
+      } ${broadcasting ? "broadcasting" : ""}`}
       style={pane ? {
         inset: "auto",
         left: `${pane.rect.left}%`,
@@ -759,13 +793,18 @@ function TerminalPaneBase({
             </div>
           </div>
         )}
-        {pane && (
+        {(pane || broadcasting) && (
           <div className="pane-label">
-            <span className={`tab-dot ${tab.state}`} style={{ color: tab.color }} />
-            <span className="pane-label-title" title={`${tab.title} · ${tab.subtitle}`}>{tab.title}</span>
-            <button type="button" title="关闭窗格" aria-label={`关闭窗格 ${tab.title}`} onClick={onClosePane}>
-              <X size={12} />
-            </button>
+            {broadcasting && <span className="pane-label-broadcast" title="正在广播输入">广播</span>}
+            {pane && (
+              <>
+                <span className={`tab-dot ${tab.state}`} style={{ color: tab.color }} />
+                <span className="pane-label-title" title={`${tab.title} · ${tab.subtitle}`}>{tab.title}</span>
+                <button type="button" title="关闭窗格" aria-label={`关闭窗格 ${tab.title}`} onClick={onClosePane}>
+                  <X size={12} />
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -799,6 +838,7 @@ export const TerminalPane = memo(TerminalPaneBase, (previous, next) => {
     previous.pane?.rect.top === next.pane?.rect.top &&
     previous.pane?.rect.width === next.pane?.rect.width &&
     previous.pane?.rect.height === next.pane?.rect.height &&
-    Boolean(previous.onSplit) === Boolean(next.onSplit)
+    Boolean(previous.onSplit) === Boolean(next.onSplit) &&
+    previous.broadcasting === next.broadcasting
   );
 });

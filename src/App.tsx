@@ -11,6 +11,7 @@ import {
 } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { command, isTauri } from "./api/tauri";
+import { BroadcastBar } from "./components/BroadcastBar";
 import { CommandHistoryPanel } from "./components/CommandHistoryPanel";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ConnectionManager } from "./components/ConnectionManager";
@@ -141,6 +142,8 @@ export default function App() {
   const [tabs, setTabs] = useState<ShellTab[]>(() => handedOffInitialTab ? [handedOffInitialTab] : []);
   const [activeTabId, setActiveTabId] = useState<string | null>(() => handedOffInitialTab?.id ?? null);
   const [paneLayouts, setPaneLayouts] = useState<PaneLayouts>({});
+  // Sessions that mirror each other's input; null when broadcasting is off.
+  const [broadcastTargets, setBroadcastTargets] = useState<Set<string> | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
   const [filesRatio, setFilesRatio] = useState(FILES_PANEL_RATIO);
   const [filesDragging, setFilesDragging] = useState(false);
@@ -186,6 +189,9 @@ export default function App() {
   const serversRef = useRef<ServerRecord[]>([]);
   const terminalStackRef = useRef<HTMLDivElement>(null);
   const paneDragCleanupRef = useRef<(() => void) | null>(null);
+  const broadcastTargetsRef = useRef<Set<string> | null>(null);
+  // Each terminal pane registers a function that types into it.
+  const paneInputsRef = useRef(new Map<string, (data: string) => void>());
 
   const activeTab = useMemo(
     () => tabs.find((tab) => tab.id === activeTabId) ?? null,
@@ -214,6 +220,7 @@ export default function App() {
   tabsRef.current = tabs;
   activeTabIdRef.current = activeTabId;
   paneLayoutsRef.current = paneLayouts;
+  broadcastTargetsRef.current = broadcastTargets;
   if (activeTabId && activeGroupId) lastFocusedPaneRef.current[activeGroupId] = activeTabId;
 
   useEffect(() => {
@@ -338,6 +345,16 @@ export default function App() {
       if (noticeTimer.current !== null) window.clearTimeout(noticeTimer.current);
     };
   }, []);
+
+  useEffect(() => {
+    setBroadcastTargets((current) => {
+      if (!current) return current;
+      if (tabs.length === 0) return null;
+      const open = new Set(tabs.map((tab) => tab.id));
+      const kept = [...current].filter((id) => open.has(id));
+      return kept.length === current.size ? current : new Set(kept);
+    });
+  }, [tabs]);
 
   useEffect(() => {
     if (!activeTab) {
@@ -689,6 +706,24 @@ export default function App() {
   function focusedPaneOf(groupId: string) {
     const last = lastFocusedPaneRef.current[groupId];
     return last && paneIdsOf(paneLayoutsRef.current, groupId).includes(last) ? last : groupId;
+  }
+
+  function toggleBroadcast() {
+    if (broadcastTargets) {
+      setBroadcastTargets(null);
+      return;
+    }
+    const groupPanes = activeGroupId ? paneIdsOf(paneLayouts, activeGroupId) : [];
+    setBroadcastTargets(new Set(groupPanes.length > 1 ? groupPanes : tabs.map((tab) => tab.id)));
+  }
+
+  /** Mirror input typed into one broadcast target to the others. Reads refs only (see splitShell). */
+  function broadcastInput(sourceTabId: string, data: string) {
+    const targets = broadcastTargetsRef.current;
+    if (!targets?.has(sourceTabId)) return;
+    for (const tabId of targets) {
+      if (tabId !== sourceTabId) paneInputsRef.current.get(tabId)?.(data);
+    }
   }
 
   function activateGroup(groupId: string) {
@@ -1585,6 +1620,8 @@ export default function App() {
           filesOpen={filesOpen}
           statusOpen={statusOpen}
           historyOpen={historyOpen}
+          broadcastActive={broadcastTargets !== null}
+          onToggleBroadcast={toggleBroadcast}
           serverCount={connections.servers.length}
           onOpenConnections={() => setConnectionsOpen((open) => !open)}
           onOpenSettings={() => setSettingsOpen(true)}
@@ -1652,6 +1689,9 @@ export default function App() {
                             onFocusPane={() => setActiveTabId(tab.id)}
                             onClosePane={() => void closeShell(tab.id)}
                             onSplit={(direction) => splitShell(tab.id, direction)}
+                            broadcasting={broadcastTargets !== null && broadcastTargets.size > 1 && broadcastTargets.has(tab.id)}
+                            onBroadcastInput={broadcastInput}
+                            inputRegistry={paneInputsRef.current}
                             theme={theme}
                             fontSize={terminalFontSize}
                             layoutSignal={`${filesOpen}:${filesRatio}:${filesDragging}:${connectionsOpen}:${statusOpen}:${historyOpen}:${statusPanelWidth}:${tabs.length}`}
@@ -1684,6 +1724,15 @@ export default function App() {
                       />
                     ))}
                   </div>
+                  {broadcastTargets && (
+                    <BroadcastBar
+                      sessions={tabs}
+                      targets={broadcastTargets}
+                      activeGroupPaneIds={activeGroupId ? paneIdsOf(paneLayouts, activeGroupId) : []}
+                      onChange={setBroadcastTargets}
+                      onStop={() => setBroadcastTargets(null)}
+                    />
+                  )}
                 </div>
 
                 {activeTab && (
