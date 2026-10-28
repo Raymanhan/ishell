@@ -12,6 +12,8 @@ export interface ServerRecord {
   keyPath?: string | null;
   color: string;
   notes: string;
+  /** Another saved server to connect through (jump host), if any. */
+  jumpServerId?: string | null;
   sortOrder: number;
   createdAt: number;
   updatedAt: number;
@@ -30,6 +32,7 @@ export interface ServerInput {
   keyPath?: string | null;
   color: string;
   notes: string;
+  jumpServerId?: string | null;
   sortOrder?: number | null;
 }
 
@@ -205,4 +208,54 @@ export interface TerminalSnapshotPayload {
 export interface TerminalClosedPayload {
   sessionId: string;
   reason: string;
+}
+
+export interface Snippet {
+  id: string;
+  name: string;
+  command: string;
+  description: string;
+  /** Press Enter after sending, so the command runs right away. */
+  run: boolean;
+  sortOrder: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface SnippetInput {
+  id?: string | null;
+  name: string;
+  command: string;
+  description: string;
+  run: boolean;
+}
+
+export type PortForwardKind = "local" | "remote" | "dynamic";
+
+export interface PortForward {
+  id: string;
+  serverId: string;
+  /** local: ssh -L, remote: ssh -R, dynamic: ssh -D (SOCKS5 proxy). */
+  kind: PortForwardKind;
+  /** Where to listen: this computer for local and dynamic, the server for remote. */
+  bindHost: string;
+  bindPort: number;
+  /** Where connections go: seen from the server for local, from this computer for remote. */
+  destHost: string;
+  destPort: number;
+  description: string;
+  /** Start when a terminal to the server connects. */
+  autoStart: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type PortForwardInput = Omit<PortForward, "id" | "createdAt" | "updatedAt"> & { id?: string | null };
+
+export type PortForwardState = "starting" | "running" | "stopped" | "error";
+
+export interface PortForwardStatus {
+  id: string;
+  state: PortForwardState;
+  message?: string | null;
 }

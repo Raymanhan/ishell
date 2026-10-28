@@ -6,9 +6,10 @@ import {
   type MouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { Activity, Clock3, Copy, FolderTree, PanelLeft, PanelsTopLeft, Plus, RefreshCw, Settings, X } from "lucide-react";
+import { Activity, Clock3, Columns2, Copy, FolderTree, Network, PanelLeft, PanelsTopLeft, Plus, Radio, RefreshCw, Rows2, Settings, SquareCode, X } from "lucide-react";
 import type { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import type { ShellTab } from "../features/shell/types";
+import { MAX_PANES, splitShortcutLabel, type SplitDirection } from "../features/shell/panes";
+import type { ShellTab, SidePanel } from "../features/shell/types";
 
 interface TabDropPoint {
   screenX: number;
@@ -36,18 +37,20 @@ export function TabBar({
   activeTabId,
   activeTabTitle,
   filesOpen,
-  statusOpen,
-  historyOpen,
+  sidePanel,
+  broadcastActive,
+  onToggleBroadcast,
   serverCount,
   onOpenConnections,
   onOpenSettings,
   onToggleFiles,
-  onToggleStatus,
-  onToggleHistory,
+  onToggleSidePanel,
   onActivate,
   onClone,
   onReconnect,
   onDetach,
+  onSplit,
+  paneCounts,
   onClose,
   onCloseTabs,
   onReorder,
@@ -59,18 +62,21 @@ export function TabBar({
   activeTabId: string | null;
   activeTabTitle: string | null;
   filesOpen: boolean;
-  statusOpen: boolean;
-  historyOpen: boolean;
+  sidePanel: SidePanel | null;
+  broadcastActive: boolean;
+  onToggleBroadcast: () => void;
   serverCount: number;
   onOpenConnections: () => void;
   onOpenSettings: () => void;
   onToggleFiles: () => void;
-  onToggleStatus: () => void;
-  onToggleHistory: () => void;
+  onToggleSidePanel: (panel: SidePanel) => void;
   onActivate: (id: string) => void;
   onClone: (id: string) => void;
   onReconnect: (id: string) => void;
   onDetach: (id: string, dropPoint?: TabDropPoint) => void;
+  onSplit: (id: string, direction: SplitDirection) => void;
+  /** Number of panes in each split tab; tabs that are not split are absent. */
+  paneCounts: Record<string, number>;
   onClose: (id: string) => void;
   onCloseTabs: (ids: string[]) => void;
   onReorder: (draggedId: string, targetId: string) => void;
@@ -164,8 +170,8 @@ export function TabBar({
     event.stopPropagation();
     setMenu({
       tabId,
-      x: Math.min(event.clientX, window.innerWidth - 188),
-      y: Math.min(event.clientY, window.innerHeight - 224),
+      x: Math.min(event.clientX, window.innerWidth - 220),
+      y: Math.min(event.clientY, window.innerHeight - 320),
     });
   }
 
@@ -484,6 +490,11 @@ export function TabBar({
                 >
                   <span className={`tab-dot ${tab.state}`} style={{ color: tab.color }} />
                   <span className="terminal-tab-title">{tab.title}</span>
+                  {paneCounts[tab.id] && (
+                    <span className="terminal-tab-panes" title={`${paneCounts[tab.id]} 个分屏窗格`}>
+                      {paneCounts[tab.id]}
+                    </span>
+                  )}
                 </button>
                 <button
                   type="button"
@@ -523,11 +534,11 @@ export function TabBar({
               </button>
               <button
                 type="button"
-                className={`dock-toggle ${statusOpen ? "on" : ""}`}
-                onClick={onToggleStatus}
+                className={`dock-toggle ${sidePanel === "status" ? "on" : ""}`}
+                onClick={() => onToggleSidePanel("status")}
                 title="监控面板"
                 aria-label="监控面板"
-                aria-pressed={statusOpen}
+                aria-pressed={sidePanel === "status"}
               >
                 <span className="dock-toggle-icon">
                   <Activity size={14} />
@@ -535,14 +546,50 @@ export function TabBar({
               </button>
               <button
                 type="button"
-                className={`dock-toggle ${historyOpen ? "on" : ""}`}
-                onClick={onToggleHistory}
+                className={`dock-toggle ${sidePanel === "history" ? "on" : ""}`}
+                onClick={() => onToggleSidePanel("history")}
                 title="历史命令"
                 aria-label="历史命令"
-                aria-pressed={historyOpen}
+                aria-pressed={sidePanel === "history"}
               >
                 <span className="dock-toggle-icon">
                   <Clock3 size={14} />
+                </span>
+              </button>
+              <button
+                type="button"
+                className={`dock-toggle ${sidePanel === "snippets" ? "on" : ""}`}
+                onClick={() => onToggleSidePanel("snippets")}
+                title="命令片段"
+                aria-label="命令片段"
+                aria-pressed={sidePanel === "snippets"}
+              >
+                <span className="dock-toggle-icon">
+                  <SquareCode size={14} />
+                </span>
+              </button>
+              <button
+                type="button"
+                className={`dock-toggle ${sidePanel === "forwards" ? "on" : ""}`}
+                onClick={() => onToggleSidePanel("forwards")}
+                title="端口转发"
+                aria-label="端口转发"
+                aria-pressed={sidePanel === "forwards"}
+              >
+                <span className="dock-toggle-icon">
+                  <Network size={14} />
+                </span>
+              </button>
+              <button
+                type="button"
+                className={`dock-toggle ${broadcastActive ? "on broadcast-on" : ""}`}
+                onClick={onToggleBroadcast}
+                title="广播输入：同时向多个会话输入"
+                aria-label="广播输入"
+                aria-pressed={broadcastActive}
+              >
+                <span className="dock-toggle-icon">
+                  <Radio size={14} />
                 </span>
               </button>
             </>
@@ -577,7 +624,28 @@ export function TabBar({
             <RefreshCw size={14} />
             重连
           </button>
-          {tabs.length > 1 && (
+          <div className="ctx-sep" role="separator" />
+          <button
+            type="button"
+            role="menuitem"
+            disabled={(paneCounts[menu.tabId] ?? 1) >= MAX_PANES}
+            onClick={() => runMenu(() => onSplit(menu.tabId, "row"))}
+          >
+            <Columns2 size={14} />
+            向右分屏
+            <kbd>{splitShortcutLabel.row}</kbd>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={(paneCounts[menu.tabId] ?? 1) >= MAX_PANES}
+            onClick={() => runMenu(() => onSplit(menu.tabId, "column"))}
+          >
+            <Rows2 size={14} />
+            向下分屏
+            <kbd>{splitShortcutLabel.column}</kbd>
+          </button>
+          {tabs.length > 1 && !paneCounts[menu.tabId] && (
             <button type="button" role="menuitem" onClick={() => runMenu(() => onDetach(menu.tabId))}>
               <PanelsTopLeft size={14} />
               移至新窗口

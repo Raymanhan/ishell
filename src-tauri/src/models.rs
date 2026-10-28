@@ -14,6 +14,9 @@ pub struct ServerRecord {
     pub key_path: Option<String>,
     pub color: String,
     pub notes: String,
+    /// Another saved server to connect through (ProxyJump), if any.
+    #[serde(default)]
+    pub jump_server_id: Option<String>,
     #[serde(default)]
     pub sort_order: u64,
     pub created_at: u64,
@@ -36,7 +39,17 @@ pub struct ServerInput {
     pub color: String,
     pub notes: String,
     #[serde(default)]
+    pub jump_server_id: Option<String>,
+    #[serde(default)]
     pub sort_order: Option<u64>,
+}
+
+/// One jump host on the way to a server, with its saved password or key
+/// passphrase. Routes list hops from the one the client dials first.
+#[derive(Debug, Clone)]
+pub struct JumpHop {
+    pub server: ServerRecord,
+    pub secret: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -45,6 +58,85 @@ pub struct ServerOrderInput {
     pub id: String,
     pub group: String,
     pub sort_order: u64,
+}
+
+/// A saved port forwarding rule for a server.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortForward {
+    pub id: String,
+    pub server_id: String,
+    /// "local" (ssh -L), "remote" (ssh -R) or "dynamic" (ssh -D, a SOCKS5 proxy).
+    pub kind: String,
+    /// Where to listen: on this computer for local and dynamic, on the server for remote.
+    pub bind_host: String,
+    pub bind_port: u16,
+    /// Where connections go: as seen from the server for local, from this computer for remote.
+    #[serde(default)]
+    pub dest_host: String,
+    #[serde(default)]
+    pub dest_port: u16,
+    #[serde(default)]
+    pub description: String,
+    /// Start when a terminal to the server connects.
+    #[serde(default)]
+    pub auto_start: bool,
+    pub created_at: u64,
+    pub updated_at: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortForwardInput {
+    pub id: Option<String>,
+    pub server_id: String,
+    pub kind: String,
+    pub bind_host: String,
+    pub bind_port: u16,
+    #[serde(default)]
+    pub dest_host: String,
+    #[serde(default)]
+    pub dest_port: u16,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub auto_start: bool,
+}
+
+/// Live state of a port forward: "starting", "running", "stopped" or "error".
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortForwardStatus {
+    pub id: String,
+    pub state: String,
+    pub message: Option<String>,
+}
+
+/// A saved command that can be sent to a terminal from the snippets panel.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Snippet {
+    pub id: String,
+    pub name: String,
+    pub command: String,
+    #[serde(default)]
+    pub description: String,
+    /// Press Enter after sending, so the command runs right away.
+    pub run: bool,
+    pub sort_order: u64,
+    pub created_at: u64,
+    pub updated_at: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SnippetInput {
+    pub id: Option<String>,
+    pub name: String,
+    pub command: String,
+    #[serde(default)]
+    pub description: String,
+    pub run: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

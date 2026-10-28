@@ -7,3 +7,4 @@ src-tauri/target/
 *.local
 .playwright-cli/
 output/
+src-tauri/gen/schemas/linux-schema.json

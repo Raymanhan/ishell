@@ -1,11 +1,14 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
+import { SearchAddon } from "@xterm/addon-search";
 import { Terminal } from "@xterm/xterm";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, X } from "lucide-react";
 import { command, isTauri } from "../api/tauri";
 import { getTerminalSurfaceReport, getTerminalTheme, type AppTheme } from "../constants/theme";
+import { splitShortcutDirection, type PaneRect, type SplitDirection } from "../features/shell/panes";
 import type { ShellTab } from "../features/shell/types";
+import { isTerminalSearchShortcut, TerminalSearchBar } from "./TerminalSearchBar";
 import type {
   TerminalClosedPayload,
   TerminalDataPayload,
@@ -28,6 +31,12 @@ interface HistorySuggestState {
   x: number;
   y: number;
   maxHeight: number;
+}
+
+/** Where a pane sits when its tab is split; absent for a tab that fills the terminal area. */
+export interface PanePlacement {
+  rect: PaneRect;
+  focused: boolean;
 }
 
 const closedHistorySuggest: HistorySuggestState = {
@@ -53,6 +62,13 @@ function TerminalPaneBase({
   pasteRequest,
   commandRequest,
   commandHistory,
+  pane,
+  onFocusPane,
+  onClosePane,
+  onSplit,
+  broadcasting = false,
+  onBroadcastInput,
+  inputRegistry,
 }: {
   tab: ShellTab;
   visible: boolean;
@@ -67,6 +83,15 @@ function TerminalPaneBase({
   pasteRequest?: { id: number; command: string } | null;
   commandRequest?: { id: number; command: string; requirePromptStart?: boolean; blockedNotice?: string } | null;
   commandHistory: string[];
+  pane?: PanePlacement;
+  onFocusPane?: () => void;
+  onClosePane?: () => void;
+  onSplit?: (direction: SplitDirection) => void;
+  /** This session is a broadcast target: input typed here is mirrored to the other targets. */
+  broadcasting?: boolean;
+  onBroadcastInput?: (sourceTabId: string, data: string) => void;
+  /** Where the pane registers a function that types into it, for broadcasts from other panes. */
+  inputRegistry?: Map<string, (data: string) => void>;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -83,12 +108,21 @@ function TerminalPaneBase({
   const onReadyRef = useRef(onReady);
   const onClosedRef = useRef(onClosed);
   const onCommandSubmittedRef = useRef(onCommandSubmitted);
+  const onSplitRef = useRef(onSplit);
+  onSplitRef.current = onSplit;
+  const broadcastingRef = useRef(broadcasting);
+  broadcastingRef.current = broadcasting;
+  const onBroadcastInputRef = useRef(onBroadcastInput);
+  onBroadcastInputRef.current = onBroadcastInput;
   const commandDraftRef = useRef("");
   const sensitiveInputRef = useRef(false);
   const commandHistoryRef = useRef(commandHistory);
   const historySuggestRef = useRef<HistorySuggestState>(closedHistorySuggest);
   const selectedSuggestionRef = useRef<HTMLButtonElement | null>(null);
   const [historySuggest, setHistorySuggest] = useState<HistorySuggestState>(closedHistorySuggest);
+  const [searchAddon, setSearchAddon] = useState<SearchAddon | null>(null);
+  // 0 = closed; otherwise bumped on every open shortcut so the bar refocuses.
+  const [searchSignal, setSearchSignal] = useState(0);
   commandHistoryRef.current = commandHistory;
 
   const suggestedCommands = useMemo(
@@ -334,9 +368,15 @@ function TerminalPaneBase({
     rawSendTerminalInput(data);
   }
 
-  function rawSendTerminalInput(data: string) {
+  /**
+   * Send input as if typed. `broadcast` mirrors it to the other broadcast
+   * targets when this pane is one; input that arrived from a broadcast, or that
+   * only makes sense for this session, passes false.
+   */
+  function rawSendTerminalInput(data: string, broadcast = true) {
     const currentSession = sessionRef.current;
     if (currentSession && closedSessionRef.current === currentSession) return;
+    if (broadcast && broadcastingRef.current) onBroadcastInputRef.current?.(tab.id, data);
     updateCommandDraft(data);
     if (isTauri && currentSession) {
       command("terminal_input", { sessionId: currentSession, data }).catch((error) => {
@@ -344,10 +384,8 @@ function TerminalPaneBase({
         if (terminalRef.current) terminalRef.current.options.disableStdin = true;
       });
     } else if (!isTauri) {
-      terminalRef.current?.write(data);
-      if (data === "\r") {
-        terminalRef.current?.write("\r\n$ ");
-      }
+      // Browser demo: echo locally and fake a prompt after every Enter.
+      terminalRef.current?.write(data.replace(/\r/g, "\r\n$ "));
     }
   }
 
@@ -381,17 +419,28 @@ function TerminalPaneBase({
       // background (ignoring the #00000000 theme color) and covers the macOS
       // vibrancy across the whole terminal region.
       allowTransparency: true,
+      // Search highlights use the decorations API.
+      allowProposedApi: true,
       theme: getTerminalTheme(theme),
     });
 
+    const search = new SearchAddon();
     terminal.loadAddon(fit);
+    terminal.loadAddon(search);
     // The theme background is transparent, so xterm would answer a background
     // query (OSC 11 "?") with black and CLIs that adapt to it (Codex, Claude
     // Code, vim) would pick dark styling on light themes, e.g. dark ink on a
     // dark input box. Answer with the surface the terminal actually sits on.
     terminal.parser.registerOscHandler(11, (data) => {
       if (data !== "?") return false;
-      terminal.input(`\x1b]11;${getTerminalSurfaceReport(themeRef.current)}\x1b\\`, false);
+      // Reply to this session only, never through the (possibly broadcast) input path.
+      const sessionId = sessionRef.current;
+      if (isTauri && sessionId) {
+        command("terminal_input", {
+          sessionId,
+          data: `\x1b]11;${getTerminalSurfaceReport(themeRef.current)}\x1b\\`,
+        }).catch(() => undefined);
+      }
       return true;
     });
     terminal.open(containerRef.current);
@@ -400,6 +449,20 @@ function TerminalPaneBase({
     terminal.writeln("");
 
     terminal.attachCustomKeyEventHandler((event) => {
+      const splitDirection = splitShortcutDirection(event);
+      if (splitDirection && onSplitRef.current) {
+        onSplitRef.current(splitDirection);
+        event.preventDefault();
+        return false;
+      }
+
+      if (isTerminalSearchShortcut(event)) {
+        closeHistorySuggest();
+        setSearchSignal((signal) => signal + 1);
+        event.preventDefault();
+        return false;
+      }
+
       if (
         event.type === "keydown" &&
         event.key === "Alt" &&
@@ -481,12 +544,14 @@ function TerminalPaneBase({
 
     terminalRef.current = terminal;
     fitRef.current = fit;
+    setSearchAddon(search);
 
     return () => {
       window.removeEventListener("resize", refit);
       if (fitTimerRef.current !== null) window.clearTimeout(fitTimerRef.current);
       if (fitSettledTimerRef.current !== null) window.clearTimeout(fitSettledTimerRef.current);
       observer.disconnect();
+      setSearchAddon(null);
       terminal.dispose();
     };
   }, [setNotice, tab.title]);
@@ -509,8 +574,17 @@ function TerminalPaneBase({
       return;
     }
     terminalRef.current?.focus();
-    rawSendTerminalInput(commandRequest.command);
+    rawSendTerminalInput(commandRequest.command, false);
   }, [commandRequest?.id, visible]);
+
+  useEffect(() => {
+    if (!inputRegistry) return;
+    const tabId = tab.id;
+    inputRegistry.set(tabId, (data) => rawSendTerminalInput(data, false));
+    return () => {
+      inputRegistry.delete(tabId);
+    };
+  }, [inputRegistry, tab.id]);
 
   useEffect(() => {
     themeRef.current = theme;
@@ -649,9 +723,35 @@ function TerminalPaneBase({
   }, [historySuggest.active, historySuggest.selectedIndex, suggestedCommands.length]);
 
   return (
-    <section className={`terminal-panel ${visible ? "active" : ""}`} aria-hidden={!visible}>
+    <section
+      className={`terminal-panel ${visible ? "active" : ""} ${pane ? "split" : ""} ${pane?.focused ? "focused" : ""} ${
+        pane && pane.rect.top > 0 ? "pane-below" : ""
+      } ${broadcasting ? "broadcasting" : ""}`}
+      style={pane ? {
+        inset: "auto",
+        left: `${pane.rect.left}%`,
+        top: `${pane.rect.top}%`,
+        width: `${pane.rect.width}%`,
+        height: `${pane.rect.height}%`,
+      } : undefined}
+      aria-hidden={!visible}
+      data-pane-id={tab.id}
+      onPointerDownCapture={pane && !pane.focused ? onFocusPane : undefined}
+      onFocusCapture={pane && !pane.focused ? onFocusPane : undefined}
+    >
       <div className="terminal-frame">
         <div className="terminal-host" ref={containerRef} />
+        {searchSignal > 0 && searchAddon && (
+          <TerminalSearchBar
+            search={searchAddon}
+            theme={theme}
+            openSignal={searchSignal}
+            onClose={() => {
+              setSearchSignal(0);
+              terminalRef.current?.focus();
+            }}
+          />
+        )}
         {historySuggest.active && (
           <div
             className="terminal-history-suggest"
@@ -691,6 +791,20 @@ function TerminalPaneBase({
             </div>
           </div>
         )}
+        {(pane || broadcasting) && (
+          <div className="pane-label">
+            {broadcasting && <span className="pane-label-broadcast" title="正在广播输入">广播</span>}
+            {pane && (
+              <>
+                <span className={`tab-dot ${tab.state}`} style={{ color: tab.color }} />
+                <span className="pane-label-title" title={`${tab.title} · ${tab.subtitle}`}>{tab.title}</span>
+                <button type="button" title="关闭窗格" aria-label={`关闭窗格 ${tab.title}`} onClick={onClosePane}>
+                  <X size={12} />
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
       {tab.state === "closed" && (
         <button type="button" className="terminal-reconnect" onClick={onReconnect}>
@@ -716,6 +830,13 @@ export const TerminalPane = memo(TerminalPaneBase, (previous, next) => {
     previous.layoutSignal === next.layoutSignal &&
     previous.pasteRequest?.id === next.pasteRequest?.id &&
     previous.commandRequest?.id === next.commandRequest?.id &&
-    previous.commandHistory === next.commandHistory
+    previous.commandHistory === next.commandHistory &&
+    previous.pane?.focused === next.pane?.focused &&
+    previous.pane?.rect.left === next.pane?.rect.left &&
+    previous.pane?.rect.top === next.pane?.rect.top &&
+    previous.pane?.rect.width === next.pane?.rect.width &&
+    previous.pane?.rect.height === next.pane?.rect.height &&
+    Boolean(previous.onSplit) === Boolean(next.onSplit) &&
+    previous.broadcasting === next.broadcasting
   );
 });

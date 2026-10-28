@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.3.0](https://github.com/Raymanhan/ishell/releases/tag/v1.3.0)**
+**[Download iShell v1.4.0](https://github.com/Raymanhan/ishell/releases/tag/v1.4.0)**
 
 Available packages:
 
@@ -36,7 +36,15 @@ Available packages:
   optional passphrase-protected secrets.
 - **Interactive terminals**: xterm-powered tabs backed by real PTY sessions,
   reconnect support, tab cloning, tab reordering, tab handoff between windows,
-  and command history.
+  command history, and search in the terminal output.
+- **Split panes and broadcast input**: split a tab into up to four nested
+  panes, and mirror typing to several sessions at once.
+- **Command snippets**: save frequent commands and send or run them with one
+  click, on every broadcast session if broadcasting.
+- **Jump hosts**: reach a server through another saved server, chained if
+  needed, with each hop using its own user and password or key.
+- **Port forwarding**: local (-L), remote (-R) and dynamic SOCKS5 (-D) forwards
+  per server, running in the background with live status.
 - **OpenSSH and russh transports**: macOS/Linux use the system OpenSSH client;
   Windows uses a pure-Rust `russh` backend with pooled sessions.
 - **SFTP browser**: column or tree browsing, upload, download, rename, delete,
@@ -82,6 +90,8 @@ Each profile includes:
 - Name, host, port, username, group, tags, color, and notes
 - Authentication type: password or private key
 - Optional private key path
+- Optional jump host: another saved server to connect through first; a jump
+  host can have its own jump host (up to three hops)
 - A built-in connection test before saving
 - Password visibility toggle while editing
 
@@ -100,6 +110,48 @@ connections, secret export is optional and can be passphrase-protected.
   edge.
 - The terminal font size is configurable in Settings.
 - Command history can be searched and pasted back into the active terminal.
+- Search the terminal output with `⌘F` (macOS) or `Ctrl+Shift+F`
+  (Windows/Linux), with case, whole-word and regex options.
+
+### Split Panes and Broadcast Input
+
+- Right-click a tab and choose **Split right** or **Split down**, or press
+  `⌘D` / `⇧⌘D` (macOS) or `Ctrl+Shift+D` / `Ctrl+Shift+E` (Windows/Linux) in
+  a terminal. The new pane connects to the same server.
+- Right-click a server in the connection manager and choose **Connect in
+  split** to open a different server next to the current pane.
+- Splits nest, up to four panes per tab. Drag the dividers to resize, click a
+  pane to focus it; the file and monitoring panels follow the focused pane.
+- The broadcast button in the top bar mirrors what you type in one selected
+  session to the others. It starts with the panes of the current tab (or every
+  session when the tab is not split); the bar below the terminals toggles
+  individual sessions.
+
+### Command Snippets
+
+- Open **Snippets** from the top bar to save frequent commands with a name and
+  an optional note.
+- A snippet either runs right away (Enter is pressed) or is only typed in for
+  editing; multi-line snippets are sent line by line.
+- Click a snippet to send it to the focused pane, or to every broadcast session
+  while broadcasting.
+- Snippets are stored in the local database.
+
+### Port Forwarding
+
+Open **Port forwarding** from the top bar to add rules for the current server:
+
+- **Local (-L)**: a port on this computer that reaches an address the server
+  can reach, e.g. a database only open to the server.
+- **Remote (-R)**: a port on the server whose connections are passed to an
+  address this computer can reach.
+- **SOCKS (-D)**: a SOCKS5 proxy on this computer that reaches the network
+  through the server.
+
+Forwards run in the background independent of tabs and all stop when iShell
+quits. The panel shows each forward's live state and, on failure, the reason.
+A forward can start automatically when a terminal to its server connects. Jump
+hosts apply to forwards too.
 
 ### SFTP
 
@@ -203,13 +255,15 @@ Frontend-only preview:
 npm run dev
 ```
 
-Build and verify:
+Build and verify (CI runs the same on every pull request):
 
 ```bash
 npm run build
 cd src-tauri
-cargo check
-cargo check --features force-russh
+cargo clippy --all-targets -- -D warnings
+cargo clippy --all-targets --features force-russh -- -D warnings
+cargo test
+cargo test --features force-russh
 ```
 
 ## Local Installer Build
@@ -237,8 +291,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.3.0
-git push origin v1.3.0
+git tag v1.4.0
+git push origin v1.4.0
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -273,28 +327,37 @@ src/
   api/              Tauri IPC wrappers and runtime detection
   components/       React UI components
   constants/        Theme tokens and shared constants
-  features/         Feature-owned types and helpers
+  features/         Hooks and helpers per feature: connections, panes,
+                    transfer queues, snippets, port forwards, updates
   mocks/            Browser-preview demo data
   styles/           CSS modules for base, layout, controls, views, and themes
-  utils/            Formatting and filtering helpers
-  App.tsx           Application orchestration
+  utils/            Formatting, highlighting and drag helpers
+  App.tsx           Workbench layout and tab/pane orchestration
 
 src-tauri/src/
   commands.rs       Tauri command boundary
   models.rs         Serializable DTOs shared by commands
-  openssh.rs        OpenSSH argument construction and multiplexing helpers
+  openssh.rs        OpenSSH arguments, jump host ProxyCommand, askpass helper
   pool.rs           Transport invalidation / pooled-session boundary
-  russh_transport.rs Pure-Rust SSH transport used by the Windows backend
-  ssh.rs            SSH, SFTP, file editing, and status sampling
-  store.rs          Server persistence and OS keychain secret storage
+  russh_transport.rs Pure-Rust SSH transport used by the Windows backend,
+                    including jump hosts and port forwarding
+  ssh/              Remote operations: commands, monitoring, SFTP, uploads,
+                    downloads
+  store.rs          Local database for servers, snippets and port forwards
   tail_monitor.rs   Live remote file tail process registry
   terminal.rs       Interactive terminal session registry
+  tunnel.rs         Registry of running port forwards
   time.rs           Small time helper
   lib.rs            Tauri application assembly
 ```
 
 ## Recent Changes
 
+- `v1.4.0` adds jump hosts (chainable), port forwarding (local, remote and
+  SOCKS5, running in the background with live status), split panes, broadcast
+  input, command snippets and search in the terminal. Terminal selections are
+  readable on light themes again, deleting from the server editor now always
+  deletes the server being edited, and pull requests are checked by CI.
 - `v1.3.0` adds in-app updates: iShell checks for a new release in the
   background at startup and every 6 hours, offers it in a corner prompt, and
   downloads, installs and restarts in one click. Settings gains an "About and

@@ -12,7 +12,7 @@ iShell 是一个基于 Tauri + React + Rust 的轻量级 SSH 桌面工作台，�
 
 请从 GitHub Releases 下载最新版安装包：
 
-**[下载 iShell v1.3.0](https://github.com/Raymanhan/ishell/releases/tag/v1.3.0)**
+**[下载 iShell v1.4.0](https://github.com/Raymanhan/ishell/releases/tag/v1.4.0)**
 
 可用安装包：
 
@@ -27,7 +27,11 @@ iShell 是一个基于 Tauri + React + Rust 的轻量级 SSH 桌面工作台，�
 - **连接顺序持久化**：连接排序和所在分组会保存到本地数据库，重启后保持不变。
 - **安全保存密钥信息**：密码通过操作系统钥匙串/Secret Store 保存，不会明文写入导出的连接文件。
 - **导入/导出连接**：可导出选中的主机或文件夹为 JSON/ZIP，也可选择用口令加密导出密码。
-- **交互式终端**：基于 xterm 的真实 PTY 会话，支持重连、复制标签页、标签排序、跨窗口交接和命令历史。
+- **交互式终端**：基于 xterm 的真实 PTY 会话，支持重连、复制标签页、标签排序、跨窗口交接、命令历史和终端内搜索。
+- **分屏与广播输入**：一个标签最多分成 4 个窗格，可左右、上下嵌套分屏；广播输入可把键入内容同步发送到多个会话。
+- **命令片段**：保存常用命令，一键发送或执行，广播开启时可同时发到多台服务器。
+- **跳板机**：服务器可经由另一台已保存的服务器连接，支持多级串联，每一级使用各自的账号和密码或私钥。
+- **端口转发**：按服务器管理本地（-L）、远程（-R）和 SOCKS5 动态（-D）转发，后台运行并显示实时状态。
 - **OpenSSH 与 russh 双后端**：macOS/Linux 使用系统 OpenSSH；Windows 使用纯 Rust `russh` 后端和连接池。
 - **SFTP 文件浏览器**：支持树形/多列视图、上传、下载、新建文件夹、重命名、删除、右键菜单、软链接识别、终端目录跳转、小文件远程编辑和独立日志滚动查看。
 - **实时主机监控**：展示 CPU、GPU、显存、内存、Swap、磁盘、负载、进程排行和网络吞吐，并支持一键复制主机/IP。
@@ -61,6 +65,7 @@ iShell 是一个基于 Tauri + React + Rust 的轻量级 SSH 桌面工作台，�
 - 名称、主机、端口、用户名、分组、标签、颜色和备注
 - 认证方式：密码或私钥
 - 可选私钥路径
+- 可选跳板机：选择另一台已保存的服务器，先连上它再连到目标；跳板机自己也可以设置跳板机（最多 3 层）
 - 保存前可直接测试连接
 - 编辑密码时支持显示/隐藏切换
 
@@ -76,6 +81,31 @@ iShell 是一个基于 Tauri + React + Rust 的轻量级 SSH 桌面工作台，�
 - 顶部栏可设置为常驻显示，或在鼠标离开后自动隐藏、移到窗口顶端时再显示。
 - 终端字号可在设置中调整。
 - 命令历史支持搜索，并可将历史命令粘贴回当前终端。
+- 在终端中按 `⌘F`（macOS）或 `Ctrl+Shift+F`（Windows/Linux）搜索输出，支持区分大小写、全字匹配和正则。
+
+### 分屏与广播输入
+
+- 右键标签选择“向右分屏”或“向下分屏”，或在终端中按 `⌘D` / `⇧⌘D`（macOS）、`Ctrl+Shift+D` / `Ctrl+Shift+E`（Windows/Linux）。新窗格连接同一台服务器。
+- 在连接管理中右键服务器选择“分屏连接”，可在当前窗格旁打开另一台服务器。
+- 分屏可以嵌套，一个标签最多 4 个窗格；拖动窗格之间的分隔线调整大小，点击窗格切换焦点，文件面板和监控面板跟随当前窗格。
+- 点击顶部栏的广播按钮开启广播输入：在任一所选会话中键入的内容会同步发送到其他所选会话。默认选择当前标签的全部窗格（未分屏时为全部会话），可在终端下方的广播栏中逐个勾选。
+
+### 命令片段
+
+- 在顶部栏打开“命令片段”面板，保存常用命令，可填写名称和说明。
+- 每个片段可设为“立即执行”（发送后自动回车）或只输入到终端供修改；多行片段会逐行发送。
+- 点击片段发送到当前窗格；广播开启时会发送到所有广播会话。
+- 片段保存在本地数据库中。
+
+### 端口转发
+
+在顶部栏打开“端口转发”面板，为当前服务器添加转发规则：
+
+- **本地（-L）**：访问本机的监听地址，等于从服务器访问目标地址，常用于连接只对服务器开放的数据库或后台。
+- **远程（-R）**：服务器上的监听地址收到的连接会转到本机能访问的目标地址。
+- **SOCKS（-D）**：在本机开一个 SOCKS5 代理，经服务器访问网络。
+
+转发在后台独立运行，关闭标签不会停止，退出 iShell 时全部停止。面板中显示每条转发的实时状态，失败时显示原因；可勾选“连接终端时自动启动”。跳板机设置对端口转发同样有效。
 
 ### SFTP 文件管理
 
@@ -160,13 +190,15 @@ npm run tauri -- dev
 npm run dev
 ```
 
-构建和验证：
+构建和验证（每个 Pull Request 也会由 CI 自动运行）：
 
 ```bash
 npm run build
 cd src-tauri
-cargo check
-cargo check --features force-russh
+cargo clippy --all-targets -- -D warnings
+cargo clippy --all-targets --features force-russh -- -D warnings
+cargo test
+cargo test --features force-russh
 ```
 
 ## 本地构建安装包
@@ -193,8 +225,8 @@ npm run tauri -- build --target aarch64-apple-darwin
 推送 `v*` 标签后，GitHub Actions 会自动构建 Release。也可以在 GitHub Actions 页面手动运行 **Build installers** 工作流。
 
 ```bash
-git tag v1.3.0
-git push origin v1.3.0
+git tag v1.4.0
+git push origin v1.4.0
 ```
 
 发布工作流会构建 Windows、Linux、macOS Intel 和 macOS Apple Silicon 安装包，并把产物上传到 GitHub Release。
@@ -221,28 +253,30 @@ src/
   api/              Tauri IPC 封装和运行环境检测
   components/       React UI 组件
   constants/        主题 token 和共享常量
-  features/         功能域类型和工具
+  features/         按功能划分的 hooks 和工具：连接、分屏、传输队列、片段、端口转发、更新
   mocks/            浏览器预览用演示数据
   styles/           基础、布局、控件、视图和主题 CSS 模块
-  utils/            格式化和过滤工具
-  App.tsx           应用状态和流程编排
+  utils/            格式化、高亮、拖动等工具
+  App.tsx           工作台布局和标签、窗格编排
 
 src-tauri/src/
   commands.rs       Tauri 命令边界
   models.rs         命令共享的可序列化 DTO
-  openssh.rs        OpenSSH 参数构造和复用连接辅助
+  openssh.rs        OpenSSH 参数、跳板机 ProxyCommand 和 askpass 辅助
   pool.rs           传输失效和连接池边界
-  russh_transport.rs Windows 使用的纯 Rust SSH 传输
-  ssh.rs            SSH、SFTP、文件编辑和状态采样
-  store.rs          服务器持久化和系统密钥存储
+  russh_transport.rs Windows 使用的纯 Rust SSH 传输（含跳板机和端口转发）
+  ssh/              SSH 远程操作：命令执行、监控、SFTP、上传、下载
+  store.rs          服务器、片段、端口转发的本地数据库和密钥加密
   tail_monitor.rs   远程文件实时滚动查看进程注册表
   terminal.rs       交互式终端会话注册表
+  tunnel.rs         运行中的端口转发注册表
   time.rs           时间工具
   lib.rs            Tauri 应用组装
 ```
 
 ## 最近更新
 
+- `v1.4.0` 新增跳板机（可多级串联）、端口转发（本地/远程/SOCKS5，后台运行并显示状态）、终端分屏、广播输入、命令片段和终端内搜索；修复浅色主题下终端选中文字看不清，以及在编辑窗口中删除服务器可能删错的问题；新增 Pull Request 自动检查，并拆分大文件便于维护。
 - `v1.3.0` 新增应用内自动更新：启动后及每 6 小时在后台检查新版本，发现更新时在右下角提示，可一键下载、安装并重启；设置中新增“关于与更新”，可手动检查或关闭自动检查。更新包经签名校验后才会安装。
 - `v1.2.2` 终端会向查询背景色的程序如实报告当前主题的背景，Codex、Claude Code 等 AI 命令行能自动选用匹配的浅色或深色样式，浅色主题下输入文字不再看不见。
 - `v1.2.1` 全部主题提亮：文字恢复明亮、次要文字更易读、背景底色更通透、终端配色更鲜明；实时监控面板改用一套固定的鲜艳系统色，在所有主题下保持一致。

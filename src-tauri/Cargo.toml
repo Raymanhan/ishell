@@ -1,6 +1,6 @@
 [package]
 name = "ishell"
-version = "1.3.0"
+version = "1.4.0"
 description = "A lightweight SSH and SFTP manager"
 authors = ["iShell"]
 license = "MIT"
@@ -37,7 +37,7 @@ base64 = "0.22"
 # [target.'cfg(windows)'.dependencies] section below); optional elsewhere so the
 # Windows code path can be compile-tested on any host via `--features force-russh`.
 russh = { version = "0.61", optional = true }
-tokio = { version = "1", features = ["rt-multi-thread", "io-util", "macros", "sync", "time"], optional = true }
+tokio = { version = "1", features = ["rt-multi-thread", "io-util", "macros", "net", "sync", "time"], optional = true }
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 
@@ -48,4 +48,4 @@ force-russh = ["dep:russh", "dep:tokio"]
 # On Windows the russh transport is the only option, so it is always compiled in.
 [target.'cfg(windows)'.dependencies]
 russh = "0.61"
-tokio = { version = "1", features = ["rt-multi-thread", "io-util", "macros", "sync", "time"] }
+tokio = { version = "1", features = ["rt-multi-thread", "io-util", "macros", "net", "sync", "time"] }

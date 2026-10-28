@@ -6,14 +6,9 @@ use std::{
 
 #[cfg(not(russh_backend))]
 use std::{
-    fs,
     io::{Read, Write},
-    path::{Path, PathBuf},
     time::Duration,
 };
-
-#[cfg(all(unix, not(russh_backend)))]
-use std::os::unix::fs::PermissionsExt;
 
 #[cfg(not(russh_backend))]
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
@@ -24,6 +19,8 @@ use uuid::Uuid;
 use crate::models::ServerRecord;
 #[cfg(not(russh_backend))]
 use crate::openssh;
+#[cfg(not(russh_backend))]
+use crate::store::jump_hops;
 use crate::{
     models::{
         TerminalClosedPayload, TerminalDataPayload, TerminalReadyPayload, TerminalSnapshotPayload,
@@ -339,30 +336,6 @@ fn emit_terminal_ready(app: &AppHandle, registry: &TerminalRegistry, session_id:
 }
 
 #[cfg(not(russh_backend))]
-fn create_askpass_helper(session_id: &str) -> Result<PathBuf, String> {
-    let path = std::env::temp_dir().join(format!("ishell-askpass-{session_id}.sh"));
-    fs::write(
-        &path,
-        "#!/bin/sh\nprintf '%s\\n' \"$ISHELL_SSH_PASSWORD\"\n",
-    )
-    .map_err(|err| format!("无法创建 SSH_ASKPASS helper：{err}"))?;
-    #[cfg(unix)]
-    {
-        let permissions = fs::Permissions::from_mode(0o700);
-        fs::set_permissions(&path, permissions)
-            .map_err(|err| format!("无法设置 SSH_ASKPASS helper 权限：{err}"))?;
-    }
-    Ok(path)
-}
-
-#[cfg(not(russh_backend))]
-fn cleanup_askpass_helper(path: Option<&PathBuf>) {
-    if let Some(path) = path {
-        let _ = fs::remove_file(path);
-    }
-}
-
-#[cfg(not(russh_backend))]
 fn strip_ansi_sequences(value: &str) -> String {
     let mut output = String::with_capacity(value.len());
     let mut chars = value.chars().peekable();
@@ -450,34 +423,24 @@ fn looks_like_shell_ready(output_tail: &str) -> bool {
 }
 
 #[cfg(not(russh_backend))]
-fn build_ssh_command(
-    server: &ServerRecord,
-    saved_secret: Option<&str>,
-    askpass_path: Option<&Path>,
-) -> CommandBuilder {
+fn build_ssh_command(server: &ServerRecord, invocation: &openssh::SshInvocation) -> CommandBuilder {
     let mut command = CommandBuilder::new(openssh::ssh_binary());
     command.env("TERM", "xterm-256color");
+    for (key, value) in &invocation.env {
+        // Keep a real DISPLAY: askpass only needs one to be set.
+        if key == "DISPLAY" && command.get_env("DISPLAY").is_some() {
+            continue;
+        }
+        command.env(key, value);
+    }
     command.arg("-tt");
-    for arg in openssh::common_ssh_args(server, true) {
+    for arg in &invocation.args {
         command.arg(arg);
     }
     command.arg("-o");
     command.arg("PermitLocalCommand=yes");
     command.arg("-o");
     command.arg("LocalCommand=printf '\\r\\n[iShell] connected via OpenSSH\\r\\n'");
-
-    if let (Some(secret), Some(path)) = (saved_secret, askpass_path) {
-        command.env("SSH_ASKPASS", path);
-        command.env("SSH_ASKPASS_REQUIRE", "force");
-        command.env("ISHELL_SSH_PASSWORD", secret);
-        if command.get_env("DISPLAY").is_none() {
-            command.env("DISPLAY", "ishell:0");
-        }
-    }
-    for arg in openssh::auth_ssh_args(server, saved_secret.is_some()) {
-        command.arg(arg);
-    }
-
     command.arg(&server.host);
     command
 }
@@ -494,11 +457,16 @@ fn run_terminal_thread(
     let saved_secret = read_secret(&app, &server_id)
         .ok()
         .filter(|secret| !secret.is_empty());
-    let askpass_path = if saved_secret.is_some() {
-        Some(create_askpass_helper(&session_id)?)
-    } else {
-        None
-    };
+    let hops = jump_hops(&app, &server)?;
+    // Not batch: a password that is not saved can be typed into the terminal.
+    let invocation = openssh::SshInvocation::prepare(
+        &server,
+        saved_secret.as_deref(),
+        &hops,
+        true,
+        false,
+        &session_id,
+    )?;
     let pty_system = native_pty_system();
     let pair = pty_system
         .openpty(PtySize {
@@ -507,13 +475,16 @@ fn run_terminal_thread(
             pixel_width: 0,
             pixel_height: 0,
         })
-        .map_err(|err| format!("无法创建本地 PTY：{err}"))?;
+        .map_err(|err| {
+            invocation.cleanup();
+            format!("无法创建本地 PTY：{err}")
+        })?;
 
-    let command = build_ssh_command(&server, saved_secret.as_deref(), askpass_path.as_deref());
+    let command = build_ssh_command(&server, &invocation);
     let mut child = match pair.slave.spawn_command(command) {
         Ok(child) => child,
         Err(err) => {
-            cleanup_askpass_helper(askpass_path.as_ref());
+            invocation.cleanup();
             return Err(format!("无法启动本机 ssh：{err}"));
         }
     };
@@ -534,7 +505,10 @@ fn run_terminal_thread(
     let read_registry = registry.clone();
     let read_session_id = session_id.clone();
     let read_server_id = server_id.clone();
-    let should_autofill_password = saved_secret.is_some();
+    // Typing the saved password at the first prompt is a fallback for an ssh
+    // that ignores SSH_ASKPASS_REQUIRE. With jump hosts the first prompt may be
+    // a jump host's, so leave those to the askpass helper.
+    let should_autofill_password = saved_secret.is_some() && hops.is_empty();
     thread::spawn(move || {
         let mut buffer = [0_u8; 8192];
         let mut decoder = Utf8StreamDecoder::default();
@@ -609,11 +583,11 @@ fn run_terminal_thread(
         if password_prompt_receiver.try_recv().is_ok() {
             if let Some(secret) = saved_secret.as_deref() {
                 if let Err(err) = writer.write_all(secret.as_bytes()) {
-                    cleanup_askpass_helper(askpass_path.as_ref());
+                    invocation.cleanup();
                     return Err(format!("终端写入失败：{err}"));
                 }
                 if let Err(err) = writer.write_all(b"\n") {
-                    cleanup_askpass_helper(askpass_path.as_ref());
+                    invocation.cleanup();
                     return Err(format!("终端写入失败：{err}"));
                 }
                 writer.flush().ok();
@@ -622,14 +596,14 @@ fn run_terminal_thread(
 
         if let Ok(reason) = read_done_receiver.try_recv() {
             let _ = child.wait();
-            cleanup_askpass_helper(askpass_path.as_ref());
+            invocation.cleanup();
             return Err(reason);
         }
 
         match receiver.recv_timeout(Duration::from_millis(80)) {
             Ok(TerminalControl::Input(data)) => {
                 if let Err(err) = writer.write_all(data.as_bytes()) {
-                    cleanup_askpass_helper(askpass_path.as_ref());
+                    invocation.cleanup();
                     return Err(format!("终端写入失败：{err}"));
                 }
                 writer.flush().ok();
@@ -641,21 +615,21 @@ fn run_terminal_thread(
                     pixel_width: 0,
                     pixel_height: 0,
                 }) {
-                    cleanup_askpass_helper(askpass_path.as_ref());
+                    invocation.cleanup();
                     return Err(format!("无法调整终端尺寸：{err}"));
                 }
             }
             Ok(TerminalControl::Close) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                cleanup_askpass_helper(askpass_path.as_ref());
+                invocation.cleanup();
                 return Ok(());
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {}
             Err(mpsc::RecvTimeoutError::Disconnected) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                cleanup_askpass_helper(askpass_path.as_ref());
+                invocation.cleanup();
                 return Ok(());
             }
         }

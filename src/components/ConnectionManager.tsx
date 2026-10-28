@@ -7,6 +7,7 @@ import {
   Pencil,
   PencilLine,
   PlugZap,
+  Columns2,
   Copy,
   Search,
   Server,
@@ -26,6 +27,7 @@ export function ConnectionManager({
   grouped,
   onSelect,
   onConnect,
+  onConnectSplit,
   onClone,
   onEdit,
   onRenameServer,
@@ -42,6 +44,8 @@ export function ConnectionManager({
   grouped: Record<string, ServerRecord[]>;
   onSelect: (server: ServerRecord) => void;
   onConnect: (server: ServerRecord) => void;
+  /** Open the server in a new pane beside the current terminal; omitted when no terminal is open. */
+  onConnectSplit?: (server: ServerRecord) => void;
   onClone: (server: ServerRecord) => void;
   onEdit: (server: ServerRecord) => void;
   onRenameServer: (server: ServerRecord, name: string) => void;
@@ -207,7 +211,7 @@ export function ConnectionManager({
     setMenu({
       type: "server",
       server,
-      ...menuPosition(event, 148, 178),
+      ...menuPosition(event, 148, onConnectSplit ? 300 : 270),
     });
   }
 
@@ -248,6 +252,14 @@ export function ConnectionManager({
   function connectFromMenu() {
     if (!menu || menu.type !== "server") return;
     connect(menu.server);
+    setMenu(null);
+  }
+
+  function connectSplitFromMenu() {
+    if (!menu || menu.type !== "server" || !onConnectSplit) return;
+    onSelect(menu.server);
+    clearTreeSelection();
+    onConnectSplit(menu.server);
     setMenu(null);
   }
 
@@ -708,6 +720,12 @@ export function ConnectionManager({
                 <PlugZap size={14} />
                 <span>连接</span>
               </button>
+              {onConnectSplit && (
+                <button type="button" onClick={connectSplitFromMenu} role="menuitem">
+                  <Columns2 size={14} />
+                  <span>分屏连接</span>
+                </button>
+              )}
               <button type="button" onClick={editFromMenu} role="menuitem">
                 <Pencil size={14} />
                 <span>编辑</span>

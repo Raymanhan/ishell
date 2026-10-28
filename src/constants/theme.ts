@@ -1,3 +1,4 @@
+import type { ISearchOptions } from "@xterm/addon-search";
 import type { ITheme } from "@xterm/xterm";
 
 export const swatches = ["#5b9dff", "#43c98b", "#f2b45a", "#f56b6b", "#b18cff", "#46c7c7"];
@@ -392,8 +393,12 @@ export function getThemeDefinition(theme: AppTheme) {
   return appThemeDefinitions[theme];
 }
 
-export function getTerminalTheme(theme: AppTheme) {
-  return getThemeDefinition(theme).terminal;
+export function getTerminalTheme(theme: AppTheme): ITheme {
+  const definition = getThemeDefinition(theme);
+  // The background stays fully transparent for the glass effect, but xterm
+  // blends selection and match highlights onto its RGB. Give it the surface's
+  // RGB so those blends come out light on light themes instead of near-black.
+  return { ...definition.terminal, background: `${definition.terminalSurface}00` };
 }
 
 /** OSC 11 reply body (`rgb:rrrr/gggg/bbbb`) for the theme's terminal surface. */
@@ -405,4 +410,36 @@ export function getTerminalSurfaceReport(theme: AppTheme) {
 
 export function readSavedTheme(value: string | null): AppTheme {
   return appThemeOrder.includes(value as AppTheme) ? (value as AppTheme) : defaultAppTheme;
+}
+
+function isLightSurface(hex: string) {
+  const value = Number.parseInt(hex.slice(1, 7), 16);
+  const red = (value >> 16) & 0xff;
+  const green = (value >> 8) & 0xff;
+  const blue = value & 0xff;
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue > 150;
+}
+
+/**
+ * Highlight colors for terminal search. xterm decorations take opaque
+ * #RRGGBB colors only, so light and dark surfaces get their own amber shades
+ * that keep the matched text readable.
+ */
+export function getTerminalSearchDecorations(theme: AppTheme): NonNullable<ISearchOptions["decorations"]> {
+  const light = isLightSurface(getThemeDefinition(theme).terminalSurface);
+  return light
+    ? {
+        matchBackground: "#fde68a",
+        matchOverviewRuler: "#e0a800",
+        activeMatchBackground: "#fbbf24",
+        activeMatchBorder: "#b45309",
+        activeMatchColorOverviewRuler: "#b45309",
+      }
+    : {
+        matchBackground: "#5c4813",
+        matchOverviewRuler: "#ffd60a",
+        activeMatchBackground: "#a86b00",
+        activeMatchBorder: "#ffd60a",
+        activeMatchColorOverviewRuler: "#ff9f0a",
+      };
 }

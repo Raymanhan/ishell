@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use russh::{client, ChannelMsg};
 use tokio::runtime::Runtime;
 
-use crate::models::ServerRecord;
+use crate::models::{JumpHop, PortForward, ServerRecord};
 use crate::terminal::TerminalControl;
 
 type Session = client::Handle<ClientHandler>;
@@ -229,9 +229,17 @@ async fn recover_upload_transport_failure(
     error
 }
 
+/// Remote (-R) forwards of one session: server-side listen port to the
+/// host and port that connections are passed on to from this computer.
+type RemoteForwards = Arc<Mutex<HashMap<u32, (String, u16)>>>;
+
 struct ClientHandler {
     host: String,
     port: u16,
+    /// The jump host session this connection is tunnelled through, kept alive
+    /// for as long as this connection.
+    _jump: Option<Arc<Session>>,
+    remote_forwards: RemoteForwards,
 }
 
 impl client::Handler for ClientHandler {
@@ -255,6 +263,49 @@ impl client::Handler for ClientHandler {
             }
             Err(err) => Err(err.into()),
         }
+    }
+
+    async fn server_channel_open_forwarded_tcpip(
+        &mut self,
+        channel: russh::Channel<client::Msg>,
+        _connected_address: &str,
+        connected_port: u32,
+        _originator_address: &str,
+        _originator_port: u32,
+        _session: &mut client::Session,
+    ) -> Result<(), Self::Error> {
+        let target = self
+            .remote_forwards
+            .lock()
+            .ok()
+            .and_then(|forwards| forwards.get(&connected_port).cloned());
+        if let Some((host, port)) = target {
+            tokio::spawn(async move {
+                if let Ok(mut socket) = tokio::net::TcpStream::connect((host.as_str(), port)).await
+                {
+                    let mut stream = channel.into_stream();
+                    let _ = tokio::io::copy_bidirectional(&mut socket, &mut stream).await;
+                }
+            });
+        }
+        Ok(())
+    }
+}
+
+type JumpResolver = Box<dyn Fn(&ServerRecord) -> Result<Vec<JumpHop>, String> + Send + Sync>;
+
+static JUMP_RESOLVER: OnceLock<JumpResolver> = OnceLock::new();
+
+/// Install the lookup of a server's jump hosts (from the app database). Set
+/// once at startup; without it every server is reached directly.
+pub fn set_jump_resolver(resolver: JumpResolver) {
+    let _ = JUMP_RESOLVER.set(resolver);
+}
+
+fn jump_hops(server: &ServerRecord) -> Result<Vec<JumpHop>, String> {
+    match JUMP_RESOLVER.get() {
+        Some(resolve) => resolve(server),
+        None => Ok(Vec::new()),
     }
 }
 
@@ -343,33 +394,105 @@ async fn isolated_channel(
     Ok((handle, channel))
 }
 
+/// Open a `direct-tcpip` channel to the server through its last jump host,
+/// whose (pooled) session in turn goes through any earlier hops.
+async fn tunnel_through(
+    jump: &JumpHop,
+    server: &ServerRecord,
+) -> Result<(Arc<Session>, russh::Channel<client::Msg>), String> {
+    let hop_error = |err: String| format!("跳板机 {}：{err}", jump.server.name);
+    let open = |session: Arc<Session>| async move {
+        let channel = tokio::time::timeout(
+            CONNECT_TIMEOUT,
+            session.channel_open_direct_tcpip(
+                server.host.clone(),
+                u32::from(server.port),
+                "127.0.0.1",
+                0,
+            ),
+        )
+        .await
+        .map_err(|_| format!("经跳板机连接 {}:{} 超时", server.host, server.port))?
+        .map_err(|err| format!("跳板机无法连接到 {}:{}：{err}", server.host, server.port))?;
+        Ok::<_, String>((session, channel))
+    };
+
+    // Recursion through the pool: the jump host's own jump hosts are resolved there.
+    let session = Box::pin(get_or_connect(&jump.server, jump.secret.as_deref()))
+        .await
+        .map_err(hop_error)?;
+    match open(session).await {
+        Ok(tunnel) => Ok(tunnel),
+        Err(_) => {
+            // The pooled jump session may be stale: reconnect it once.
+            invalidate(&jump.server.id);
+            let session = Box::pin(get_or_connect(&jump.server, jump.secret.as_deref()))
+                .await
+                .map_err(hop_error)?;
+            open(session).await
+        }
+    }
+}
+
 async fn connect(
     server: &ServerRecord,
     secret: Option<&str>,
+) -> Result<client::Handle<ClientHandler>, String> {
+    connect_with_forwards(server, secret, RemoteForwards::default()).await
+}
+
+async fn connect_with_forwards(
+    server: &ServerRecord,
+    secret: Option<&str>,
+    remote_forwards: RemoteForwards,
 ) -> Result<client::Handle<ClientHandler>, String> {
     let config = Arc::new(client::Config {
         keepalive_interval: Some(Duration::from_secs(30)),
         nodelay: true,
         ..client::Config::default()
     });
-    let handler = ClientHandler {
-        host: server.host.clone(),
-        port: server.port,
-    };
-    let mut handle = tokio::time::timeout(
-        CONNECT_TIMEOUT,
-        client::connect(config, (server.host.as_str(), server.port), handler),
-    )
-    .await
-    .map_err(|_| {
+    let hops = jump_hops(server)?;
+    let connect_timeout = |_| {
         format!(
             "连接 {}:{} 超时（{} 秒）",
             server.host,
             server.port,
             CONNECT_TIMEOUT.as_secs()
         )
-    })?
-    .map_err(|err| format!("无法连接 {}:{}：{err}", server.host, server.port))?;
+    };
+    let mut handle = match hops.last() {
+        None => {
+            let handler = ClientHandler {
+                host: server.host.clone(),
+                port: server.port,
+                _jump: None,
+                remote_forwards,
+            };
+            tokio::time::timeout(
+                CONNECT_TIMEOUT,
+                client::connect(config, (server.host.as_str(), server.port), handler),
+            )
+            .await
+            .map_err(connect_timeout)?
+            .map_err(|err| format!("无法连接 {}:{}：{err}", server.host, server.port))?
+        }
+        Some(jump) => {
+            let (jump_session, channel) = tunnel_through(jump, server).await?;
+            let handler = ClientHandler {
+                host: server.host.clone(),
+                port: server.port,
+                _jump: Some(jump_session),
+                remote_forwards,
+            };
+            tokio::time::timeout(
+                CONNECT_TIMEOUT,
+                client::connect_stream(config, channel.into_stream(), handler),
+            )
+            .await
+            .map_err(connect_timeout)?
+            .map_err(|err| format!("无法连接 {}:{}：{err}", server.host, server.port))?
+        }
+    };
 
     if server.auth_type == "key" {
         let key_path = server
@@ -833,6 +956,237 @@ pub fn run_terminal(
             }
         }
     })
+}
+
+/// Called once a port forward is listening; the forward then runs until stopped.
+pub type ForwardRunning = Box<dyn Fn() + Send + Sync>;
+/// Called when a port forward ends on its own, with the reason.
+pub type ForwardEnded = Box<dyn FnOnce(String) + Send>;
+
+/// Start a port forward on the shared runtime. Returns a function that stops
+/// it; a forward stopped that way does not report `on_end`.
+pub fn start_port_forward(
+    server: ServerRecord,
+    secret: Option<String>,
+    forward: PortForward,
+    on_running: ForwardRunning,
+    on_end: ForwardEnded,
+) -> Result<Box<dyn Fn() + Send + Sync>, String> {
+    let rt = runtime()?;
+    let task = rt.spawn(async move {
+        match forward.kind.as_str() {
+            "remote" => {
+                serve_remote_forward(&server, secret.as_deref(), &forward, on_running).await
+            }
+            kind => {
+                serve_local_forward(&server, secret, &forward, kind == "dynamic", on_running).await
+            }
+        }
+    });
+    let abort = task.abort_handle();
+    rt.spawn(async move {
+        let reason = match task.await {
+            Ok(Ok(())) => "端口转发已结束".to_string(),
+            Ok(Err(message)) => message,
+            Err(err) if err.is_cancelled() => return,
+            Err(err) => format!("端口转发异常退出：{err}"),
+        };
+        on_end(reason);
+    });
+    Ok(Box::new(move || abort.abort()))
+}
+
+/// Open a direct-tcpip channel to `host:port` on the server's pooled session.
+async fn open_direct(
+    server: &ServerRecord,
+    secret: Option<&str>,
+    host: &str,
+    port: u16,
+    origin: std::net::SocketAddr,
+) -> Result<(Arc<Session>, russh::Channel<client::Msg>), String> {
+    let open = |session: Arc<Session>| async move {
+        let channel = session
+            .channel_open_direct_tcpip(
+                host.to_string(),
+                u32::from(port),
+                origin.ip().to_string(),
+                u32::from(origin.port()),
+            )
+            .await
+            .map_err(|err| format!("服务器无法连接到 {host}:{port}：{err}"))?;
+        Ok::<_, String>((session, channel))
+    };
+    match open(get_or_connect(server, secret).await?).await {
+        Ok(tunnel) => Ok(tunnel),
+        Err(_) => {
+            invalidate(&server.id);
+            open(get_or_connect(server, secret).await?).await
+        }
+    }
+}
+
+/// Local (-L) and dynamic (-D) forwards: listen here, connect from the server.
+async fn serve_local_forward(
+    server: &ServerRecord,
+    secret: Option<String>,
+    forward: &PortForward,
+    socks: bool,
+    on_running: ForwardRunning,
+) -> Result<(), String> {
+    // Connect first so a login problem shows up now, not on the first connection.
+    get_or_connect(server, secret.as_deref()).await?;
+    let listener = tokio::net::TcpListener::bind((forward.bind_host.as_str(), forward.bind_port))
+        .await
+        .map_err(|err| {
+            format!(
+                "无法监听 {}:{}：{err}",
+                forward.bind_host, forward.bind_port
+            )
+        })?;
+    on_running();
+
+    // Dropping the set (when the forward stops) closes every open connection.
+    let mut connections = tokio::task::JoinSet::new();
+    loop {
+        tokio::select! {
+            accepted = listener.accept() => {
+                let (socket, origin) = accepted.map_err(|err| format!("接受连接失败：{err}"))?;
+                let server = server.clone();
+                let secret = secret.clone();
+                let target = (forward.dest_host.clone(), forward.dest_port);
+                connections.spawn(async move {
+                    let _ = if socks {
+                        relay_socks5(socket, origin, &server, secret.as_deref()).await
+                    } else {
+                        relay_direct(socket, origin, &server, secret.as_deref(), &target.0, target.1).await
+                    };
+                });
+            }
+            Some(_) = connections.join_next(), if !connections.is_empty() => {}
+        }
+    }
+}
+
+async fn relay_direct(
+    mut socket: tokio::net::TcpStream,
+    origin: std::net::SocketAddr,
+    server: &ServerRecord,
+    secret: Option<&str>,
+    host: &str,
+    port: u16,
+) -> Result<(), String> {
+    let (_session, channel) = open_direct(server, secret, host, port, origin).await?;
+    let mut stream = channel.into_stream();
+    tokio::io::copy_bidirectional(&mut socket, &mut stream)
+        .await
+        .map(|_| ())
+        .map_err(|err| err.to_string())
+}
+
+/// Minimal SOCKS5 server for one connection: no authentication, CONNECT only.
+async fn relay_socks5(
+    mut socket: tokio::net::TcpStream,
+    origin: std::net::SocketAddr,
+    server: &ServerRecord,
+    secret: Option<&str>,
+) -> Result<(), String> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let io = |err: std::io::Error| err.to_string();
+    let mut header = [0u8; 2];
+    socket.read_exact(&mut header).await.map_err(io)?;
+    if header[0] != 5 {
+        return Err("只支持 SOCKS5".into());
+    }
+    let mut methods = vec![0u8; usize::from(header[1])];
+    socket.read_exact(&mut methods).await.map_err(io)?;
+    if !methods.contains(&0) {
+        socket.write_all(&[5, 0xff]).await.map_err(io)?;
+        return Err("SOCKS5 客户端要求认证".into());
+    }
+    socket.write_all(&[5, 0]).await.map_err(io)?;
+
+    let mut request = [0u8; 4];
+    socket.read_exact(&mut request).await.map_err(io)?;
+    let host = match request[3] {
+        1 => {
+            let mut ip = [0u8; 4];
+            socket.read_exact(&mut ip).await.map_err(io)?;
+            std::net::Ipv4Addr::from(ip).to_string()
+        }
+        3 => {
+            let mut len = [0u8; 1];
+            socket.read_exact(&mut len).await.map_err(io)?;
+            let mut name = vec![0u8; usize::from(len[0])];
+            socket.read_exact(&mut name).await.map_err(io)?;
+            String::from_utf8(name).map_err(|_| "SOCKS5 域名无效".to_string())?
+        }
+        4 => {
+            let mut ip = [0u8; 16];
+            socket.read_exact(&mut ip).await.map_err(io)?;
+            std::net::Ipv6Addr::from(ip).to_string()
+        }
+        _ => return Err("SOCKS5 地址类型无效".into()),
+    };
+    let mut port = [0u8; 2];
+    socket.read_exact(&mut port).await.map_err(io)?;
+    let port = u16::from_be_bytes(port);
+
+    // Replies carry a bound address we do not have; zeros are accepted by clients.
+    const SUCCEEDED: [u8; 10] = [5, 0, 0, 1, 0, 0, 0, 0, 0, 0];
+    const COMMAND_NOT_SUPPORTED: [u8; 10] = [5, 7, 0, 1, 0, 0, 0, 0, 0, 0];
+    const HOST_UNREACHABLE: [u8; 10] = [5, 4, 0, 1, 0, 0, 0, 0, 0, 0];
+    if request[1] != 1 {
+        socket.write_all(&COMMAND_NOT_SUPPORTED).await.map_err(io)?;
+        return Err("SOCKS5 只支持 CONNECT".into());
+    }
+    let (_session, channel) = match open_direct(server, secret, &host, port, origin).await {
+        Ok(tunnel) => tunnel,
+        Err(err) => {
+            let _ = socket.write_all(&HOST_UNREACHABLE).await;
+            return Err(err);
+        }
+    };
+    socket.write_all(&SUCCEEDED).await.map_err(io)?;
+    let mut stream = channel.into_stream();
+    tokio::io::copy_bidirectional(&mut socket, &mut stream)
+        .await
+        .map(|_| ())
+        .map_err(io)
+}
+
+/// Remote (-R) forward: the server listens and hands each connection to us.
+/// Uses its own connection, so stopping the forward cancels it on the server.
+async fn serve_remote_forward(
+    server: &ServerRecord,
+    secret: Option<&str>,
+    forward: &PortForward,
+    on_running: ForwardRunning,
+) -> Result<(), String> {
+    let forwards = RemoteForwards::default();
+    let session = connect_with_forwards(server, secret, forwards.clone()).await?;
+    if let Ok(mut map) = forwards.lock() {
+        map.insert(
+            u32::from(forward.bind_port),
+            (forward.dest_host.clone(), forward.dest_port),
+        );
+    }
+    session
+        .tcpip_forward(forward.bind_host.clone(), u32::from(forward.bind_port))
+        .await
+        .map_err(|err| {
+            format!(
+                "服务器拒绝在 {}:{} 监听：{err}",
+                forward.bind_host, forward.bind_port
+            )
+        })?;
+    on_running();
+    loop {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        if session.is_closed() {
+            return Err("与服务器的连接已断开".into());
+        }
+    }
 }
 
 #[cfg(test)]
