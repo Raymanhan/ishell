@@ -1,11 +1,13 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
+import { SearchAddon } from "@xterm/addon-search";
 import { Terminal } from "@xterm/xterm";
 import { RefreshCw } from "lucide-react";
 import { command, isTauri } from "../api/tauri";
 import { getTerminalSurfaceReport, getTerminalTheme, type AppTheme } from "../constants/theme";
 import type { ShellTab } from "../features/shell/types";
+import { isTerminalSearchShortcut, TerminalSearchBar } from "./TerminalSearchBar";
 import type {
   TerminalClosedPayload,
   TerminalDataPayload,
@@ -89,6 +91,9 @@ function TerminalPaneBase({
   const historySuggestRef = useRef<HistorySuggestState>(closedHistorySuggest);
   const selectedSuggestionRef = useRef<HTMLButtonElement | null>(null);
   const [historySuggest, setHistorySuggest] = useState<HistorySuggestState>(closedHistorySuggest);
+  const [searchAddon, setSearchAddon] = useState<SearchAddon | null>(null);
+  // 0 = closed; otherwise bumped on every open shortcut so the bar refocuses.
+  const [searchSignal, setSearchSignal] = useState(0);
   commandHistoryRef.current = commandHistory;
 
   const suggestedCommands = useMemo(
@@ -381,10 +386,14 @@ function TerminalPaneBase({
       // background (ignoring the #00000000 theme color) and covers the macOS
       // vibrancy across the whole terminal region.
       allowTransparency: true,
+      // Search highlights use the decorations API.
+      allowProposedApi: true,
       theme: getTerminalTheme(theme),
     });
 
+    const search = new SearchAddon();
     terminal.loadAddon(fit);
+    terminal.loadAddon(search);
     // The theme background is transparent, so xterm would answer a background
     // query (OSC 11 "?") with black and CLIs that adapt to it (Codex, Claude
     // Code, vim) would pick dark styling on light themes, e.g. dark ink on a
@@ -400,6 +409,13 @@ function TerminalPaneBase({
     terminal.writeln("");
 
     terminal.attachCustomKeyEventHandler((event) => {
+      if (isTerminalSearchShortcut(event)) {
+        closeHistorySuggest();
+        setSearchSignal((signal) => signal + 1);
+        event.preventDefault();
+        return false;
+      }
+
       if (
         event.type === "keydown" &&
         event.key === "Alt" &&
@@ -481,12 +497,14 @@ function TerminalPaneBase({
 
     terminalRef.current = terminal;
     fitRef.current = fit;
+    setSearchAddon(search);
 
     return () => {
       window.removeEventListener("resize", refit);
       if (fitTimerRef.current !== null) window.clearTimeout(fitTimerRef.current);
       if (fitSettledTimerRef.current !== null) window.clearTimeout(fitSettledTimerRef.current);
       observer.disconnect();
+      setSearchAddon(null);
       terminal.dispose();
     };
   }, [setNotice, tab.title]);
@@ -652,6 +670,17 @@ function TerminalPaneBase({
     <section className={`terminal-panel ${visible ? "active" : ""}`} aria-hidden={!visible}>
       <div className="terminal-frame">
         <div className="terminal-host" ref={containerRef} />
+        {searchSignal > 0 && searchAddon && (
+          <TerminalSearchBar
+            search={searchAddon}
+            theme={theme}
+            openSignal={searchSignal}
+            onClose={() => {
+              setSearchSignal(0);
+              terminalRef.current?.focus();
+            }}
+          />
+        )}
         {historySuggest.active && (
           <div
             className="terminal-history-suggest"

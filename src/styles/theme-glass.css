@@ -206,6 +206,7 @@
 :root[data-theme="glass"] .tab-context-menu,
 :root[data-theme="glass"] .ctx-menu,
 :root[data-theme="glass"] .terminal-history-suggest,
+:root[data-theme="glass"] .terminal-search,
 :root[data-theme="glass"] .upload-queue,
 :root[data-theme="glass"] .sftp-drop-card {
   border-color: rgba(255, 255, 255, 0.2);
@@ -644,6 +645,7 @@
 :root[data-theme^="liquid-glass"] .tab-context-menu::before,
 :root[data-theme^="liquid-glass"] .ctx-menu::before,
 :root[data-theme^="liquid-glass"] .terminal-history-suggest::before,
+:root[data-theme^="liquid-glass"] .terminal-search::before,
 :root[data-theme^="liquid-glass"] .upload-queue::before,
 :root[data-theme^="liquid-glass"] .sftp-drop-card::before,
 :root[data-theme^="liquid-glass"] .recent-card::before,
@@ -681,6 +683,7 @@
 :root[data-theme^="liquid-glass"] .tab-context-menu > *,
 :root[data-theme^="liquid-glass"] .ctx-menu > *,
 :root[data-theme^="liquid-glass"] .terminal-history-suggest > *,
+:root[data-theme^="liquid-glass"] .terminal-search > *,
 :root[data-theme^="liquid-glass"] .upload-queue > *,
 :root[data-theme^="liquid-glass"] .sftp-drop-card > *,
 :root[data-theme^="liquid-glass"] .recent-card > *,
@@ -717,6 +720,7 @@
 :root[data-theme^="liquid-glass"] .tab-context-menu,
 :root[data-theme^="liquid-glass"] .ctx-menu,
 :root[data-theme^="liquid-glass"] .terminal-history-suggest,
+:root[data-theme^="liquid-glass"] .terminal-search,
 :root[data-theme^="liquid-glass"] .upload-queue,
 :root[data-theme^="liquid-glass"] .sftp-drop-card {
   border-color: rgba(var(--liquid-line-rgb), 0.16);
@@ -1409,6 +1413,7 @@
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .tab-context-menu::before,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .ctx-menu::before,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .terminal-history-suggest::before,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .terminal-search::before,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .upload-queue::before,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .sftp-drop-card::before,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .recent-card::before,
@@ -1601,6 +1606,7 @@
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .tab-context-menu,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .ctx-menu,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .terminal-history-suggest,
+:root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .terminal-search,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .upload-queue,
 :root:is([data-theme="liquid-glass-pearl"], [data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-clay-light"]) .sftp-drop-card {
   border-color: rgba(var(--ink-rgb), 0.18);
