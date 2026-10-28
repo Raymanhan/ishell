@@ -1,0 +1,79 @@
+name: CI
+
+# Fast checks for every pull request and every push to main. Installers are
+# built only by release.yml (tags and manual runs).
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check and build
+        run: npm run build
+
+  rust:
+    name: Rust
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev
+
+      - name: Check formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+
+      # The OpenSSH backend (macOS/Linux) and the russh backend (Windows) are
+      # separate code paths; lint and test both.
+      - name: Clippy (OpenSSH backend)
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+      - name: Clippy (russh backend)
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --features force-russh -- -D warnings
+
+      - name: Test (OpenSSH backend)
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Test (russh backend)
+        run: cargo test --manifest-path src-tauri/Cargo.toml --features force-russh
