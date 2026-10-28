@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.3.0](https://github.com/Raymanhan/ishell/releases/tag/v1.3.0)**
+**[Download iShell v1.4.0](https://github.com/Raymanhan/ishell/releases/tag/v1.4.0)**
 
 Available packages:
 
@@ -291,8 +291,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.3.0
-git push origin v1.3.0
+git tag v1.4.0
+git push origin v1.4.0
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -353,6 +353,11 @@ src-tauri/src/
 
 ## Recent Changes
 
+- `v1.4.0` adds jump hosts (chainable), port forwarding (local, remote and
+  SOCKS5, running in the background with live status), split panes, broadcast
+  input, command snippets and search in the terminal. Terminal selections are
+  readable on light themes again, deleting from the server editor now always
+  deletes the server being edited, and pull requests are checked by CI.
 - `v1.3.0` adds in-app updates: iShell checks for a new release in the
   background at startup and every 6 hours, offers it in a corner prompt, and
   downloads, installs and restarts in one click. Settings gains an "About and
