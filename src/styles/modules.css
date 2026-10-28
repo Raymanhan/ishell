@@ -1350,17 +1350,17 @@ button.detail-row:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.folder-upload-replace-target {
+.delete-target.labeled {
   display: grid;
   gap: 5px;
   white-space: normal;
 }
-.folder-upload-replace-target span {
+.delete-target.labeled span {
   color: var(--faint);
   font-family: var(--font-sans);
   font-size: 11px;
 }
-.folder-upload-replace-target code {
+.delete-target.labeled code {
   color: var(--dim);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
