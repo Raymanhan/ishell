@@ -21,6 +21,7 @@ import { ServerDetail } from "./components/ServerDetail";
 import { ServerEditor } from "./components/ServerEditor";
 import { useConnections } from "./features/connections/useConnections";
 import { SettingsModal } from "./components/SettingsModal";
+import { PortForwardsPanel } from "./components/PortForwardsPanel";
 import { SnippetsPanel } from "./components/SnippetsPanel";
 import { StatusDashboard } from "./components/StatusDashboard";
 import { TabBar } from "./components/TabBar";
@@ -64,7 +65,7 @@ import {
   type PaneLayouts,
   type SplitDirection,
 } from "./features/shell/panes";
-import { createTabId, type ShellTab } from "./features/shell/types";
+import { createTabId, type ShellTab, type SidePanel } from "./features/shell/types";
 import {
   closeCurrentWindowIfPeerExists,
   handoffTabSnapshot,
@@ -76,6 +77,7 @@ import {
   type TabDropPoint,
 } from "./features/shell/windowHandoff";
 import { applyNativeWindowTheme } from "./features/theme/nativeWindowTheme";
+import { usePortForwards } from "./features/forwards/usePortForwards";
 import { snippetInput, useSnippets } from "./features/snippets/useSnippets";
 import { AUTO_CHECK_UPDATES_KEY, readAutoCheckUpdates, useUpdater } from "./features/updater/useUpdater";
 import { demoStatus } from "./mocks/demoData";
@@ -83,6 +85,7 @@ import { loadDemoFiles } from "./mocks/demoSftp";
 import type {
   FolderDownloadMode,
   NetworkSample,
+  PortForward,
   ProcessSamplePayload,
   ServerRecord,
   ServerStatus,
@@ -119,7 +122,6 @@ interface DeleteConfirmState {
 }
 
 type UploadPickerKind = "files" | "folder";
-type SidePanel = "status" | "history" | "snippets";
 
 export default function App() {
   const tabGhost = useMemo(() => readTabGhostFromUrl(), []);
@@ -482,6 +484,15 @@ export default function App() {
     showNotice(snippet.run ? `已执行片段：${snippet.name}` : `已发送片段：${snippet.name}`);
   }
 
+  async function deletePortForward(forward: PortForward) {
+    if (!window.confirm(`删除端口转发 ${forward.bindHost}:${forward.bindPort}？运行中的转发会被停止。`)) return;
+    try {
+      await portForwards.remove(forward.id);
+    } catch (error) {
+      showNotice(String(error));
+    }
+  }
+
   async function deleteSnippet(snippet: Snippet) {
     if (!window.confirm(`删除片段「${snippet.name}」？`)) return;
     try {
@@ -597,6 +608,7 @@ export default function App() {
   });
   const downloadQueue = useDownloadQueue({ showNotice, beginBusy: beginSftpBusy, endBusy: endSftpBusy });
   const snippets = useSnippets(showNotice);
+  const portForwards = usePortForwards(showNotice);
   const connections = useConnections({
     showNotice,
     onServerRenamed: (serverId, name) =>
@@ -914,6 +926,7 @@ export default function App() {
     terminalReadyTabs.current.add(tabId);
     patchTab(tabId, { state: "connected" });
     showNotice(`${title} 已连接`);
+    portForwards.autoStart(serverId);
     connections.refreshServers();
     refreshSftpAfterTerminalReady(tabId, serverId);
   }
@@ -1821,6 +1834,19 @@ export default function App() {
                     )}
                     {sidePanel === "history" && (
                       <CommandHistoryPanel commands={commandHistory} onPick={pasteHistoryCommand} />
+                    )}
+                    {sidePanel === "forwards" && (
+                      <PortForwardsPanel
+                        serverId={activeTab.serverId}
+                        serverName={activeTab.title}
+                        forwards={portForwards.forwards}
+                        statuses={portForwards.statuses}
+                        onSave={portForwards.save}
+                        onDelete={(forward) => void deletePortForward(forward)}
+                        onStart={(id) => void portForwards.start(id)}
+                        onStop={(id) => void portForwards.stop(id)}
+                        onCopied={(text) => showNotice(`已复制 ${text}`)}
+                      />
                     )}
                     {sidePanel === "snippets" && (
                       <SnippetsPanel

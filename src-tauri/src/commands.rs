@@ -17,8 +17,9 @@ use uuid::Uuid;
 use crate::{
     models::{
         ConnectionExport, ConnectionExportServer, ConnectionImport, ConnectionImportServer,
-        EncryptedExportSecret, NetworkSample, ServerInput, ServerOrderInput, ServerRecord,
-        ServerStatus, SftpEntry, Snippet, SnippetInput, TerminalSnapshotPayload,
+        EncryptedExportSecret, NetworkSample, PortForward, PortForwardInput, PortForwardStatus,
+        ServerInput, ServerOrderInput, ServerRecord, ServerStatus, SftpEntry, Snippet,
+        SnippetInput, TerminalSnapshotPayload,
     },
     pool::SshPool,
     process_monitor::ProcessMonitorRegistry,
@@ -28,15 +29,18 @@ use crate::{
         upload_file, upload_folder, write_text_file,
     },
     store::{
-        append_command_history, delete_server as remove_server, delete_snippet as remove_snippet,
+        append_command_history, delete_port_forward as remove_port_forward,
+        delete_server as remove_server, delete_snippet as remove_snippet, get_port_forward,
         get_server, jump_hops, list_command_history as load_command_history,
-        list_servers as load_servers, list_snippets as load_snippets, normalize_tags, read_secret,
-        reorder_servers as save_server_order, save_snippet as store_snippet, upsert_server,
-        validate_server,
+        list_port_forwards as load_port_forwards, list_servers as load_servers,
+        list_snippets as load_snippets, normalize_tags, read_secret,
+        reorder_servers as save_server_order, save_port_forward as store_port_forward,
+        save_snippet as store_snippet, upsert_server, validate_server,
     },
     tail_monitor::TailMonitorRegistry,
     terminal::{self, TerminalRegistry},
     time::now,
+    tunnel::TunnelRegistry,
 };
 
 const CONNECTION_EXPORT_VERSION: u32 = 1;
@@ -401,10 +405,74 @@ pub fn import_connections(
 pub fn delete_server(
     app: AppHandle,
     pool: State<'_, Arc<SshPool>>,
+    tunnels: State<'_, Arc<TunnelRegistry>>,
     id: String,
 ) -> Result<(), String> {
+    for forward in load_port_forwards(&app)?
+        .into_iter()
+        .filter(|forward| forward.server_id == id)
+    {
+        tunnels.stop(&app, &forward.id);
+    }
     pool.invalidate(&id);
     remove_server(&app, &id)
+}
+
+#[tauri::command]
+pub fn list_port_forwards(app: AppHandle) -> Result<Vec<PortForward>, String> {
+    load_port_forwards(&app)
+}
+
+#[tauri::command]
+pub fn save_port_forward(
+    app: AppHandle,
+    tunnels: State<'_, Arc<TunnelRegistry>>,
+    input: PortForwardInput,
+) -> Result<PortForward, String> {
+    let forward = store_port_forward(&app, input)?;
+    // A running forward keeps its old settings until restarted.
+    let running = tunnels.statuses().into_iter().any(|status| {
+        status.id == forward.id && matches!(status.state.as_str(), "starting" | "running")
+    });
+    if running {
+        tunnels.stop(&app, &forward.id);
+        tunnels.inner().start(&app, forward.clone())?;
+    }
+    Ok(forward)
+}
+
+#[tauri::command]
+pub fn delete_port_forward(
+    app: AppHandle,
+    tunnels: State<'_, Arc<TunnelRegistry>>,
+    id: String,
+) -> Result<(), String> {
+    tunnels.stop(&app, &id);
+    remove_port_forward(&app, &id)
+}
+
+#[tauri::command]
+pub async fn start_port_forward(
+    app: AppHandle,
+    tunnels: State<'_, Arc<TunnelRegistry>>,
+    id: String,
+) -> Result<(), String> {
+    let tunnels = tunnels.inner().clone();
+    run_blocking(move || {
+        let forward = get_port_forward(&app, &id)?;
+        tunnels.start(&app, forward)
+    })
+    .await
+}
+
+#[tauri::command]
+pub fn stop_port_forward(app: AppHandle, tunnels: State<'_, Arc<TunnelRegistry>>, id: String) {
+    tunnels.stop(&app, &id);
+}
+
+#[tauri::command]
+pub fn port_forward_statuses(tunnels: State<'_, Arc<TunnelRegistry>>) -> Vec<PortForwardStatus> {
+    tunnels.statuses()
 }
 
 #[tauri::command]

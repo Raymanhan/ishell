@@ -2,6 +2,9 @@ import type { FileColumn, NetworkPoint, NetworkSample, ServerStatus, SftpEntry }
 
 export type ShellState = "connecting" | "connected" | "closed";
 
+/** The tool shown in the side panel next to the terminal. */
+export type SidePanel = "status" | "history" | "snippets" | "forwards";
+
 export interface ShellTab {
   id: string;
   serverId: string;

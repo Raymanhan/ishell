@@ -8,7 +8,9 @@ use rusqlite::{params, Connection, OptionalExtension};
 use tauri::{AppHandle, Manager};
 
 use crate::{
-    models::{JumpHop, ServerInput, ServerRecord, Snippet, SnippetInput},
+    models::{
+        JumpHop, PortForward, PortForwardInput, ServerInput, ServerRecord, Snippet, SnippetInput,
+    },
     time::now,
 };
 
@@ -56,6 +58,22 @@ const SNIPPETS_SCHEMA: &str = "CREATE TABLE IF NOT EXISTS snippets (
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );";
+
+const PORT_FORWARDS_SCHEMA: &str = "CREATE TABLE IF NOT EXISTS port_forwards (
+    id TEXT PRIMARY KEY,
+    server_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    bind_host TEXT NOT NULL,
+    bind_port INTEGER NOT NULL,
+    dest_host TEXT NOT NULL DEFAULT '',
+    dest_port INTEGER NOT NULL DEFAULT 0,
+    description TEXT NOT NULL DEFAULT '',
+    auto_start INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);";
+
+const FORWARD_COLUMNS: &str = "id, server_id, kind, bind_host, bind_port, dest_host, dest_port, description, auto_start, created_at, updated_at";
 
 const COLUMNS: &str = "id,name,host,port,username,\"group\",tags,auth_type,key_path,color,notes,created_at,updated_at,last_connected_at,sort_order,jump_server_id";
 
@@ -142,6 +160,8 @@ pub fn upsert_server(
 pub fn delete_server(app: &AppHandle, id: &str) -> Result<(), String> {
     let conn = open_db(app)?;
     conn.execute("DELETE FROM servers WHERE id = ?1", [id])
+        .map_err(db_err)?;
+    conn.execute("DELETE FROM port_forwards WHERE server_id = ?1", [id])
         .map_err(db_err)?;
     // Servers that went through this one now connect directly.
     conn.execute(
@@ -386,6 +406,148 @@ pub fn delete_snippet(app: &AppHandle, id: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn row_to_forward(row: &rusqlite::Row) -> rusqlite::Result<PortForward> {
+    Ok(PortForward {
+        id: row.get(0)?,
+        server_id: row.get(1)?,
+        kind: row.get(2)?,
+        bind_host: row.get(3)?,
+        bind_port: row.get::<_, i64>(4)? as u16,
+        dest_host: row.get(5)?,
+        dest_port: row.get::<_, i64>(6)? as u16,
+        description: row.get(7)?,
+        auto_start: row.get::<_, i64>(8)? != 0,
+        created_at: row.get::<_, i64>(9)? as u64,
+        updated_at: row.get::<_, i64>(10)? as u64,
+    })
+}
+
+pub fn list_port_forwards(app: &AppHandle) -> Result<Vec<PortForward>, String> {
+    let conn = open_db(app)?;
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT {FORWARD_COLUMNS} FROM port_forwards ORDER BY created_at"
+        ))
+        .map_err(db_err)?;
+    let rows = stmt.query_map([], row_to_forward).map_err(db_err)?;
+    let mut forwards = Vec::new();
+    for row in rows {
+        forwards.push(row.map_err(db_err)?);
+    }
+    Ok(forwards)
+}
+
+pub fn get_port_forward(app: &AppHandle, id: &str) -> Result<PortForward, String> {
+    let conn = open_db(app)?;
+    conn.query_row(
+        &format!("SELECT {FORWARD_COLUMNS} FROM port_forwards WHERE id = ?1"),
+        [id],
+        row_to_forward,
+    )
+    .optional()
+    .map_err(db_err)?
+    .ok_or_else(|| "找不到该端口转发".into())
+}
+
+pub fn validate_port_forward(input: &PortForwardInput) -> Result<(), String> {
+    if !matches!(input.kind.as_str(), "local" | "remote" | "dynamic") {
+        return Err("转发类型无效".into());
+    }
+    if input.bind_port == 0 {
+        return Err("监听端口必须在 1–65535 之间".into());
+    }
+    if input.kind != "dynamic" {
+        if input.dest_host.trim().is_empty() {
+            return Err("请填写目标主机".into());
+        }
+        if input.dest_port == 0 {
+            return Err("目标端口必须在 1–65535 之间".into());
+        }
+    }
+    Ok(())
+}
+
+pub fn save_port_forward(app: &AppHandle, input: PortForwardInput) -> Result<PortForward, String> {
+    validate_port_forward(&input)?;
+    get_server(app, &input.server_id)?;
+    let conn = open_db(app)?;
+    let stamp = now();
+    let created_at = match input.id.as_deref().filter(|id| !id.is_empty()) {
+        Some(id) => conn
+            .query_row(
+                "SELECT created_at FROM port_forwards WHERE id = ?1",
+                [id],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()
+            .map_err(db_err)?
+            .map(|value| value as u64),
+        None => None,
+    };
+    let bind_host = input.bind_host.trim();
+    let forward = PortForward {
+        id: input
+            .id
+            .filter(|id| !id.is_empty() && created_at.is_some())
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+        server_id: input.server_id,
+        bind_host: if bind_host.is_empty() {
+            "127.0.0.1".into()
+        } else {
+            bind_host.into()
+        },
+        bind_port: input.bind_port,
+        dest_host: if input.kind == "dynamic" {
+            String::new()
+        } else {
+            input.dest_host.trim().into()
+        },
+        dest_port: if input.kind == "dynamic" {
+            0
+        } else {
+            input.dest_port
+        },
+        kind: input.kind,
+        description: input.description.trim().into(),
+        auto_start: input.auto_start,
+        created_at: created_at.unwrap_or(stamp),
+        updated_at: stamp,
+    };
+    conn.execute(
+        &format!(
+            "INSERT INTO port_forwards ({FORWARD_COLUMNS})
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+             ON CONFLICT(id) DO UPDATE SET
+               kind=excluded.kind, bind_host=excluded.bind_host, bind_port=excluded.bind_port,
+               dest_host=excluded.dest_host, dest_port=excluded.dest_port,
+               description=excluded.description, auto_start=excluded.auto_start,
+               updated_at=excluded.updated_at"
+        ),
+        params![
+            forward.id,
+            forward.server_id,
+            forward.kind,
+            forward.bind_host,
+            forward.bind_port as i64,
+            forward.dest_host,
+            forward.dest_port as i64,
+            forward.description,
+            forward.auto_start as i64,
+            forward.created_at as i64,
+            forward.updated_at as i64,
+        ],
+    )
+    .map_err(db_err)?;
+    Ok(forward)
+}
+
+pub fn delete_port_forward(app: &AppHandle, id: &str) -> Result<(), String> {
+    let conn = open_db(app)?;
+    conn.execute("DELETE FROM port_forwards WHERE id = ?1", [id])
+        .map_err(db_err)?;
+    Ok(())
+}
+
 pub fn normalize_tags(tags: Vec<String>) -> Vec<String> {
     tags.into_iter()
         .map(|tag| tag.trim().to_string())
@@ -456,6 +618,7 @@ fn open_db(app: &AppHandle) -> Result<Connection, String> {
     )?;
     conn.execute_batch(COMMAND_HISTORY_SCHEMA).map_err(db_err)?;
     conn.execute_batch(SNIPPETS_SCHEMA).map_err(db_err)?;
+    conn.execute_batch(PORT_FORWARDS_SCHEMA).map_err(db_err)?;
     migrate_legacy_json(app, &conn)?;
     Ok(conn)
 }

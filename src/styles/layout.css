@@ -1967,3 +1967,208 @@
   color: var(--faint);
   font-size: 11px;
 }
+
+/* ===== Port forwards ===== */
+.forwards-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: 0 0 auto;
+  margin-bottom: 8px;
+}
+.forwards-head > div {
+  display: grid;
+  min-width: 0;
+}
+.forwards-head strong {
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+.forwards-head span {
+  overflow: hidden;
+  color: var(--faint);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.forward-kinds {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+}
+.forward-kinds button {
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dim);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.forward-kinds button.active {
+  background: rgba(var(--accent-rgb), 0.16);
+  color: var(--text);
+  font-weight: 620;
+}
+.forward-hint {
+  margin: 0;
+  color: var(--faint);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.forward-label {
+  margin-top: 2px;
+  color: var(--dim);
+  font-size: 11px;
+}
+.forward-address {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 70px;
+  gap: 5px;
+}
+.forwards-list {
+  flex: 1 1 auto;
+}
+.forward-row {
+  display: grid;
+  gap: 5px;
+  flex: 0 0 auto;
+  padding: 7px 8px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+}
+.forward-row.running {
+  border-color: rgba(48, 209, 88, 0.35);
+}
+.forward-row.error {
+  border-color: rgba(255, 69, 58, 0.35);
+}
+.forward-row-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--dim);
+}
+.forward-row-dest {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding-left: 13px;
+  color: var(--faint);
+}
+.forward-row-dest code,
+.forward-row-main code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.forward-row-dest svg {
+  flex: 0 0 auto;
+  color: var(--faint);
+}
+.forward-state {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+.forward-state.running {
+  background: var(--vivid-green);
+  box-shadow: 0 0 0 3px rgba(48, 209, 88, 0.18);
+}
+.forward-state.starting {
+  background: var(--vivid-orange);
+}
+.forward-state.error {
+  background: var(--danger);
+}
+.forward-kind {
+  flex: 0 0 auto;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: rgba(var(--accent-rgb), 0.12);
+  color: var(--dim);
+  font-size: 10.5px;
+  line-height: 16px;
+}
+.forward-row-note {
+  color: var(--faint);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.forward-row-note.error {
+  color: var(--danger);
+}
+.forward-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.forward-row-actions > button:not(.forward-toggle) {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+}
+.forward-row-actions > button:not(.forward-toggle):hover {
+  background: rgba(var(--accent-rgb), 0.14);
+  color: var(--text);
+}
+.forward-row-actions > button.danger:hover {
+  color: var(--danger);
+}
+.forward-state-label {
+  flex: 1 1 auto;
+  margin-left: 4px;
+  color: var(--faint);
+  font-size: 11px;
+}
+.forward-toggle {
+  position: relative;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(var(--accent-rgb), 0.22);
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+.forward-toggle span {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: transform 140ms ease;
+}
+.forward-toggle.on {
+  background: var(--vivid-green);
+}
+.forward-toggle.on span {
+  transform: translateX(12px);
+}

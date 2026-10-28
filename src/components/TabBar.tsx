@@ -6,10 +6,10 @@ import {
   type MouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { Activity, Clock3, Columns2, Copy, FolderTree, PanelLeft, PanelsTopLeft, Plus, Radio, RefreshCw, Rows2, Settings, SquareCode, X } from "lucide-react";
+import { Activity, Clock3, Columns2, Copy, FolderTree, Network, PanelLeft, PanelsTopLeft, Plus, Radio, RefreshCw, Rows2, Settings, SquareCode, X } from "lucide-react";
 import type { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { MAX_PANES, splitShortcutLabel, type SplitDirection } from "../features/shell/panes";
-import type { ShellTab } from "../features/shell/types";
+import type { ShellTab, SidePanel } from "../features/shell/types";
 
 interface TabDropPoint {
   screenX: number;
@@ -62,14 +62,14 @@ export function TabBar({
   activeTabId: string | null;
   activeTabTitle: string | null;
   filesOpen: boolean;
-  sidePanel: "status" | "history" | "snippets" | null;
+  sidePanel: SidePanel | null;
   broadcastActive: boolean;
   onToggleBroadcast: () => void;
   serverCount: number;
   onOpenConnections: () => void;
   onOpenSettings: () => void;
   onToggleFiles: () => void;
-  onToggleSidePanel: (panel: "status" | "history" | "snippets") => void;
+  onToggleSidePanel: (panel: SidePanel) => void;
   onActivate: (id: string) => void;
   onClone: (id: string) => void;
   onReconnect: (id: string) => void;
@@ -566,6 +566,18 @@ export function TabBar({
               >
                 <span className="dock-toggle-icon">
                   <SquareCode size={14} />
+                </span>
+              </button>
+              <button
+                type="button"
+                className={`dock-toggle ${sidePanel === "forwards" ? "on" : ""}`}
+                onClick={() => onToggleSidePanel("forwards")}
+                title="端口转发"
+                aria-label="端口转发"
+                aria-pressed={sidePanel === "forwards"}
+              >
+                <span className="dock-toggle-icon">
+                  <Network size={14} />
                 </span>
               </button>
               <button

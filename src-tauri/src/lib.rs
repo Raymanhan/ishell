@@ -10,6 +10,7 @@ mod store;
 mod tail_monitor;
 mod terminal;
 mod time;
+mod tunnel;
 
 use pool::SshPool;
 use process_monitor::ProcessMonitorRegistry;
@@ -17,6 +18,7 @@ use std::sync::Arc;
 use tail_monitor::TailMonitorRegistry;
 use tauri::Manager;
 use terminal::TerminalRegistry;
+use tunnel::TunnelRegistry;
 
 pub fn run() {
     tauri::Builder::default()
@@ -28,6 +30,7 @@ pub fn run() {
         .manage(Arc::new(SshPool))
         .manage(Arc::new(ProcessMonitorRegistry::default()))
         .manage(Arc::new(TailMonitorRegistry::default()))
+        .manage(Arc::new(TunnelRegistry::default()))
         .manage(Arc::new(commands::UploadCancelRegistry::default()))
         .manage(Arc::new(commands::DownloadCancelRegistry::default()))
         .setup(|app| {
@@ -54,6 +57,12 @@ pub fn run() {
             commands::list_snippets,
             commands::save_snippet,
             commands::delete_snippet,
+            commands::list_port_forwards,
+            commands::save_port_forward,
+            commands::delete_port_forward,
+            commands::start_port_forward,
+            commands::stop_port_forward,
+            commands::port_forward_statuses,
             commands::fetch_server_status,
             commands::start_process_monitor,
             commands::stop_process_monitor,
@@ -82,6 +91,10 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building iShell")
         .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                app.state::<Arc<TunnelRegistry>>().stop_all();
+            }
+
             if let tauri::RunEvent::WindowEvent { label, event, .. } = &event {
                 if matches!(event, tauri::WindowEvent::Destroyed) && label.starts_with("tail-") {
                     app.state::<Arc<TailMonitorRegistry>>().stop_window(label);
