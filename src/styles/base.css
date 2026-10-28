@@ -79,7 +79,8 @@
 
   font-family: var(--font-sans);
   font-size: 13px;
-  background: var(--bg);
+  /* --window-underlay (set from the transparency setting) sits under everything. */
+  background: linear-gradient(var(--bg), var(--bg)), var(--window-underlay, transparent);
   color: var(--text);
   -webkit-font-smoothing: auto;
   -moz-osx-font-smoothing: auto;

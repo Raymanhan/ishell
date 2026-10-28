@@ -20,12 +20,14 @@ const themeIcons: Record<ThemeIcon, typeof Layers> = {
 
 export function SettingsModal({
   theme,
+  windowTransparency,
   terminalFontSize,
   tailViewerDefaultLines,
   autoHideTopBar,
   updater,
   autoCheckUpdates,
   onThemeChange,
+  onWindowTransparencyChange,
   onTerminalFontSizeChange,
   onTailViewerDefaultLinesChange,
   onAutoHideTopBarChange,
@@ -35,12 +37,14 @@ export function SettingsModal({
   onClose,
 }: {
   theme: AppTheme;
+  windowTransparency: number;
   terminalFontSize: number;
   tailViewerDefaultLines: number;
   autoHideTopBar: boolean;
   updater: UpdaterState;
   autoCheckUpdates: boolean;
   onThemeChange: (theme: AppTheme) => void;
+  onWindowTransparencyChange: (transparency: number) => void;
   onTerminalFontSizeChange: (size: number) => void;
   onTailViewerDefaultLinesChange: (lines: number) => void;
   onAutoHideTopBarChange: (autoHide: boolean) => void;
@@ -104,7 +108,9 @@ export function SettingsModal({
           <div className="settings-section">
             <div className="settings-section-copy">
               <h3>主题</h3>
-              <p>选择界面的显示风格。终端内容保持高对比度，便于阅读。</p>
+              <p>
+                选择界面的显示风格。透明度 100% 为主题原本的效果，调低会减少窗口背后内容的透出，0% 为完全不透明。
+              </p>
             </div>
 
             <div className="theme-options" role="radiogroup" aria-label="主题">
@@ -133,6 +139,20 @@ export function SettingsModal({
                 );
               })}
             </div>
+
+            <label className="settings-range">
+              <span>透明度</span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={windowTransparency}
+                aria-valuetext={`${windowTransparency}%`}
+                onChange={(event) => onWindowTransparencyChange(Number(event.target.value))}
+              />
+              <strong>{windowTransparency}%</strong>
+            </label>
           </div>
 
           <div className="settings-section">

@@ -31,7 +31,13 @@ import {
   readSavedTailViewerLines,
   TAIL_VIEWER_DEFAULT_LINES_KEY,
 } from "./constants/tail";
-import { readSavedTheme, type AppTheme } from "./constants/theme";
+import {
+  applyWindowUnderlay,
+  readSavedTheme,
+  readSavedWindowTransparency,
+  WINDOW_TRANSPARENCY_KEY,
+  type AppTheme,
+} from "./constants/theme";
 import {
   connectionDeleteDescription,
   connectionDeleteTargetText,
@@ -133,8 +139,12 @@ export default function App() {
   const [theme, setTheme] = useState<AppTheme>(
     () => readSavedTheme(window.localStorage.getItem("ishell.theme")),
   );
+  const [windowTransparency, setWindowTransparency] = useState(
+    () => readSavedWindowTransparency(window.localStorage.getItem(WINDOW_TRANSPARENCY_KEY)),
+  );
   const [terminalFontSize, setTerminalFontSize] = useState(() => {
-    const saved = Number(window.localStorage.getItem("ishell.terminalFontSize"));
+    const raw = window.localStorage.getItem("ishell.terminalFontSize");
+    const saved = raw === null ? Number.NaN : Number(raw);
     return Number.isFinite(saved) ? Math.min(20, Math.max(11, saved)) : 14;
   });
   const [tailViewerDefaultLines, setTailViewerDefaultLines] = useState(
@@ -300,6 +310,11 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem("ishell.theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    applyWindowUnderlay(theme, windowTransparency);
+    window.localStorage.setItem(WINDOW_TRANSPARENCY_KEY, String(windowTransparency));
+  }, [theme, windowTransparency]);
 
   useEffect(() => {
     if (!isTauri) return;
@@ -1879,12 +1894,14 @@ export default function App() {
       {settingsOpen && (
         <SettingsModal
           theme={theme}
+          windowTransparency={windowTransparency}
           terminalFontSize={terminalFontSize}
           tailViewerDefaultLines={tailViewerDefaultLines}
           autoHideTopBar={autoHideTopBar}
           updater={updater.state}
           autoCheckUpdates={autoCheckUpdates}
           onThemeChange={setTheme}
+          onWindowTransparencyChange={setWindowTransparency}
           onTerminalFontSizeChange={setTerminalFontSize}
           onTailViewerDefaultLinesChange={setTailViewerDefaultLines}
           onAutoHideTopBarChange={setAutoHideTopBar}

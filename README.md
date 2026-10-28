@@ -209,6 +209,8 @@ Settings currently include:
 
 - Theme: Cloud, Dusk, Claude Dark, Claude Light, Graphite, Midnight, Jade,
   Obsidian, or Ivory
+- Window transparency: 100% keeps each theme's own glass, lower values let less
+  of what is behind the window show through, 0% is fully opaque
 - Auto-hide top bar toggle
 - Terminal font size
 - Default line count for new live tail viewer windows

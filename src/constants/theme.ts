@@ -412,6 +412,31 @@ export function readSavedTheme(value: string | null): AppTheme {
   return appThemeOrder.includes(value as AppTheme) ? (value as AppTheme) : defaultAppTheme;
 }
 
+export const WINDOW_TRANSPARENCY_KEY = "ishell.windowTransparency";
+/** 100 is each theme as designed; lower values fade in a solid base under the window. */
+export const DEFAULT_WINDOW_TRANSPARENCY = 100;
+
+export function readSavedWindowTransparency(value: string | null) {
+  const saved = value === null ? Number.NaN : Number(value);
+  return Number.isFinite(saved) ? Math.min(100, Math.max(0, Math.round(saved))) : DEFAULT_WINDOW_TRANSPARENCY;
+}
+
+/**
+ * The color laid under the whole window: the theme's own tint, as opaque as
+ * the transparency setting asks. Without OS blur behind the window (Windows),
+ * the glass themes otherwise show other windows almost unchanged.
+ */
+export function getWindowUnderlay(theme: AppTheme, transparency: number) {
+  const { red, green, blue } = getThemeDefinition(theme).native.backgroundColor;
+  const alpha = (100 - transparency) / 100;
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+/** Lay the underlay under this window's page. */
+export function applyWindowUnderlay(theme: AppTheme, transparency: number) {
+  document.documentElement.style.setProperty("--window-underlay", getWindowUnderlay(theme, transparency));
+}
+
 function isLightSurface(hex: string) {
   const value = Number.parseInt(hex.slice(1, 7), 16);
   const red = (value >> 16) & 0xff;
