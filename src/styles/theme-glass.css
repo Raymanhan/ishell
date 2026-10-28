@@ -1810,6 +1810,9 @@
 :root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .terminal-frame {
   padding: 14px 14px 12px 18px;
 }
+:root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .terminal-panel {
+  --pane-top-inset: 0px;
+}
 
 /* Dashboard card (no session open) */
 :root:is([data-theme="liquid-glass-cloud"], [data-theme="liquid-glass-dusk"], [data-theme="liquid-glass-clay"], [data-theme="liquid-glass-clay-light"]) .view-layer {

@@ -6,7 +6,12 @@ import {
   MAX_TAIL_VIEWER_LINES,
   MIN_TAIL_VIEWER_LINES,
 } from "../constants/tail";
-import { readSavedTheme } from "../constants/theme";
+import {
+  applyWindowUnderlay,
+  readSavedTheme,
+  readSavedWindowTransparency,
+  WINDOW_TRANSPARENCY_KEY,
+} from "../constants/theme";
 import type {
   TailDataPayload,
   TailMonitorState,
@@ -61,7 +66,12 @@ export function TailViewer({ config }: { config: TailViewerConfig }) {
   const startMonitorRef = useRef<(lines: number) => Promise<void>>(async () => undefined);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = readSavedTheme(window.localStorage.getItem("ishell.theme"));
+    const theme = readSavedTheme(window.localStorage.getItem("ishell.theme"));
+    document.documentElement.dataset.theme = theme;
+    applyWindowUnderlay(
+      theme,
+      readSavedWindowTransparency(window.localStorage.getItem(WINDOW_TRANSPARENCY_KEY)),
+    );
     document.documentElement.classList.add("tail-viewer-root");
     document.body.classList.add("tail-viewer-body");
     if (isTauri) {
