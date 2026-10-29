@@ -205,16 +205,19 @@ The status panel samples remote host information through SSH:
 
 ### Settings
 
-Settings currently include:
+Settings lists its categories on the left and the chosen category's settings
+on the right:
 
-- Theme: Cloud, Dusk, Claude Dark, Claude Light, Graphite, Midnight, Jade,
-  Obsidian, or Ivory
-- Window transparency: 100% keeps each theme's own glass, lower values let less
-  of what is behind the window show through, 0% is fully opaque
-- Auto-hide top bar toggle
-- Terminal font size
-- Default line count for new live tail viewer windows
-- About and updates: current version, a manual update check, and automatic
+- **Appearance**
+  - Theme: Cloud, Dusk, Claude Dark, Claude Light, Graphite, Midnight, Jade,
+    Obsidian, or Ivory
+  - Window transparency: 100% keeps each theme's own glass, lower values let
+    less of what is behind the window show through, 0% is fully opaque
+  - Auto-hide top bar toggle
+- **Terminal**
+  - Terminal font size
+  - Default line count for new live tail viewer windows
+- **About and updates**: current version, a manual update check, and automatic
   checks (on launch and every 6 hours)
 
 When a newer release is available, iShell offers it in a small prompt; it
