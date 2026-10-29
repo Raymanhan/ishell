@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.4.1](https://github.com/Raymanhan/ishell/releases/tag/v1.4.1)**
+**[Download iShell v1.4.2](https://github.com/Raymanhan/ishell/releases/tag/v1.4.2)**
 
 Available packages:
 
@@ -205,16 +205,19 @@ The status panel samples remote host information through SSH:
 
 ### Settings
 
-Settings currently include:
+Settings lists its categories on the left and the chosen category's settings
+on the right:
 
-- Theme: Cloud, Dusk, Claude Dark, Claude Light, Graphite, Midnight, Jade,
-  Obsidian, or Ivory
-- Window transparency: 100% keeps each theme's own glass, lower values let less
-  of what is behind the window show through, 0% is fully opaque
-- Auto-hide top bar toggle
-- Terminal font size
-- Default line count for new live tail viewer windows
-- About and updates: current version, a manual update check, and automatic
+- **Appearance**
+  - Theme: Cloud, Dusk, Claude Dark, Claude Light, Graphite, Midnight, Jade,
+    Obsidian, or Ivory
+  - Window transparency: 100% keeps each theme's own glass, lower values let
+    less of what is behind the window show through, 0% is fully opaque
+  - Auto-hide top bar toggle
+- **Terminal**
+  - Terminal font size
+  - Default line count for new live tail viewer windows
+- **About and updates**: current version, a manual update check, and automatic
   checks (on launch and every 6 hours)
 
 When a newer release is available, iShell offers it in a small prompt; it
@@ -293,8 +296,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.4.1
-git push origin v1.4.1
+git tag v1.4.2
+git push origin v1.4.2
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -355,6 +358,9 @@ src-tauri/src/
 
 ## Recent Changes
 
+- `v1.4.2` lays out Settings as a side menu: Appearance, Terminal, and About
+  and updates on the left, the chosen menu's settings on the right, at a fixed
+  size while switching; About and updates shows a dot when an update is waiting.
 - `v1.4.1` adds a window transparency slider to Settings, so less of what is
   behind the window shows through the glass themes (most noticeable on
   Windows); 0% is fully opaque. Split pane labels now sit flush in the pane's
