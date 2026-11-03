@@ -12,7 +12,7 @@ iShell 是一个基于 Tauri + React + Rust 的轻量级 SSH 桌面工作台，�
 
 请从 GitHub Releases 下载最新版安装包：
 
-**[下载 iShell v1.4.2](https://github.com/Raymanhan/ishell/releases/tag/v1.4.2)**
+**[下载 iShell v1.4.3](https://github.com/Raymanhan/ishell/releases/tag/v1.4.3)**
 
 可用安装包：
 
@@ -228,8 +228,8 @@ npm run tauri -- build --target aarch64-apple-darwin
 推送 `v*` 标签后，GitHub Actions 会自动构建 Release。也可以在 GitHub Actions 页面手动运行 **Build installers** 工作流。
 
 ```bash
-git tag v1.4.2
-git push origin v1.4.2
+git tag v1.4.3
+git push origin v1.4.3
 ```
 
 发布工作流会构建 Windows、Linux、macOS Intel 和 macOS Apple Silicon 安装包，并把产物上传到 GitHub Release。
@@ -279,6 +279,7 @@ src-tauri/src/
 
 ## 最近更新
 
+- `v1.4.3` 修复 Windows 拖出标签时偶发残留且无法消除的悬浮气泡，处理预览窗口延迟创建和鼠标捕获丢失时的清理，并排除将预览气泡误识别为标签接收窗口的情况。
 - `v1.4.2` 设置窗口改为左右布局：左侧为“外观”“终端”“关于与更新”三个分类菜单，右侧显示对应设置，切换时窗口大小不变；有新版本时“关于与更新”菜单旁会显示提示圆点。
 - `v1.4.1` 设置中新增窗口透明度滑轨，可减少透明主题下窗口背后内容的透出（Windows 上尤其明显），0% 为完全不透明；分屏窗格的标识改为紧贴窗格右上角；修复首次安装时终端字号默认为 11px 而不是 14px 的问题。
 - `v1.4.0` 新增跳板机（可多级串联）、端口转发（本地/远程/SOCKS5，后台运行并显示状态）、终端分屏、广播输入、命令片段和终端内搜索；修复浅色主题下终端选中文字看不清，以及在编辑窗口中删除服务器可能删错的问题；新增 Pull Request 自动检查，并拆分大文件便于维护。

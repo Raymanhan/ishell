@@ -7,7 +7,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { Activity, Clock3, Columns2, Copy, FolderTree, Network, PanelLeft, PanelsTopLeft, Plus, Radio, RefreshCw, Rows2, Settings, SquareCode, X } from "lucide-react";
-import type { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { manageNativeDragGhost } from "../features/shell/nativeDragGhost";
 import { MAX_PANES, splitShortcutLabel, type SplitDirection } from "../features/shell/panes";
 import type { ShellTab, SidePanel } from "../features/shell/types";
 
@@ -97,7 +97,7 @@ export function TabBar({
   } | null>(null);
   const nativeGhostRef = useRef<{
     token: number;
-    windowRef: WebviewWindow | null;
+    stopWindow: (() => void) | null;
     timer: number | null;
     moving: boolean;
   } | null>(null);
@@ -212,6 +212,11 @@ export function TabBar({
       const drag = tabDragRef.current;
       if (!drag || drag.pointerId !== pointerId) return;
       drag.lastDropPoint = { screenX: event.screenX, screenY: event.screenY };
+      // WebView2 can miss the release outside the source window. Recover as
+      // soon as the pointer returns without the primary button held.
+      if (event.pointerType === "mouse" && event.buttons === 0) {
+        void finishTabDrag(drag.lastDropPoint);
+      }
     };
     const onPointerUp = (event: PointerEvent) => {
       if (event.pointerId !== pointerId) return;
@@ -244,7 +249,7 @@ export function TabBar({
   function startNativeDragGhost(preview: TabDragPreview) {
     if (!canUseNativeGhost() || nativeGhostRef.current) return;
     const token = ++nativeGhostTokenRef.current;
-    nativeGhostRef.current = { token, windowRef: null, timer: null, moving: false };
+    nativeGhostRef.current = { token, stopWindow: null, timer: null, moving: false };
 
     void (async () => {
       const [{ WebviewWindow }, { PhysicalPosition }, { cursorPosition }] = await Promise.all([
@@ -285,17 +290,17 @@ export function TabBar({
         focusable: false,
         resizable: false,
         shadow: false,
-        visible: true,
+        visible: false,
       });
+      const stopWindow = manageNativeDragGhost(windowRef, () => nativeGhostRef.current?.token === token);
       if (nativeGhostRef.current?.token !== token) {
-        void windowRef.close().catch(() => undefined);
+        stopWindow();
         return;
       }
 
-      nativeGhostRef.current.windowRef = windowRef;
-      void windowRef.once("tauri://created", () => {
-        void windowRef.setIgnoreCursorEvents(true);
-        void windowRef.setShadow(false).catch(() => undefined);
+      nativeGhostRef.current.stopWindow = stopWindow;
+      void windowRef.once("tauri://error", () => {
+        if (nativeGhostRef.current?.token === token) stopNativeDragGhost();
       });
       const intervalMs = document.documentElement.dataset.platform === "windows" ? 33 : 16;
       nativeGhostRef.current.timer = window.setInterval(async () => {
@@ -315,7 +320,9 @@ export function TabBar({
           if (nativeGhostRef.current?.token === token) nativeGhostRef.current.moving = false;
         }
       }, intervalMs);
-    })().catch(() => stopNativeDragGhost());
+    })().catch(() => {
+      if (nativeGhostRef.current?.token === token) stopNativeDragGhost();
+    });
   }
 
   function stopNativeDragGhost() {
@@ -325,7 +332,7 @@ export function TabBar({
     if (ghost?.timer !== null && ghost?.timer !== undefined) {
       window.clearInterval(ghost.timer);
     }
-    void ghost?.windowRef?.close().catch(() => undefined);
+    ghost?.stopWindow?.();
   }
 
   function moveTabPointerDrag(event: ReactPointerEvent<HTMLDivElement>) {
@@ -473,6 +480,9 @@ export function TabBar({
                 onPointerMove={moveTabPointerDrag}
                 onPointerUp={endTabPointerDrag}
                 onPointerCancel={endTabPointerDrag}
+                onLostPointerCapture={(event) => {
+                  if (tabDragRef.current?.pointerId === event.pointerId) void finishTabDrag();
+                }}
               >
                 <button
                   type="button"

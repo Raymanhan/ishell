@@ -138,7 +138,7 @@ export async function peerWindowAtPoint(point: TabDropPoint) {
   ];
   const windows = await getAllWebviewWindows();
   for (const windowRef of windows) {
-    if (windowRef.label === current.label) continue;
+    if (windowRef.label === current.label || !isShellWindow(windowRef.label)) continue;
     const [position, size] = await Promise.all([
       windowRef.outerPosition(),
       windowRef.outerSize(),
@@ -164,7 +164,11 @@ export async function closeCurrentWindowIfPeerExists() {
   const { getAllWebviewWindows, getCurrentWebviewWindow } = await import("@tauri-apps/api/webviewWindow");
   const current = getCurrentWebviewWindow();
   const windows = await getAllWebviewWindows();
-  if (windows.some((windowRef) => windowRef.label !== current.label)) {
+  if (windows.some((windowRef) => windowRef.label !== current.label && isShellWindow(windowRef.label))) {
     await current.close();
   }
+}
+
+function isShellWindow(label: string) {
+  return label === "main" || label.startsWith("shell-");
 }

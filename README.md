@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.4.2](https://github.com/Raymanhan/ishell/releases/tag/v1.4.2)**
+**[Download iShell v1.4.3](https://github.com/Raymanhan/ishell/releases/tag/v1.4.3)**
 
 Available packages:
 
@@ -296,8 +296,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.4.2
-git push origin v1.4.2
+git tag v1.4.3
+git push origin v1.4.3
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -358,6 +358,7 @@ src-tauri/src/
 
 ## Recent Changes
 
+- `v1.4.3` fixes lingering floating tab previews when dragging a tab out on Windows, including delayed window creation and lost pointer capture; temporary preview windows are excluded from tab handoff targets.
 - `v1.4.2` lays out Settings as a side menu: Appearance, Terminal, and About
   and updates on the left, the chosen menu's settings on the right, at a fixed
   size while switching; About and updates shows a dot when an update is waiting.
