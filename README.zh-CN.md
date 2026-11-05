@@ -12,7 +12,7 @@ iShell 是一个基于 Tauri + React + Rust 的轻量级 SSH 桌面工作台，�
 
 请从 GitHub Releases 下载最新版安装包：
 
-**[下载 iShell v1.4.4](https://github.com/Raymanhan/ishell/releases/tag/v1.4.4)**
+**[下载 iShell v1.4.5](https://github.com/Raymanhan/ishell/releases/tag/v1.4.5)**
 
 可用安装包：
 
@@ -228,8 +228,8 @@ npm run tauri -- build --target aarch64-apple-darwin
 推送 `v*` 标签后，GitHub Actions 会自动构建 Release。也可以在 GitHub Actions 页面手动运行 **Build installers** 工作流。
 
 ```bash
-git tag v1.4.4
-git push origin v1.4.4
+git tag v1.4.5
+git push origin v1.4.5
 ```
 
 发布工作流会构建 Windows、Linux、macOS Intel 和 macOS Apple Silicon 安装包，并把产物上传到 GitHub Release。
@@ -279,7 +279,7 @@ src-tauri/src/
 
 ## 最近更新
 
-- `v1.4.4` 下载完成后新增 SVG 图标按钮：文件可打开所在文件夹或使用系统默认应用打开；原样下载的文件夹可直接打开，压缩下载的归档按文件处理；按钮提供悬停提示，打开失败时显示通知。
+- `v1.4.5` 下载完成后新增 SVG 图标按钮：文件可打开所在文件夹或使用系统默认应用打开；原样下载的文件夹可直接打开，压缩下载的归档按文件处理；按钮提供悬停提示，打开失败时显示通知。
 
 - `v1.4.3` 修复 Windows 拖出标签时偶发残留且无法消除的悬浮气泡，处理预览窗口延迟创建和鼠标捕获丢失时的清理，并排除将预览气泡误识别为标签接收窗口的情况。
 - `v1.4.2` 设置窗口改为左右布局：左侧为“外观”“终端”“关于与更新”三个分类菜单，右侧显示对应设置，切换时窗口大小不变；有新版本时“关于与更新”菜单旁会显示提示圆点。
