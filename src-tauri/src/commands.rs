@@ -25,8 +25,8 @@ use crate::{
     process_monitor::ProcessMonitorRegistry,
     ssh::{
         download_file, download_folder, fetch_network_sample as fetch_network, fetch_status,
-        list_sftp, make_directory, read_text_file, remove_entry, rename_entry, test_connection,
-        upload_file, upload_folder, write_text_file,
+        list_sftp, make_directory, read_text_file, remove_entry, rename_entry,
+        resolve_sftp_directory, test_connection, upload_file, upload_folder, write_text_file,
     },
     store::{
         append_command_history, delete_port_forward as remove_port_forward,
@@ -589,6 +589,15 @@ pub async fn sftp_list(
 ) -> Result<Vec<SftpEntry>, String> {
     let pool = pool.inner().clone();
     run_blocking(move || list_sftp(&pool, &app, &id, &path)).await
+}
+
+#[tauri::command]
+pub async fn sftp_resolve_directory(
+    app: AppHandle,
+    id: String,
+    path: String,
+) -> Result<String, String> {
+    run_blocking(move || resolve_sftp_directory(&app, &id, &path)).await
 }
 
 #[tauri::command]

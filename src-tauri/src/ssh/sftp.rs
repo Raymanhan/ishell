@@ -83,6 +83,27 @@ pub fn list_sftp(
     Ok(mapped)
 }
 
+pub fn resolve_sftp_directory(app: &AppHandle, id: &str, path: &str) -> Result<String, String> {
+    let raw = run_remote_python(
+        app,
+        id,
+        r#"import json
+import os
+import sys
+
+path = os.path.expanduser(sys.argv[1])
+if not os.path.isabs(path):
+    raise ValueError("Cannot resolve the remote directory")
+path = os.path.abspath(path)
+if not os.path.isdir(path):
+    raise NotADirectoryError(path)
+print(json.dumps(path, ensure_ascii=False))
+"#,
+        &[path],
+    )?;
+    serde_json::from_str(&raw).map_err(|err| format!("无法解析远程目录路径：{err}"))
+}
+
 pub fn make_directory(
     _pool: &SshPool,
     app: &AppHandle,

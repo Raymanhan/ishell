@@ -208,6 +208,7 @@ export default function App() {
   const broadcastTargetsRef = useRef<Set<string> | null>(null);
   // Each terminal pane registers a function that types into it.
   const paneInputsRef = useRef(new Map<string, (data: string) => void>());
+  const directoryJumpRef = useRef(0);
 
   const activeTab = useMemo(
     () => tabs.find((tab) => tab.id === activeTabId) ?? null,
@@ -429,7 +430,7 @@ export default function App() {
   useEffect(() => {
     if (!activeTab) return;
     if (filesOpen && activeTab.files.length === 0) {
-      loadFiles("/", 0);
+      loadFilesFor(activeTab.id, activeTab.serverId, "/", 0);
     }
     if (statusOpen && !activeTab.status) {
       refreshStatus(activeTab.id, activeTab.serverId);
@@ -1149,6 +1150,7 @@ export default function App() {
   }
 
   async function loadFiles(path = "/", columnIndex = 0, force = false) {
+    directoryJumpRef.current += 1;
     const tab = activeTab;
     if (!tab) return;
     await loadFilesFor(tab.id, tab.serverId, path, columnIndex, force);
@@ -1161,7 +1163,7 @@ export default function App() {
     columnIndex = 0,
     force = false,
   ) {
-    const tab = tabs.find((item) => item.id === tabId);
+    const tab = tabsRef.current.find((item) => item.id === tabId);
     if (!tab) return;
     const cached = force ? undefined : tab.cache[path];
     const startedAt = performance.now();
@@ -1242,6 +1244,7 @@ export default function App() {
   }
 
   function jumpToPath(path: string) {
+    directoryJumpRef.current += 1;
     if (!activeTab) return;
     const tabId = activeTab.id;
     const serverId = activeTab.serverId;
@@ -1253,6 +1256,40 @@ export default function App() {
       files: buildPathColumns(pathChain, activeTab.cache),
     });
     loadFilesFor(tabId, serverId, path, targetIndex);
+  }
+
+  async function openTerminalDirectory(tabId: string, path: string) {
+    const source = tabsRef.current.find((tab) => tab.id === tabId);
+    if (!source || source.state !== "connected") {
+      showNotice("终端尚未连接，无法打开目录");
+      return;
+    }
+    const request = ++directoryJumpRef.current;
+    activeTabIdRef.current = tabId;
+    setActiveTabId(tabId);
+    beginSftpBusy();
+    try {
+      const resolved = isTauri
+        ? await command<string>("sftp_resolve_directory", { id: source.serverId, path })
+        : path.replace(/^~[^/]*/, "/home/demo");
+      const latest = tabsRef.current.find((tab) => tab.id === tabId);
+      if (
+        request !== directoryJumpRef.current || !latest || latest.state !== "connected" ||
+        latest.sessionId !== source.sessionId || activeTabIdRef.current !== tabId
+      ) return;
+      const chain = buildPathChain(resolved);
+      patchTab(tabId, {
+        selectedPath: null,
+        selectedPaths: [],
+        files: buildPathColumns(chain, latest.cache),
+      });
+      setFilesOpen(true);
+      await loadFilesFor(tabId, source.serverId, resolved, chain.length - 1);
+    } catch (error) {
+      if (request === directoryJumpRef.current) showNotice(`无法打开终端目录：${String(error)}`);
+    } finally {
+      endSftpBusy();
+    }
   }
 
   function patchRenamedEntry(tabId: string, columnIndex: number, from: SftpEntry, toPath: string, nextName: string) {
@@ -1733,6 +1770,7 @@ export default function App() {
                             setNotice={showNotice}
                             onReady={() => handleTerminalReady(tab.id, tab.serverId, tab.title)}
                             onCommandSubmitted={handleCommandSubmitted}
+                            onOpenDirectory={(path) => void openTerminalDirectory(tab.id, path)}
                             pasteRequest={pasteRequest?.tabId === tab.id ? pasteRequest : null}
                             commandRequest={commandRequest?.tabId === tab.id ? commandRequest : null}
                             commandHistory={commandHistory}

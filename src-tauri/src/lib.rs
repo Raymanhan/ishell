@@ -72,6 +72,7 @@ pub fn run() {
             commands::test_server_connection,
             commands::invalidate_connection,
             commands::sftp_list,
+            commands::sftp_resolve_directory,
             commands::sftp_download,
             commands::sftp_download_folder,
             commands::sftp_upload,

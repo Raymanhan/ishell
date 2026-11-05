@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.4.5](https://github.com/Raymanhan/ishell/releases/tag/v1.4.5)**
+**[Download iShell v1.4.6](https://github.com/Raymanhan/ishell/releases/tag/v1.4.6)**
 
 Available packages:
 
@@ -160,6 +160,8 @@ Open the file panel for the active terminal tab to browse the remote filesystem.
 Supported operations:
 
 - Switch between tree/detail and multi-column browsing.
+- Opening a directory expands its ancestors and scrolls the tree to the current directory.
+- Hold `Command` (macOS) or `Ctrl` (Windows/Linux) and click a `user@host:directory` terminal prompt to open that directory in the file panel. Home-directory paths (`~`) and absolute paths are supported.
 - Upload files or folders to the current directory, including folder drag and drop. If a same-named remote folder exists, iShell asks before replacing it in full; replacement does not merge and removes remote-only entries.
 - Download selected files; newly queued transfers appear at the top of the
   transfer list.
@@ -296,8 +298,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.4.5
-git push origin v1.4.5
+git tag v1.4.6
+git push origin v1.4.6
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -358,6 +360,7 @@ src-tauri/src/
 
 ## Recent Changes
 
+- `v1.4.6` expands and scrolls the directory tree to the current folder when navigating; Command-click (macOS) or Ctrl-click (Windows/Linux) a terminal prompt to open its directory in the file panel, including remote home directories, Unicode, spaces, and wrapped prompts.
 - `v1.4.5` adds compact SVG actions for completed downloads: reveal files in their containing folder or open them with the default app, and open downloaded folders directly. Archived folder downloads use file actions; buttons include tooltips and failures show a notice.
 
 - `v1.4.3` fixes lingering floating tab previews when dragging a tab out on Windows, including delayed window creation and lost pointer capture; temporary preview windows are excluded from tab handoff targets.

@@ -12,7 +12,7 @@ iShell 是一个基于 Tauri + React + Rust 的轻量级 SSH 桌面工作台，�
 
 请从 GitHub Releases 下载最新版安装包：
 
-**[下载 iShell v1.4.5](https://github.com/Raymanhan/ishell/releases/tag/v1.4.5)**
+**[下载 iShell v1.4.6](https://github.com/Raymanhan/ishell/releases/tag/v1.4.6)**
 
 可用安装包：
 
@@ -114,6 +114,8 @@ iShell 是一个基于 Tauri + React + Rust 的轻量级 SSH 桌面工作台，�
 支持操作：
 
 - 在树形详情视图和多列视图之间切换。
+- 进入目录时，左侧目录树自动展开并滚动到当前目录。
+- 按住 `⌘`（macOS）或 `Ctrl`（Windows/Linux）点击终端中 `用户@主机:目录` 提示符，可在文件面板打开该目录，支持 `~` 主目录和绝对路径。
 - 上传文件或文件夹到当前目录，支持拖放目录；远端存在同名文件夹时会先确认是否完整替换，替换不会合并，并会删除远端独有内容。
 - 下载选中的文件；新加入的传输任务会显示在队列顶部，方便查看最新进度。
 - 新建文件夹、重命名条目、删除一个或多个条目。
@@ -228,8 +230,8 @@ npm run tauri -- build --target aarch64-apple-darwin
 推送 `v*` 标签后，GitHub Actions 会自动构建 Release。也可以在 GitHub Actions 页面手动运行 **Build installers** 工作流。
 
 ```bash
-git tag v1.4.5
-git push origin v1.4.5
+git tag v1.4.6
+git push origin v1.4.6
 ```
 
 发布工作流会构建 Windows、Linux、macOS Intel 和 macOS Apple Silicon 安装包，并把产物上传到 GitHub Release。
@@ -279,6 +281,7 @@ src-tauri/src/
 
 ## 最近更新
 
+- `v1.4.6` 进入目录时，左侧目录树自动展开祖先节点并滚动到当前目录；支持按住 Command（macOS）或 Ctrl（Windows/Linux）点击终端提示符，在文件面板打开对应目录，正确解析远端主目录，并支持中文、空格和换行路径。
 - `v1.4.5` 下载完成后新增 SVG 图标按钮：文件可打开所在文件夹或使用系统默认应用打开；原样下载的文件夹可直接打开，压缩下载的归档按文件处理；按钮提供悬停提示，打开失败时显示通知。
 
 - `v1.4.3` 修复 Windows 拖出标签时偶发残留且无法消除的悬浮气泡，处理预览窗口延迟创建和鼠标捕获丢失时的清理，并排除将预览气泡误识别为标签接收窗口的情况。

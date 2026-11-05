@@ -7,6 +7,7 @@ import { RefreshCw, X } from "lucide-react";
 import { command, isTauri } from "../api/tauri";
 import { getTerminalSurfaceReport, getTerminalTheme, type AppTheme } from "../constants/theme";
 import { splitShortcutDirection, type PaneRect, type SplitDirection } from "../features/shell/panes";
+import { directoryLinkProvider } from "../features/shell/directoryLinks";
 import type { ShellTab } from "../features/shell/types";
 import { isTerminalSearchShortcut, TerminalSearchBar } from "./TerminalSearchBar";
 import type {
@@ -59,6 +60,7 @@ function TerminalPaneBase({
   onClosed,
   onReconnect,
   onCommandSubmitted,
+  onOpenDirectory,
   pasteRequest,
   commandRequest,
   commandHistory,
@@ -80,6 +82,7 @@ function TerminalPaneBase({
   onClosed?: (reason: string) => void;
   onReconnect?: () => void;
   onCommandSubmitted?: (command: string) => void;
+  onOpenDirectory?: (path: string) => void;
   pasteRequest?: { id: number; command: string } | null;
   commandRequest?: { id: number; command: string; requirePromptStart?: boolean; blockedNotice?: string } | null;
   commandHistory: string[];
@@ -108,6 +111,8 @@ function TerminalPaneBase({
   const onReadyRef = useRef(onReady);
   const onClosedRef = useRef(onClosed);
   const onCommandSubmittedRef = useRef(onCommandSubmitted);
+  const onOpenDirectoryRef = useRef(onOpenDirectory);
+  onOpenDirectoryRef.current = onOpenDirectory;
   const onSplitRef = useRef(onSplit);
   onSplitRef.current = onSplit;
   const broadcastingRef = useRef(broadcasting);
@@ -444,6 +449,11 @@ function TerminalPaneBase({
       return true;
     });
     terminal.open(containerRef.current);
+    terminal.registerLinkProvider(directoryLinkProvider(
+      terminal,
+      (path) => onOpenDirectoryRef.current?.(path),
+      platformSource.includes("mac"),
+    ));
     fit.fit();
     terminal.writeln(`iShell · ${tab.title}`);
     terminal.writeln("");

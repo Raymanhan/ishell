@@ -182,6 +182,7 @@ function SftpBrowserBase({
   const renameStartedForRef = useRef<string | null>(null);
   const createStartedForRef = useRef<string | null>(null);
   const detailResizeRef = useRef<DetailResizeState | null>(null);
+  const currentTreeRowRef = useRef<HTMLButtonElement | null>(null);
 
   const detailGridStyle = useMemo<CSSProperties>(
     () => ({
@@ -204,6 +205,20 @@ function SftpBrowserBase({
   useEffect(() => {
     setPathValue(currentDir);
   }, [currentDir]);
+
+  useEffect(() => {
+    setCollapsedPaths((current) => {
+      const next = new Set([...current].filter((path) =>
+        path !== "/" && !currentDir.startsWith(`${path}/`)
+      ));
+      return next.size === current.size ? current : next;
+    });
+  }, [currentDir, tab.id]);
+
+  useEffect(() => {
+    if (viewMode !== "tree") return;
+    currentTreeRowRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [currentDir, treeRows, viewMode, tab.id]);
 
   useEffect(() => {
     setCollapsedPaths((current) => {
@@ -676,6 +691,7 @@ function SftpBrowserBase({
                   return (
                     <button
                       key={`${row.entry.path}-${row.level}`}
+                      ref={isCurrent ? currentTreeRowRef : undefined}
                       type="button"
                       className={rowClassName}
                       style={{ paddingLeft: `${8 + row.level * 14}px` }}
@@ -1253,8 +1269,8 @@ function appendDirectoryRows(
   const nextColumn = columns[columnIndex + 1];
   for (const entry of column.entries) {
     if (!entry.isDir) continue;
-    if (!showHidden && isHiddenEntry(entry)) continue;
     const inTrail = nextColumn?.path === entry.path;
+    if (!showHidden && isHiddenEntry(entry) && !inTrail) continue;
     rows.push({
       entry,
       columnIndex,
