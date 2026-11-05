@@ -1,3 +1,4 @@
+mod ai;
 mod commands;
 mod models;
 mod openssh;
@@ -28,6 +29,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .manage(Arc::new(TerminalRegistry::default()))
         .manage(Arc::new(SshPool))
+        .manage(Arc::new(ai::AiRegistry::default()))
         .manage(Arc::new(ProcessMonitorRegistry::default()))
         .manage(Arc::new(TailMonitorRegistry::default()))
         .manage(Arc::new(TunnelRegistry::default()))
@@ -46,6 +48,12 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            ai::ai_get_config,
+            ai::ai_save_config,
+            ai::ai_list_models,
+            ai::ai_chat,
+            ai::ai_cancel,
+            ai::ai_approve,
             commands::list_servers,
             commands::save_server,
             commands::reorder_servers,
@@ -93,6 +101,7 @@ pub fn run() {
         .expect("error while building iShell")
         .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
+                app.state::<Arc<ai::AiRegistry>>().stop_all();
                 app.state::<Arc<TunnelRegistry>>().stop_all();
             }
 

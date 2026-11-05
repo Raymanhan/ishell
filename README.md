@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.4.6](https://github.com/Raymanhan/ishell/releases/tag/v1.4.6)**
+**[Download iShell v1.5.0](https://github.com/Raymanhan/ishell/releases/tag/v1.5.0)**
 
 Available packages:
 
@@ -205,6 +205,27 @@ The status panel samples remote host information through SSH:
 - Network upload/download throughput
 - Host/IP copy shortcut
 
+### AI Server Assistant
+
+1. Open **Settings → AI Assistant**, enter an OpenAI-compatible API base URL and key, fetch models or enter tool-capable model IDs, and save. Keys are encrypted in the local SQLite database with the existing local encryption key; they are not stored in browser storage or connection exports.
+2. Connect to a server and click the **sparkles SVG button** at the top right. Select a model and reasoning effort in the chat. Use **Default** for providers that do not support `reasoning_effort`.
+3. Describe a deployment or operations task. The agent can run Shell commands, read/write files, and execute generated Python, Shell, or Node.js code. Every step exposes its command/code, output, and exit status. The server needs Python 3; JavaScript also needs Node.js. Non-interactive elevation uses existing `sudo -n` privileges.
+
+Choose permissions below the composer, or set the default for new chats in settings:
+
+| Mode | Behavior |
+| --- | --- |
+| Suggestions only | No server tools are executed |
+| Confirm before execution | Every tool requires approval |
+| Automatic, low risk (default) | Recognized low-risk queries run automatically; writes, arbitrary code, and unrecognized commands require approval |
+| Full access | Tools for the requested task run without individual approval |
+
+Approval cards show the target server, complete command/code, paths, risk level, and reason. Decisions apply once. Classification uses conservative rules and is not a sandbox; SSH account privileges still apply.
+
+Conversations and tasks stay bound to their originating terminal connection. Switching tabs does not redirect a running task. Closing the sidebar preserves the conversation; closing or reconnecting the terminal requests cancellation. Stop is available at any time; completed changes are retained. Tools default to a 120-second timeout, allow up to 1800 seconds, and return bounded output with truncation markers.
+
+Context automatically compacts at **200k estimated tokens** into a summary that retains the original task, recent complete tool groups, key results, and remaining work. Visible chat history remains available; failed/canceled compaction preserves the original context. A provider context-limit error also triggers one compaction attempt. Conversations last for the current window session. Task messages, necessary server details, and tool output are sent to the configured model API.
+
 ### Settings
 
 Settings lists its categories on the left and the chosen category's settings
@@ -219,6 +240,7 @@ on the right:
 - **Terminal**
   - Terminal font size
   - Default line count for new live tail viewer windows
+- **AI Assistant**: API endpoint, encrypted key, model list, default agent permissions, and 200k context compaction
 - **About and updates**: current version, a manual update check, and automatic
   checks (on launch and every 6 hours)
 
@@ -298,8 +320,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.4.6
-git push origin v1.4.6
+git tag v1.5.0
+git push origin v1.5.0
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -359,6 +381,8 @@ src-tauri/src/
 ```
 
 ## Recent Changes
+
+- `v1.5.0` adds an AI server assistant sidebar with OpenAI-compatible configuration, encrypted keys, model/reasoning selection, multi-step Shell and code tools, streamed output, and cancellation. Four permission modes enforce risk-based one-time approvals; context compacts automatically at 200k estimated tokens while preserving recent tool groups and visible history.
 
 - `v1.4.6` expands and scrolls the directory tree to the current folder when navigating; Command-click (macOS) or Ctrl-click (Windows/Linux) a terminal prompt to open its directory in the file panel, including remote home directories, Unicode, spaces, and wrapped prompts.
 - `v1.4.5` adds compact SVG actions for completed downloads: reveal files in their containing folder or open them with the default app, and open downloaded folders directly. Archived folder downloads use file actions; buttons include tooltips and failures show a notice.

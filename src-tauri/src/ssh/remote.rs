@@ -93,7 +93,7 @@ pub(super) fn run_remote_shell(app: &AppHandle, id: &str, script: &str) -> Resul
     )
 }
 
-pub(super) fn run_remote_python(
+pub(crate) fn run_remote_python(
     app: &AppHandle,
     id: &str,
     script: &str,

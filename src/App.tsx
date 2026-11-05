@@ -12,6 +12,7 @@ import {
 import { open } from "@tauri-apps/plugin-dialog";
 import { command, isTauri } from "./api/tauri";
 import { BroadcastBar } from "./components/BroadcastBar";
+import { useAi } from "./features/ai/useAi";
 import { CommandHistoryPanel } from "./components/CommandHistoryPanel";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ConnectionManager } from "./components/ConnectionManager";
@@ -105,6 +106,7 @@ import { waitAtLeast, waitForNextPaint } from "./utils/timing";
 const TerminalPane = lazy(() =>
   import("./components/TerminalPane").then((module) => ({ default: module.TerminalPane })),
 );
+const AiPanel = lazy(() => import("./components/AiPanel").then((module) => ({ default: module.AiPanel })));
 const SftpBrowser = lazy(() =>
   import("./components/SftpBrowser").then((module) => ({ default: module.SftpBrowser })),
 );
@@ -136,6 +138,7 @@ export default function App() {
   const handedOffInitialTab = useMemo(() => readHandedOffTabFromUrl(), []);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsPage, setSettingsPage] = useState<"appearance" | "ai">("appearance");
   const [theme, setTheme] = useState<AppTheme>(
     () => readSavedTheme(window.localStorage.getItem("ishell.theme")),
   );
@@ -156,6 +159,7 @@ export default function App() {
     () => window.localStorage.getItem(AUTO_HIDE_TOP_BAR_KEY) !== "false",
   );
   const [tabs, setTabs] = useState<ShellTab[]>(() => handedOffInitialTab ? [handedOffInitialTab] : []);
+  const ai = useAi(tabs);
   const [activeTabId, setActiveTabId] = useState<string | null>(() => handedOffInitialTab?.id ?? null);
   const [paneLayouts, setPaneLayouts] = useState<PaneLayouts>({});
   // Sessions that mirror each other's input; null when broadcasting is off.
@@ -491,6 +495,7 @@ export default function App() {
   }
 
   function toggleSidePanel(panel: SidePanel) {
+    if (panel === "ai") setStatusPanelWidth((width) => Math.max(400, width));
     setSidePanel((current) => (current === panel ? null : panel));
   }
 
@@ -1697,7 +1702,7 @@ export default function App() {
           onToggleBroadcast={toggleBroadcast}
           serverCount={connections.servers.length}
           onOpenConnections={() => setConnectionsOpen((open) => !open)}
-          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenSettings={() => { setSettingsPage("appearance"); setSettingsOpen(true); }}
           onToggleFiles={() => setFilesOpen((open) => !open)}
           onToggleSidePanel={toggleSidePanel}
           onActivate={activateGroup}
@@ -1886,6 +1891,13 @@ export default function App() {
                     {sidePanel === "status" && (
                       <StatusDashboard tab={activeTab} onHostCopied={(host) => showNotice(`已复制 ${host}`)} />
                     )}
+                    {sidePanel === "ai" && (
+                      <Suspense fallback={<div className="ai-notice">正在加载 AI 助手…</div>}>
+                        <AiPanel tab={activeTab} ai={ai}
+                          onSettings={() => { setSettingsPage("ai"); setSettingsOpen(true); }}
+                          onClose={() => setSidePanel(null)} />
+                      </Suspense>
+                    )}
                     {sidePanel === "history" && (
                       <CommandHistoryPanel commands={commandHistory} onPick={pasteHistoryCommand} />
                     )}
@@ -1932,6 +1944,9 @@ export default function App() {
 
       {settingsOpen && (
         <SettingsModal
+          initialPage={settingsPage}
+          aiConfig={ai.config}
+          onAiConfigSaved={ai.setConfig}
           theme={theme}
           windowTransparency={windowTransparency}
           terminalFontSize={terminalFontSize}

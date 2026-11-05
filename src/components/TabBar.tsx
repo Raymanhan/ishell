@@ -6,7 +6,7 @@ import {
   type MouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { Activity, Clock3, Columns2, Copy, FolderTree, Network, PanelLeft, PanelsTopLeft, Plus, Radio, RefreshCw, Rows2, Settings, SquareCode, X } from "lucide-react";
+import { Activity, Clock3, Columns2, Copy, FolderTree, Network, PanelLeft, PanelsTopLeft, Plus, Radio, RefreshCw, Rows2, Settings, Sparkles, SquareCode, X } from "lucide-react";
 import { manageNativeDragGhost } from "../features/shell/nativeDragGhost";
 import { MAX_PANES, splitShortcutLabel, type SplitDirection } from "../features/shell/panes";
 import type { ShellTab, SidePanel } from "../features/shell/types";
@@ -604,6 +604,17 @@ export function TabBar({
               </button>
             </>
           )}
+          <button
+            type="button"
+            className={`dock-toggle ${sidePanel === "ai" ? "on" : ""}`}
+            onClick={() => onToggleSidePanel("ai")}
+            title="AI 助手"
+            aria-label="AI 助手"
+            aria-pressed={sidePanel === "ai"}
+            disabled={!activeTabId}
+          >
+            <span className="dock-toggle-icon"><Sparkles size={15} /></span>
+          </button>
           <button
             type="button"
             className="dock-toggle"

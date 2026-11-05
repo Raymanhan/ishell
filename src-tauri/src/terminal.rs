@@ -30,6 +30,7 @@ use crate::{
 
 #[derive(Default)]
 pub struct TerminalRegistry {
+    servers: Mutex<HashMap<String, String>>,
     sessions: Mutex<HashMap<String, mpsc::Sender<TerminalControl>>>,
     output_buffers: Mutex<HashMap<String, String>>,
     output_starts: Mutex<HashMap<String, usize>>,
@@ -95,7 +96,24 @@ impl Utf8StreamDecoder {
 const CONNECTED_MARKER: &str = "[iShell] connected";
 
 impl TerminalRegistry {
+    pub(crate) fn connected_to(&self, session_id: &str, server_id: &str) -> bool {
+        self.servers
+            .lock()
+            .is_ok_and(|servers| servers.get(session_id).is_some_and(|id| id == server_id))
+            && self
+                .sessions
+                .lock()
+                .is_ok_and(|sessions| sessions.contains_key(session_id))
+            && self
+                .ready_sessions
+                .lock()
+                .is_ok_and(|sessions| sessions.contains(session_id))
+    }
+
     fn remove_session(&self, session_id: &str) {
+        if let Ok(mut servers) = self.servers.lock() {
+            servers.remove(session_id);
+        }
         if let Ok(mut sessions) = self.sessions.lock() {
             sessions.remove(session_id);
         }
@@ -109,6 +127,11 @@ pub fn open_terminal(
 ) -> Result<String, String> {
     let session_id = Uuid::new_v4().to_string();
     let (sender, receiver) = mpsc::channel::<TerminalControl>();
+    registry
+        .servers
+        .lock()
+        .map_err(|_| "终端服务器表已锁定".to_string())?
+        .insert(session_id.clone(), id.clone());
 
     registry
         .sessions
@@ -210,6 +233,9 @@ pub fn close_terminal(
     registry: State<'_, Arc<TerminalRegistry>>,
     session_id: String,
 ) -> Result<(), String> {
+    if let Ok(mut servers) = registry.servers.lock() {
+        servers.remove(&session_id);
+    }
     if let Some(sender) = registry
         .sessions
         .lock()

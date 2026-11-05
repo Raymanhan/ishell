@@ -2512,7 +2512,7 @@ dependencies = [
 
 [[package]]
 name = "ishell"
-version = "1.4.6"
+version = "1.5.0"
 dependencies = [
  "aes-gcm 0.10.3",
  "base64 0.22.1",
@@ -2520,8 +2520,10 @@ dependencies = [
  "libc",
  "pbkdf2 0.12.2",
  "portable-pty",
+ "reqwest",
  "rusqlite",
  "russh",
+ "rustls",
  "serde",
  "serde_json",
  "sha2 0.10.9",

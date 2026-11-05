@@ -603,7 +603,7 @@ fn row_to_record(row: &rusqlite::Row) -> rusqlite::Result<ServerRecord> {
     })
 }
 
-fn open_db(app: &AppHandle) -> Result<Connection, String> {
+pub(crate) fn open_db(app: &AppHandle) -> Result<Connection, String> {
     let conn = Connection::open(db_path(app)?).map_err(db_err)?;
     conn.execute_batch(SCHEMA).map_err(db_err)?;
     ensure_column(
@@ -693,7 +693,7 @@ fn migrate_legacy_json(app: &AppHandle, conn: &Connection) -> Result<(), String>
 
 /// Encrypt a secret with AES-256-GCM. The output is `nonce (12 bytes) ||
 /// ciphertext` and is stored verbatim in the `secret` BLOB column.
-fn encrypt_secret(app: &AppHandle, plaintext: &str) -> Result<Vec<u8>, String> {
+pub(crate) fn encrypt_secret(app: &AppHandle, plaintext: &str) -> Result<Vec<u8>, String> {
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&master_key(app)?));
     let mut nonce_bytes = [0u8; 12];
     getrandom::getrandom(&mut nonce_bytes).map_err(|err| format!("无法生成随机数：{err}"))?;
@@ -708,7 +708,7 @@ fn encrypt_secret(app: &AppHandle, plaintext: &str) -> Result<Vec<u8>, String> {
     Ok(blob)
 }
 
-fn decrypt_secret(app: &AppHandle, blob: &[u8]) -> Result<String, String> {
+pub(crate) fn decrypt_secret(app: &AppHandle, blob: &[u8]) -> Result<String, String> {
     if blob.len() < 12 {
         return Err("密码数据已损坏".into());
     }

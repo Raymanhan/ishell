@@ -1,5 +1,7 @@
 import { useState, type KeyboardEvent } from "react";
-import { Download, Droplets, Info, Layers, Palette, RefreshCw, SquareTerminal, X } from "lucide-react";
+import { Download, Droplets, Info, Layers, Palette, RefreshCw, Sparkles, SquareTerminal, X } from "lucide-react";
+import { AiSettings } from "./AiSettings";
+import type { AiConfig } from "../features/ai/types";
 import {
   clampTailViewerLines,
   MAX_TAIL_VIEWER_LINES,
@@ -18,15 +20,19 @@ const themeIcons: Record<ThemeIcon, typeof Layers> = {
   layers: Layers,
 };
 
-type SettingsPage = "appearance" | "terminal" | "about";
+type SettingsPage = "appearance" | "terminal" | "ai" | "about";
 
 const settingsPages: { id: SettingsPage; label: string; Icon: typeof Layers }[] = [
   { id: "appearance", label: "外观", Icon: Palette },
   { id: "terminal", label: "终端", Icon: SquareTerminal },
+  { id: "ai", label: "AI 助手", Icon: Sparkles },
   { id: "about", label: "关于与更新", Icon: Info },
 ];
 
 export function SettingsModal({
+  initialPage = "appearance",
+  aiConfig,
+  onAiConfigSaved,
   theme,
   windowTransparency,
   terminalFontSize,
@@ -44,6 +50,9 @@ export function SettingsModal({
   onInstallUpdate,
   onClose,
 }: {
+  initialPage?: SettingsPage;
+  aiConfig: AiConfig;
+  onAiConfigSaved: (config: AiConfig) => void;
   theme: AppTheme;
   windowTransparency: number;
   terminalFontSize: number;
@@ -61,7 +70,7 @@ export function SettingsModal({
   onInstallUpdate: () => void;
   onClose: () => void;
 }) {
-  const [page, setPage] = useState<SettingsPage>("appearance");
+  const [page, setPage] = useState<SettingsPage>(initialPage);
   const [tailLinesDraft, setTailLinesDraft] = useState(String(tailViewerDefaultLines));
 
   function commitTailViewerDefaultLines() {
@@ -152,6 +161,7 @@ export function SettingsModal({
             id={panelId(page)}
             aria-labelledby={tabId(page)}
           >
+            {page === "ai" && <AiSettings config={aiConfig} onSaved={onAiConfigSaved} />}
             {page === "appearance" && (
               <>
                 <div className="settings-section">

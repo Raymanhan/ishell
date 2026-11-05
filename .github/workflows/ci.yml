@@ -35,6 +35,12 @@ jobs:
       - name: Type-check and build
         run: npm run build
 
+      - name: Frontend behavior tests
+        run: npm test
+
+      - name: AI remote tool runner tests
+        run: python3 tests/ai_runner_test.py
+
   rust:
     name: Rust
     runs-on: ubuntu-22.04
