@@ -194,5 +194,23 @@ export function useDownloadQueue({
     );
   }
 
-  return { downloads, enqueueFiles, enqueueFolder, stop, dismiss, clearDone };
+  async function open(item: DownloadItem, location: "item" | "parent") {
+    if (item.status !== "done" || !item.savedPath) return;
+    if (!isTauri) {
+      showNotice("浏览器预览不支持打开本地文件，请在桌面应用中使用");
+      return;
+    }
+    try {
+      const { openPath, revealItemInDir } = await import("@tauri-apps/plugin-opener");
+      if (location === "parent") {
+        await revealItemInDir(item.savedPath);
+      } else {
+        await openPath(item.savedPath);
+      }
+    } catch (error) {
+      showNotice(`打开失败：${String(error)}`);
+    }
+  }
+
+  return { downloads, enqueueFiles, enqueueFolder, stop, dismiss, clearDone, open };
 }

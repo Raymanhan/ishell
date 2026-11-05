@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronDown, DownloadCloud, Loader2, OctagonX, X, XCircle } from "lucide-react";
+import { CheckCircle2, ChevronDown, DownloadCloud, ExternalLink, FolderOpen, Loader2, OctagonX, X, XCircle } from "lucide-react";
 import { useState } from "react";
 import type { DownloadItem } from "../types";
 import { formatBytes } from "../utils/format";
@@ -8,11 +8,13 @@ export function DownloadQueue({
   onDismiss,
   onStop,
   onClearDone,
+  onOpen,
 }: {
   downloads: DownloadItem[];
   onDismiss: (id: string) => void;
   onStop: (id: string) => void;
   onClearDone: () => void;
+  onOpen: (item: DownloadItem, location: "item" | "parent") => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   if (downloads.length === 0) return null;
@@ -97,16 +99,42 @@ export function DownloadQueue({
                     </div>
                   )}
                 </div>
-                {(item.status === "pending" || item.status === "downloading") && (
-                  <button type="button" className="uq-x" onClick={() => onStop(item.id)} title="停止下载">
-                    <OctagonX size={12} />
-                  </button>
-                )}
-                {(item.status === "done" || item.status === "error" || item.status === "canceled") && (
-                  <button type="button" className="uq-x" onClick={() => onDismiss(item.id)} title="移除">
-                    <X size={12} />
-                  </button>
-                )}
+                <div className="uq-actions">
+                  {item.status === "done" && item.savedPath && (
+                    <>
+                      <button
+                        type="button"
+                        className="uq-x"
+                        onClick={() => onOpen(item, item.folderMode === "raw" ? "item" : "parent")}
+                        title={item.folderMode === "raw" ? "打开文件夹" : "打开所在文件夹"}
+                        aria-label={item.folderMode === "raw" ? "打开文件夹" : "打开所在文件夹"}
+                      >
+                        <FolderOpen size={14} aria-hidden="true" />
+                      </button>
+                      {item.folderMode !== "raw" && (
+                        <button
+                          type="button"
+                          className="uq-x"
+                          onClick={() => onOpen(item, "item")}
+                          title="打开文件"
+                          aria-label="打开文件"
+                        >
+                          <ExternalLink size={14} aria-hidden="true" />
+                        </button>
+                      )}
+                    </>
+                  )}
+                  {(item.status === "pending" || item.status === "downloading") && (
+                    <button type="button" className="uq-x" onClick={() => onStop(item.id)} title="停止下载">
+                      <OctagonX size={12} />
+                    </button>
+                  )}
+                  {(item.status === "done" || item.status === "error" || item.status === "canceled") && (
+                    <button type="button" className="uq-x" onClick={() => onDismiss(item.id)} title="移除">
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
               </li>
             );
           })}

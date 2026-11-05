@@ -897,6 +897,14 @@ button.detail-row:hover {
   height: 24px;
   border-radius: 5px;
 }
+.download-queue .uq-item {
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+}
+.uq-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
 
 
 /* ===== Status dashboard ===== */

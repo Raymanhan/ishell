@@ -1818,6 +1818,7 @@ export default function App() {
                           onDismiss={downloadQueue.dismiss}
                           onStop={downloadQueue.stop}
                           onClearDone={downloadQueue.clearDone}
+                          onOpen={downloadQueue.open}
                         />
                       </div>
                     </div>
