@@ -12,7 +12,7 @@ iShell 是一个基于 Tauri + React + Rust 的轻量级 SSH 桌面工作台，�
 
 请从 GitHub Releases 下载最新版安装包：
 
-**[下载 iShell v1.5.1](https://github.com/Raymanhan/ishell/releases/tag/v1.5.1)**
+**[下载 iShell v1.5.2](https://github.com/Raymanhan/ishell/releases/tag/v1.5.2)**
 
 可用安装包：
 
@@ -152,8 +152,8 @@ iShell 是一个基于 Tauri + React + Rust 的轻量级 SSH 桌面工作台，�
 
 ### AI 服务器助手
 
-1. 打开 **设置 → AI 助手**，填写 OpenAI 兼容 API 地址和密钥。可测试连接获取模型，也可手动填写支持工具调用的模型 ID；点击保存。密钥使用现有本机密钥加密存入 SQLite，不写入浏览器存储或连接导出。
-2. 连接服务器后，点击右上角的 **AI 星光图标** 打开侧栏。对话中可选择模型和思考程度（默认、快速、均衡、深入、最高）；服务不支持 `reasoning_effort` 时选择默认。
+1. 打开 **设置 → AI 助手**，填写 OpenAI 兼容 API 地址和密钥。点击“读取 / 刷新元数据”从服务的 `/models` 接口获取模型与支持的思考档位，选择默认模型后保存。密钥使用现有本机密钥加密存入 SQLite，不写入浏览器存储或连接导出。
+2. 连接服务器后，点击右上角的 **AI 星光图标** 打开侧栏。模型、思考程度和操作权限位于输入框底部同一行。模型与思考档位由服务元数据决定，兼容 `supported_reasoning_efforts`、Codex `supported_reasoning_levels` 等声明；没有声明具体档位时仅提供默认值。打开应用、保存设置或点击侧栏的刷新图标时会重新读取元数据，发送请求前会校验模型与档位。
 3. 描述部署、排查或运维目标。AI 可使用 Shell、读取/写入文件，以及编写并执行 Python、Shell 或 Node.js 代码；每一步显示命令、代码、输出与真实退出码。工具需要远端 Python 3，JavaScript 另需 Node.js；非交互提权使用服务器已有的 `sudo -n` 权限。
 
 **权限**可在输入框下方选择，也可在设置中指定新对话的默认值：
@@ -252,8 +252,8 @@ npm run tauri -- build --target aarch64-apple-darwin
 推送 `v*` 标签后，GitHub Actions 会自动构建 Release。也可以在 GitHub Actions 页面手动运行 **Build installers** 工作流。
 
 ```bash
-git tag v1.5.1
-git push origin v1.5.1
+git tag v1.5.2
+git push origin v1.5.2
 ```
 
 发布工作流会构建 Windows、Linux、macOS Intel 和 macOS Apple Silicon 安装包，并把产物上传到 GitHub Release。
@@ -302,6 +302,8 @@ src-tauri/src/
 ```
 
 ## 最近更新
+
+- `v1.5.2` AI 模型与思考档位改由配置服务的元数据接口获取，移除手填模型 ID 和固定档位，支持刷新及失效选择重置；模型、思考程度和操作权限合并到输入框底部同一行，上下文用量移到下方提示区。
 
 - `v1.5.1` 新增 AI 服务器助手侧栏：OpenAI 兼容模型配置、密钥本机加密、模型/思考程度选择、多轮 Shell 与代码工具调用、输出回传和停止；支持四档权限、保守风险判断与一次性执行确认；上下文达到 200k 估算 tokens 时自动压缩，保留近期工具链与聊天记录。
 

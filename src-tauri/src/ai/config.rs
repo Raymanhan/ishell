@@ -2,6 +2,7 @@ use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
+use super::metadata::Model;
 use crate::store::{decrypt_secret, encrypt_secret, open_db};
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -9,6 +10,7 @@ use crate::store::{decrypt_secret, encrypt_secret, open_db};
 pub struct Config {
     pub base_url: String,
     pub models: Vec<String>,
+    pub model_metadata: Vec<Model>,
     pub default_model: String,
     pub api_key: String,
     pub default_permission: String,
@@ -19,6 +21,7 @@ impl Default for Config {
         Self {
             base_url: "https://api.openai.com/v1".into(),
             models: vec![],
+            model_metadata: vec![],
             default_model: String::new(),
             api_key: String::new(),
             default_permission: "auto".into(),
@@ -31,9 +34,11 @@ impl Default for Config {
 pub struct PublicConfig {
     pub base_url: String,
     pub models: Vec<String>,
+    pub model_metadata: Vec<Model>,
     pub default_model: String,
     pub has_api_key: bool,
     pub default_permission: String,
+    pub metadata_error: Option<String>,
 }
 
 impl From<&Config> for PublicConfig {
@@ -41,9 +46,11 @@ impl From<&Config> for PublicConfig {
         Self {
             base_url: value.base_url.clone(),
             models: value.models.clone(),
+            model_metadata: value.model_metadata.clone(),
             default_model: value.default_model.clone(),
             has_api_key: !value.api_key.is_empty(),
             default_permission: value.default_permission.clone(),
+            metadata_error: None,
         }
     }
 }
@@ -52,6 +59,7 @@ impl From<&Config> for PublicConfig {
 #[serde(rename_all = "camelCase")]
 pub struct ConfigInput {
     pub base_url: String,
+    #[serde(default)]
     pub models: Vec<String>,
     pub default_model: String,
     /// None preserves the stored key; Some("") explicitly clears it.
@@ -133,14 +141,14 @@ pub fn merge(old: Config, input: ConfigInput) -> Result<Config, String> {
     Ok(Config {
         base_url: normalize_url(&input.base_url)?,
         models,
+        model_metadata: vec![],
         default_model,
         api_key,
         default_permission: input.default_permission,
     })
 }
 
-pub fn save(app: &AppHandle, input: ConfigInput) -> Result<PublicConfig, String> {
-    let config = merge(load(app)?, input)?;
+pub fn save(app: &AppHandle, config: Config) -> Result<PublicConfig, String> {
     let blob = encrypt_secret(
         app,
         &serde_json::to_string(&config).map_err(|e| e.to_string())?,
@@ -150,9 +158,53 @@ pub fn save(app: &AppHandle, input: ConfigInput) -> Result<PublicConfig, String>
     Ok(PublicConfig::from(&config))
 }
 
+pub fn apply_metadata(config: &mut Config, result: Result<Vec<Model>, String>) -> Option<String> {
+    let error = match result {
+        Ok(models) => {
+            config.model_metadata = models;
+            None
+        }
+        Err(error) => {
+            config.model_metadata.clear();
+            Some(error)
+        }
+    };
+    config.models = config
+        .model_metadata
+        .iter()
+        .map(|model| model.id.clone())
+        .collect();
+    if !config.models.contains(&config.default_model) {
+        config.default_model = config.models.first().cloned().unwrap_or_default();
+    }
+    error
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn metadata_replaces_manual_ids_and_failed_discovery_still_allows_key_removal() {
+        let mut config = Config {
+            models: vec!["old-manual".into()],
+            default_model: "old-manual".into(),
+            ..Config::default()
+        };
+        let catalog = super::super::metadata::catalog(
+            &serde_json::json!({"data":[{"id":"remote","supported_reasoning_efforts":["high"]}]}),
+        )
+        .unwrap();
+        assert!(apply_metadata(&mut config, Ok(catalog)).is_none());
+        assert_eq!(config.default_model, "remote");
+        assert_eq!(config.models, ["remote"]);
+        assert_eq!(
+            apply_metadata(&mut config, Err("401".into())).as_deref(),
+            Some("401")
+        );
+        assert!(config.model_metadata.is_empty());
+        assert!(config.models.is_empty());
+        assert!(config.api_key.is_empty());
+    }
     #[test]
     fn endpoint_normalization() {
         assert_eq!(

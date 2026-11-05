@@ -7,9 +7,11 @@ import {
   applyAiEvent,
   defaultAiConfig,
   emptyConversation,
+  modelSelection,
   type AiConfig,
   type AiConversation,
   type AiEvent,
+  type AiModel,
 } from "./types";
 
 interface ChatResult {
@@ -22,6 +24,11 @@ interface ChatResult {
 export function useAi(tabs: ShellTab[]) {
   const [config, setConfig] = useState<AiConfig>(defaultAiConfig);
   const [configError, setConfigError] = useState("");
+  const [models, setModels] = useState<AiModel[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsError, setModelsError] = useState("");
+  const [configLoaded, setConfigLoaded] = useState(false);
+  const modelsGeneration = useRef(0);
   const [conversations, setConversations] = useState<
     Record<string, AiConversation>
   >({});
@@ -44,7 +51,10 @@ export function useAi(tabs: ShellTab[]) {
   useEffect(() => {
     if (isTauri)
       command<AiConfig>("ai_get_config")
-        .then(setConfig)
+        .then((value) => {
+          setConfig(value);
+          setConfigLoaded(true);
+        })
         .catch((e) => setConfigError(String(e)));
     return () => {
       for (const conversation of Object.values(current.current)) {
@@ -55,6 +65,40 @@ export function useAi(tabs: ShellTab[]) {
       }
     };
   }, []);
+
+  useEffect(() => {
+    setModels(config.modelMetadata || []);
+    setModelsError("");
+    setModelsLoading(false);
+    if (
+      configLoaded &&
+      (config.defaultModel ||
+        config.hasApiKey ||
+        config.baseUrl !== defaultAiConfig.baseUrl)
+    )
+      void refreshModels();
+    return () => {
+      modelsGeneration.current += 1;
+    };
+  }, [config, configLoaded]);
+
+  async function refreshModels() {
+    if (!isTauri) return;
+    const generation = ++modelsGeneration.current;
+    setModelsLoading(true);
+    setModelsError("");
+    try {
+      const catalog = await command<AiModel[]>("ai_list_models", {
+        input: null,
+      });
+      if (generation === modelsGeneration.current) setModels(catalog);
+    } catch (error) {
+      if (generation === modelsGeneration.current)
+        setModelsError(String(error));
+    } finally {
+      if (generation === modelsGeneration.current) setModelsLoading(false);
+    }
+  }
 
   useEffect(() => {
     for (const [id, conversation] of Object.entries(current.current)) {
@@ -104,12 +148,19 @@ export function useAi(tabs: ShellTab[]) {
   async function send(tab: ShellTab) {
     const conversation =
       current.current[tab.id] || emptyConversation(configRef.current);
+    const selection = modelSelection(
+      models,
+      conversation.model,
+      conversation.effort,
+      configRef.current.defaultModel,
+    );
     const text = conversation.draft.trim();
     if (
       !text ||
       conversation.requestId ||
       tab.state !== "connected" ||
-      !conversation.model
+      !selection.model ||
+      modelsLoading
     )
       return;
     if (!isTauri) {
@@ -134,6 +185,8 @@ export function useAi(tabs: ShellTab[]) {
     update(tab.id, (value) => ({
       ...value,
       draft: "",
+      model: selection.model,
+      effort: selection.effort,
       messages,
       requestId,
       stopping: false,
@@ -190,8 +243,8 @@ export function useAi(tabs: ShellTab[]) {
           requestId,
           serverId: tab.serverId,
           sessionId: tab.sessionId,
-          model: conversation.model,
-          effort: conversation.effort,
+          model: selection.model,
+          effort: selection.effort,
           permission: conversation.permission,
           cwd: currentDirForTab(tab),
           messages,
@@ -307,6 +360,10 @@ export function useAi(tabs: ShellTab[]) {
   return {
     config,
     configError,
+    models,
+    modelsLoading,
+    modelsError,
+    refreshModels,
     setConfig: (value: AiConfig) => {
       setConfig(value);
       setConfigError("");

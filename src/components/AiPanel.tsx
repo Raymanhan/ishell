@@ -6,6 +6,7 @@ import {
   Copy,
   LoaderCircle,
   Plus,
+  RefreshCw,
   Settings,
   ShieldCheck,
   Sparkles,
@@ -17,7 +18,7 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { AiController } from "../features/ai/useAi";
 import {
-  effortOptions,
+  modelSelection,
   emptyConversation,
   permissionOptions,
   type AiEntry,
@@ -124,7 +125,9 @@ function ToolCard({
         </div>
       )}
       {(entry.name === "shell" || entry.name === "run_code") && (
-        <div className="ai-tool-path">目录：{String(args?.cwd || "~（远端主目录）")}</div>
+        <div className="ai-tool-path">
+          目录：{String(args?.cwd || "~（远端主目录）")}
+        </div>
       )}
       {entry.name === "write_file" && (
         <div className="ai-tool-path">{String(args?.path || "")}</div>
@@ -267,9 +270,13 @@ export function AiPanel({
       textarea.current.style.height = `${Math.min(180, textarea.current.scrollHeight)}px`;
     }
   }, [conversation.draft, tab.id]);
-  const models = [
-    ...new Set([...ai.config.models, conversation.model].filter(Boolean)),
-  ];
+  const models = ai.models;
+  const selection = modelSelection(
+    models,
+    conversation.model,
+    conversation.effort,
+    ai.config.defaultModel,
+  );
   const permission = permissionOptions.find(
     (option) => option.value === conversation.permission,
   )!;
@@ -282,6 +289,19 @@ export function AiPanel({
           <strong>AI 助手</strong>
         </div>
         <div>
+          <button
+            className="ai-icon"
+            type="button"
+            title="刷新模型元数据"
+            aria-label="刷新模型元数据"
+            disabled={busy || ai.modelsLoading}
+            onClick={() => void ai.refreshModels()}
+          >
+            <RefreshCw
+              size={14}
+              className={ai.modelsLoading ? "ai-spin" : undefined}
+            />
+          </button>
           <button
             className="ai-icon"
             type="button"
@@ -361,7 +381,21 @@ export function AiPanel({
         {ai.configError && (
           <div className="ai-error">AI 设置读取失败：{ai.configError}</div>
         )}
-        {!models.length && (
+        {ai.modelsError && (
+          <div className="ai-error" role="alert">
+            模型元数据读取失败：{ai.modelsError}
+            <button
+              type="button"
+              className="ai-icon"
+              aria-label="刷新模型元数据"
+              disabled={ai.modelsLoading}
+              onClick={() => void ai.refreshModels()}
+            >
+              <RefreshCw size={13} />
+            </button>
+          </div>
+        )}
+        {!models.length && !ai.modelsLoading && (
           <button type="button" className="ai-setup" onClick={onSettings}>
             <Settings size={15} />
             先配置模型地址、密钥和模型
@@ -444,35 +478,69 @@ export function AiPanel({
         <div className="ai-composer-controls">
           <select
             aria-label="AI 模型"
-            title={conversation.model || "选择模型"}
-            value={conversation.model}
-            disabled={busy}
-            onChange={(e) => patch({ model: e.target.value })}
+            title={selection.model || "选择模型"}
+            value={selection.model}
+            disabled={busy || ai.modelsLoading}
+            onChange={(e) =>
+              patch({
+                model: e.target.value,
+                effort:
+                  models.find((model) => model.id === e.target.value)
+                    ?.defaultReasoningEffort || "default",
+              })
+            }
           >
             <option value="" disabled>
-              选择模型
+              {ai.modelsLoading ? "读取模型…" : "选择模型"}
             </option>
             {models.map((model) => (
-              <option key={model} value={model}>
-                {model}
+              <option key={model.id} value={model.id}>
+                {model.name}
               </option>
             ))}
           </select>
           <select
             aria-label="思考程度"
-            title="思考程度（服务需支持 reasoning_effort）"
-            value={conversation.effort}
-            disabled={busy}
+            title={
+              selection.efforts.length > 1
+                ? "服务元数据声明的思考程度"
+                : "服务未声明思考档位，使用默认值"
+            }
+            value={selection.effort}
+            disabled={
+              busy || ai.modelsLoading || selection.efforts.length === 1
+            }
             onChange={(e) =>
               patch({ effort: e.target.value as typeof conversation.effort })
             }
           >
-            {effortOptions.map(({ value, label }) => (
+            {selection.efforts.map(({ value, label }) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
           </select>
+          <label className="ai-permission-control">
+            <ShieldCheck size={12} />
+            <select
+              aria-label="Agent 权限"
+              title={`${permission.description}。风险判断是辅助提示，不是隔离沙箱。`}
+              value={conversation.permission}
+              disabled={busy}
+              onChange={(event) =>
+                patch({
+                  permission: event.target
+                    .value as typeof conversation.permission,
+                })
+              }
+            >
+              {permissionOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
           {busy ? (
             <button
               type="button"
@@ -491,44 +559,29 @@ export function AiPanel({
               title="发送（Enter）"
               aria-label="发送 AI 消息"
               disabled={
-                !connected || !conversation.model || !conversation.draft.trim()
+                !connected ||
+                !selection.model ||
+                ai.modelsLoading ||
+                !conversation.draft.trim()
               }
             >
               <ArrowUp size={17} />
             </button>
           )}
         </div>
-        <div className="ai-permission-bar">
-          <ShieldCheck size={12} />
-          <select
-            aria-label="Agent 权限"
-            title={`${permission.description}。风险判断是辅助提示，不是隔离沙箱。`}
-            value={conversation.permission}
-            disabled={busy}
-            onChange={(event) =>
-              patch({
-                permission: event.target
-                  .value as typeof conversation.permission,
-              })
-            }
-          >
-            {permissionOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <span title="估算的模型上下文用量；达到 200k tokens 时自动压缩">
-            ≈
-            {conversation.contextTokens >= 1000
-              ? `${(conversation.contextTokens / 1000).toFixed(1)}k`
-              : conversation.contextTokens}{" "}
-            / 200k
-          </span>
-        </div>
       </form>
       <footer className="ai-foot">
-        {permission.label} · {tab.title} · Shift + Enter 换行
+        <span>{tab.title} · Shift + Enter 换行</span>
+        <span
+          className="ai-context-usage"
+          title="估算的模型上下文用量；达到 200k tokens 时自动压缩"
+        >
+          ≈
+          {conversation.contextTokens >= 1000
+            ? `${(conversation.contextTokens / 1000).toFixed(1)}k`
+            : conversation.contextTokens}{" "}
+          / 200k
+        </span>
       </footer>
     </section>
   );

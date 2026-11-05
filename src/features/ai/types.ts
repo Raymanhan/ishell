@@ -1,6 +1,8 @@
 export interface AiConfig {
   baseUrl: string;
   models: string[];
+  modelMetadata: AiModel[];
+  metadataError?: string | null;
   defaultModel: string;
   hasApiKey: boolean;
   defaultPermission: AiPermission;
@@ -12,7 +14,13 @@ export interface AiConfigInput {
   apiKey: string | null;
   defaultPermission: AiPermission;
 }
-export type AiEffort = "default" | "low" | "medium" | "high" | "xhigh";
+export type AiEffort = string;
+export interface AiModel {
+  id: string;
+  name: string;
+  reasoningEfforts: { value: string; label: string; description: string }[];
+  defaultReasoningEffort: string | null;
+}
 export type AiPermission = "suggest" | "ask" | "auto" | "full";
 export const permissionOptions: {
   value: AiPermission;
@@ -41,13 +49,34 @@ export interface AiRisk {
   label: string;
   reason: string;
 }
-export const effortOptions: { value: AiEffort; label: string }[] = [
-  { value: "default", label: "默认" },
-  { value: "low", label: "快速" },
-  { value: "medium", label: "均衡" },
-  { value: "high", label: "深入" },
-  { value: "xhigh", label: "最高" },
-];
+export function modelSelection(
+  models: AiModel[],
+  modelId: string,
+  effort: string,
+  preferredModel = "",
+) {
+  const model =
+    models.find((item) => item.id === modelId) ||
+    models.find((item) => item.id === preferredModel) ||
+    models[0];
+  const supported = model?.reasoningEfforts || [];
+  const selectedEffort =
+    effort === "default" || supported.some((item) => item.value === effort)
+      ? effort
+      : model?.defaultReasoningEffort || "default";
+  return {
+    model: model?.id || "",
+    effort: selectedEffort,
+    efforts: [
+      {
+        value: "default",
+        label: "默认",
+        description: "使用服务默认的思考程度",
+      },
+      ...supported,
+    ],
+  };
+}
 export interface ToolResult {
   status?: string;
   stdout?: string;
@@ -112,6 +141,7 @@ export interface AiEvent {
 export const defaultAiConfig: AiConfig = {
   baseUrl: "https://api.openai.com/v1",
   models: [],
+  modelMetadata: [],
   defaultModel: "",
   hasApiKey: false,
   defaultPermission: "auto",

@@ -609,33 +609,40 @@
   border-color: transparent;
   color: var(--solid-text, #1f2025);
 }
-.ai-permission-bar {
-  display: flex;
+.ai-permission-control {
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
-  margin-top: 7px;
-  padding-top: 7px;
-  border-top: 1px solid var(--hairline);
-  color: var(--faint);
-}
-.ai-permission-bar select {
+  gap: 2px;
+  flex: 0 1 105px;
   min-width: 0;
-  max-width: 70%;
-  padding: 2px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
   color: var(--dim);
-  font: inherit;
+}
+.ai-permission-control > svg {
+  flex: 0 0 auto;
+}
+.ai-composer-controls > select[aria-label="AI 模型"] {
+  flex: 1 1 70px;
+  max-width: none;
+}
+.ai-composer-controls > select[aria-label="思考程度"] {
+  flex: 0 1 64px;
+  max-width: 22%;
+}
+.ai-permission-control select {
+  width: 100%;
+  max-width: none;
   font-size: 10px;
-  cursor: pointer;
 }
-.ai-permission-bar select option {
-  background: var(--panel);
-  color: var(--text);
+.ai-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
 }
-.ai-permission-bar > span {
-  margin-left: auto;
-  font-size: 9px;
-  white-space: nowrap;
+.ai-foot > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ai-context-usage {
+  flex-shrink: 0;
 }

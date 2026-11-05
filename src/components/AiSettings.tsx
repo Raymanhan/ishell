@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { LoaderCircle, RefreshCw } from "lucide-react";
 import { command, isTauri } from "../api/tauri";
 import {
@@ -6,6 +6,7 @@ import {
   type AiConfig,
   type AiConfigInput,
   type AiPermission,
+  type AiModel,
 } from "../features/ai/types";
 
 export function AiSettings({
@@ -18,7 +19,8 @@ export function AiSettings({
   const [baseUrl, setBaseUrl] = useState(config.baseUrl);
   const [apiKey, setApiKey] = useState("");
   const [clearKey, setClearKey] = useState(false);
-  const [models, setModels] = useState(config.models.join("\n"));
+  const [models, setModels] = useState<AiModel[]>(config.modelMetadata || []);
+  const generation = useRef(0);
   const [defaultModel, setDefaultModel] = useState(config.defaultModel);
   const [defaultPermission, setDefaultPermission] = useState<AiPermission>(
     config.defaultPermission || "auto",
@@ -26,14 +28,14 @@ export function AiSettings({
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const modelList = [
-    ...new Set(
-      models
-        .split(/[\n,]/)
-        .map((value) => value.trim())
-        .filter(Boolean),
-    ),
-  ];
+  const modelList = models.map((model) => model.id);
+  function invalidateMetadata() {
+    generation.current += 1;
+    setModels([]);
+    setDefaultModel("");
+    setNotice("");
+    setError("");
+  }
   function input(): AiConfigInput {
     return {
       baseUrl,
@@ -59,9 +61,11 @@ export function AiSettings({
       setBaseUrl(value.baseUrl);
       setApiKey("");
       setClearKey(false);
-      setModels(value.models.join("\n"));
+      setModels(value.modelMetadata || []);
       setDefaultModel(value.defaultModel);
-      setNotice("已保存，密钥已在本机加密。");
+      setNotice("设置已保存，密钥已在本机加密。");
+      if (value.metadataError)
+        setError(`模型元数据读取失败：${value.metadataError}`);
     } catch (error) {
       setError(String(error));
     } finally {
@@ -69,20 +73,24 @@ export function AiSettings({
     }
   }
   async function fetchModels() {
+    const request = ++generation.current;
     setBusy("models");
     setError("");
     setNotice("");
     try {
       if (!isTauri) throw new Error("请在桌面客户端测试连接。");
-      const fetched = await command<string[]>("ai_list_models", {
+      const fetched = await command<AiModel[]>("ai_list_models", {
         input: input(),
       });
-      const merged = [...new Set([...modelList, ...fetched])];
-      setModels(merged.join("\n"));
-      if (!defaultModel) setDefaultModel(merged[0] || "");
-      setNotice(`连接成功，获取到 ${fetched.length} 个模型。点击保存后生效。`);
+      if (request !== generation.current) return;
+      setModels(fetched);
+      if (!fetched.some((model) => model.id === defaultModel))
+        setDefaultModel(fetched[0]?.id || "");
+      setNotice(
+        `已获取 ${fetched.length} 个模型及服务声明的思考档位。点击保存后生效。`,
+      );
     } catch (error) {
-      setError(`${error}。若服务不支持 /models，可手动填写模型 ID。`);
+      if (request === generation.current) setError(String(error));
     } finally {
       setBusy("");
     }
@@ -101,7 +109,10 @@ export function AiSettings({
           API 地址
           <input
             value={baseUrl}
-            onChange={(e) => setBaseUrl(e.target.value)}
+            onChange={(e) => {
+              setBaseUrl(e.target.value);
+              invalidateMetadata();
+            }}
             placeholder="https://api.openai.com/v1"
             spellCheck={false}
           />
@@ -117,6 +128,7 @@ export function AiSettings({
             value={apiKey}
             onChange={(e) => {
               setApiKey(e.target.value);
+              invalidateMetadata();
               setClearKey(false);
             }}
             placeholder={
@@ -133,6 +145,7 @@ export function AiSettings({
               checked={clearKey}
               onChange={(e) => {
                 setClearKey(e.target.checked);
+                invalidateMetadata();
                 if (e.target.checked) setApiKey("");
               }}
             />
@@ -140,24 +153,19 @@ export function AiSettings({
           </label>
         )}
         <div className="ai-settings-label">
-          <span>可选模型（每行一个 ID）</span>
+          <span>模型元数据</span>
           <button type="button" onClick={() => void fetchModels()}>
             {busy === "models" ? (
               <LoaderCircle size={13} className="ai-spin" />
             ) : (
               <RefreshCw size={13} />
             )}
-            测试连接 / 获取模型
+            读取 / 刷新元数据
           </button>
         </div>
-        <textarea
-          aria-label="可选模型"
-          value={models}
-          onChange={(e) => setModels(e.target.value)}
-          placeholder={"gpt-5.1\ndeepseek-chat\n或其他支持工具调用的模型 ID"}
-          rows={5}
-          spellCheck={false}
-        />
+        <small>
+          从当前服务的 /models 接口读取模型与思考档位，不再手动填写模型 ID。
+        </small>
         <label>
           默认模型
           <select
@@ -169,19 +177,24 @@ export function AiSettings({
             onChange={(e) => setDefaultModel(e.target.value)}
           >
             <option value="" disabled>
-              请先填写或获取模型
+              请先读取元数据
             </option>
-            {modelList.map((model) => (
-              <option key={model} value={model}>
-                {model}
+            {models.map((model) => (
+              <option key={model.id} value={model.id}>
+                {model.name}
               </option>
             ))}
           </select>
         </label>
         <small>
-          对话中可选择模型与思考程度；不支持 reasoning_effort
-          的服务请选择“默认”。远端工具需要 Python 3，JavaScript 执行另需
-          Node.js。
+          {models.find((model) => model.id === defaultModel)?.reasoningEfforts
+            .length
+            ? `此模型支持：${models
+                .find((model) => model.id === defaultModel)!
+                .reasoningEfforts.map((effort) => effort.label)
+                .join("、")}`
+            : "服务未声明此模型的思考档位，对话中仅提供默认选项。"}
+          远端工具需要 Python 3，JavaScript 执行另需 Node.js。
         </small>
         <label>
           新对话默认权限

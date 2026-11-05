@@ -11,7 +11,7 @@ use std::{
 };
 use tauri::ipc::Channel;
 
-use super::{config::Config, Event};
+use super::{config::Config, metadata, Event};
 
 pub fn client() -> Result<Client, String> {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -71,7 +71,14 @@ async fn checked(
     Err(format!("模型 API 返回 {status}：{detail}"))
 }
 
-pub async fn models(config: &Config) -> Result<Vec<String>, String> {
+pub async fn models(config: &Config) -> Result<Vec<metadata::Model>, String> {
+    models_cancellable(config, None).await
+}
+
+pub async fn models_cancellable(
+    config: &Config,
+    cancel: Option<&AtomicBool>,
+) -> Result<Vec<metadata::Model>, String> {
     let client = client()?;
     let mut request = client
         .get(format!("{}/models", config.base_url))
@@ -79,28 +86,19 @@ pub async fn models(config: &Config) -> Result<Vec<String>, String> {
     if !config.api_key.is_empty() {
         request = request.bearer_auth(&config.api_key);
     }
-    let response = checked(
-        request.send().await.map_err(|e| e.to_string())?,
-        config,
-        None,
-    )
-    .await?;
-    let body = response
-        .json::<Value>()
-        .await
-        .map_err(|e| format!("模型列表无法解析：{e}"))?;
-    let mut models = body["data"]
-        .as_array()
-        .ok_or("服务未返回 OpenAI 兼容的模型列表，可手动填写模型 ID")?
-        .iter()
-        .filter_map(|m| m["id"].as_str())
-        .filter(|m| !m.is_empty() && m.len() <= 200)
-        .take(500)
-        .map(str::to_string)
-        .collect::<Vec<_>>();
-    models.sort();
-    models.dedup();
-    Ok(models)
+    let response = match cancel {
+        Some(cancel) => cancellable(cancel, request.send()).await?,
+        None => request.send().await.map_err(|e| e.to_string())?,
+    };
+    let response = checked(response, config, cancel).await?;
+    let body = match cancel {
+        Some(cancel) => cancellable(cancel, response.json::<Value>()).await?,
+        None => response
+            .json::<Value>()
+            .await
+            .map_err(|e| format!("模型元数据无法解析：{e}"))?,
+    };
+    metadata::catalog(&body)
 }
 
 #[derive(Default)]
@@ -474,5 +472,53 @@ pub(super) mod http_tests {
             .unwrap()
             .unwrap();
         assert_eq!(result.unwrap_err(), "已停止");
+    }
+}
+
+#[cfg(test)]
+mod metadata_http_tests {
+    use super::*;
+    use std::{
+        io::{Read, Write},
+        net::TcpListener,
+    };
+    #[tokio::test]
+    async fn model_metadata_is_fetched_from_the_configured_authenticated_endpoint() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/custom/v1", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut request = Vec::new();
+            while !request.windows(4).any(|bytes| bytes == b"\r\n\r\n") {
+                let mut buf = [0; 1024];
+                let count = socket.read(&mut buf).unwrap();
+                assert!(count > 0);
+                request.extend_from_slice(&buf[..count]);
+            }
+            let request = String::from_utf8(request).unwrap();
+            assert!(request.starts_with("GET /custom/v1/models HTTP/1.1"));
+            assert!(request
+                .to_lowercase()
+                .contains("authorization: bearer fixture-key"));
+            let body = json!({"data":[{"id":"server-model","name":"服务模型","supported_reasoning_efforts":["minimal","xhigh"],"default_reasoning_effort":"minimal"}]}).to_string();
+            write!(socket,"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",body.len(),body).unwrap();
+        });
+        let config = Config {
+            base_url: url,
+            api_key: "fixture-key".into(),
+            ..Config::default()
+        };
+        let catalog = models(&config).await.unwrap();
+        assert_eq!(catalog[0].id, "server-model");
+        assert_eq!(catalog[0].name, "服务模型");
+        assert_eq!(catalog[0].reasoning_efforts[0].value, "minimal");
+        assert_eq!(
+            catalog[0].default_reasoning_effort.as_deref(),
+            Some("minimal")
+        );
+        server.join().unwrap();
     }
 }

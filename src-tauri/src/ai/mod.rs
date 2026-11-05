@@ -1,5 +1,6 @@
 mod config;
 mod context;
+mod metadata;
 mod permissions;
 mod provider;
 mod tools;
@@ -123,15 +124,25 @@ pub async fn ai_save_config(
     app: AppHandle,
     input: config::ConfigInput,
 ) -> Result<config::PublicConfig, String> {
-    tauri::async_runtime::spawn_blocking(move || config::save(&app, input))
+    let app_copy = app.clone();
+    let mut config = tauri::async_runtime::spawn_blocking(move || {
+        config::merge(config::load(&app_copy)?, input)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    let metadata_result = provider::models(&config).await;
+    let metadata_error = config::apply_metadata(&mut config, metadata_result);
+    let mut result = tauri::async_runtime::spawn_blocking(move || config::save(&app, config))
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())??;
+    result.metadata_error = metadata_error;
+    Ok(result)
 }
 #[tauri::command]
 pub async fn ai_list_models(
     app: AppHandle,
     input: Option<config::ConfigInput>,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<metadata::Model>, String> {
     let config = tauri::async_runtime::spawn_blocking(move || {
         let old = config::load(&app)?;
         match input {
@@ -274,12 +285,6 @@ pub async fn ai_chat(
     if input.model.trim().is_empty() || input.model.len() > 200 {
         return Err("请选择模型".into());
     }
-    if !matches!(
-        input.effort.as_str(),
-        "default" | "low" | "medium" | "high" | "xhigh"
-    ) {
-        return Err("思考程度无效".into());
-    }
     if !terminals.connected_to(&input.session_id, &input.server_id) {
         return Err("请先连接目标服务器".into());
     }
@@ -303,6 +308,19 @@ pub async fn ai_chat(
     })
     .await
     .map_err(|e| e.to_string())??;
+    let available_models = match provider::models_cancellable(&config, Some(&cancel)).await {
+        Ok(models) => models,
+        Err(_) if cancel.load(Ordering::Relaxed) => {
+            return Ok(ChatResult {
+                context_tokens: context::tokens(&input.messages),
+                messages: input.messages,
+                stopped: true,
+                error: None,
+            })
+        }
+        Err(error) => return Err(error),
+    };
+    metadata::validate_selection(&available_models, &input.model, &input.effort)?;
     // Retrieve the server ID from the immutable server snapshot, not the selected UI tab.
     let mut messages = input.messages.clone();
     let active_request = input
