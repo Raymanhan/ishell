@@ -138,16 +138,30 @@ pub fn catalog(body: &Value) -> Result<Vec<Model>, String> {
     Ok(models)
 }
 
-pub fn validate_selection(models: &[Model], id: &str, effort: &str) -> Result<(), String> {
-    let model = models
-        .iter()
-        .find(|model| model.id == id)
-        .ok_or("所选模型已不在服务元数据中，请刷新模型列表")?;
+pub fn validate_selection(
+    models: &[Model],
+    id: &str,
+    effort: &str,
+    manual_model: bool,
+    manual_effort: bool,
+) -> Result<(), String> {
+    let model = models.iter().find(|model| model.id == id);
+    if model.is_none() && !manual_model {
+        return Err("所选模型已不在服务元数据中，请刷新模型列表或手动输入模型 ID".into());
+    }
+    if manual_effort || manual_model {
+        if !valid_effort(effort) {
+            return Err("手动思考程度必须是 1–64 位字母、数字、下划线或短横线".into());
+        }
+        return Ok(());
+    }
     if effort != "default"
-        && !model
-            .reasoning_efforts
-            .iter()
-            .any(|level| level.value == effort)
+        && !model.is_some_and(|model| {
+            model
+                .reasoning_efforts
+                .iter()
+                .any(|level| level.value == effort)
+        })
     {
         return Err("服务元数据未声明该模型支持所选思考程度，请刷新后重新选择".into());
     }
@@ -175,17 +189,30 @@ mod tests {
         assert_eq!(codex[0].name, "Agent Model");
         assert_eq!(codex[0].reasoning_efforts[0].description, "Quick");
         assert_eq!(codex[0].reasoning_efforts[1].label, "最高");
-        assert!(validate_selection(&codex, "agent", "medium").is_err());
-        assert!(validate_selection(&codex, "agent", "xhigh").is_ok());
+        assert!(validate_selection(&codex, "agent", "medium", false, false).is_err());
+        assert!(validate_selection(&codex, "agent", "xhigh", false, false).is_ok());
     }
     #[test]
     fn capabilities_without_values_do_not_invent_levels_and_unknown_models_are_rejected() {
         let models = catalog(&json!({"data":[{"id":"gpt-future","supported_parameters":["reasoning_effort"]},{"id":"schema","parameters":{"properties":{"reasoning_effort":{"enum":["none","high"]}}}}]})).unwrap();
         assert!(models[0].reasoning_efforts.is_empty());
-        assert!(validate_selection(&models, "gpt-future", "high").is_err());
-        assert!(validate_selection(&models, "gpt-future", "default").is_ok());
-        assert!(validate_selection(&models, "missing", "default").is_err());
+        assert!(validate_selection(&models, "gpt-future", "high", false, false).is_err());
+        assert!(validate_selection(&models, "gpt-future", "default", false, false).is_ok());
+        assert!(validate_selection(&models, "missing", "default", false, false).is_err());
         assert_eq!(models[1].reasoning_efforts[0].value, "none");
         assert!(catalog(&json!({"error":"failed"})).is_err());
+    }
+}
+
+#[cfg(test)]
+mod manual_tests {
+    use super::*;
+    #[test]
+    fn manual_overrides_work_without_metadata_but_never_apply_implicitly() {
+        assert!(validate_selection(&[], "private-model", "default", true, false).is_ok());
+        assert!(validate_selection(&[], "private-model", "high", true, true).is_ok());
+        assert!(validate_selection(&[], "private-model", "high", true, false).is_ok());
+        assert!(validate_selection(&[], "private-model", "default", false, false).is_err());
+        assert!(validate_selection(&[], "private-model", "bad\nvalue", true, true).is_err());
     }
 }

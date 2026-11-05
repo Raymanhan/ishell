@@ -8,6 +8,7 @@ import {
   defaultAiConfig,
   emptyConversation,
   modelSelection,
+  mergeModelSources,
   type AiConfig,
   type AiConversation,
   type AiEvent,
@@ -36,6 +37,7 @@ export function useAi(tabs: ShellTab[]) {
   const configRef = useRef(config);
   const automaticStops = useRef(new Set<string>());
   configRef.current = config;
+  const availableModels = mergeModelSources(models, config.manualModels || []);
 
   function update(
     id: string,
@@ -149,10 +151,12 @@ export function useAi(tabs: ShellTab[]) {
     const conversation =
       current.current[tab.id] || emptyConversation(configRef.current);
     const selection = modelSelection(
-      models,
+      availableModels,
       conversation.model,
       conversation.effort,
       configRef.current.defaultModel,
+      conversation.manualModel,
+      conversation.manualEffort,
     );
     const text = conversation.draft.trim();
     if (
@@ -160,7 +164,7 @@ export function useAi(tabs: ShellTab[]) {
       conversation.requestId ||
       tab.state !== "connected" ||
       !selection.model ||
-      modelsLoading
+      (modelsLoading && !selection.manualModel)
     )
       return;
     if (!isTauri) {
@@ -187,6 +191,8 @@ export function useAi(tabs: ShellTab[]) {
       draft: "",
       model: selection.model,
       effort: selection.effort,
+      manualModel: selection.manualModel,
+      manualEffort: selection.manualEffort,
       messages,
       requestId,
       stopping: false,
@@ -245,6 +251,8 @@ export function useAi(tabs: ShellTab[]) {
           sessionId: tab.sessionId,
           model: selection.model,
           effort: selection.effort,
+          manualModel: selection.manualModel,
+          manualEffort: selection.manualEffort,
           permission: conversation.permission,
           cwd: currentDirForTab(tab),
           messages,
@@ -310,6 +318,8 @@ export function useAi(tabs: ShellTab[]) {
       ...emptyConversation(configRef.current),
       model: value.model,
       effort: value.effort,
+      manualModel: value.manualModel,
+      manualEffort: value.manualEffort,
       permission: value.permission,
     }));
   }
@@ -360,7 +370,7 @@ export function useAi(tabs: ShellTab[]) {
   return {
     config,
     configError,
-    models,
+    models: availableModels,
     modelsLoading,
     modelsError,
     refreshModels,

@@ -19,6 +19,7 @@ import remarkGfm from "remark-gfm";
 import type { AiController } from "../features/ai/useAi";
 import {
   modelSelection,
+  mergeModelSources,
   emptyConversation,
   permissionOptions,
   type AiEntry,
@@ -246,6 +247,9 @@ export function AiPanel({
   const follow = useRef(true);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const [scrolled, setScrolled] = useState(false);
+  const [editing, setEditing] = useState<"model" | "effort" | null>(null);
+  const [manualDraft, setManualDraft] = useState("");
+  const [manualError, setManualError] = useState("");
   const approveRef = useRef(ai.approve);
   approveRef.current = ai.approve;
   const approve = useCallback(
@@ -259,6 +263,7 @@ export function AiPanel({
   useEffect(() => {
     follow.current = true;
     setScrolled(false);
+    setEditing(null);
   }, [tab.id]);
   useEffect(() => {
     if (follow.current && scroller.current)
@@ -270,13 +275,56 @@ export function AiPanel({
       textarea.current.style.height = `${Math.min(180, textarea.current.scrollHeight)}px`;
     }
   }, [conversation.draft, tab.id]);
-  const models = ai.models;
+  const models = mergeModelSources(
+    ai.models,
+    conversation.manualModel ? [conversation.model] : [],
+  );
   const selection = modelSelection(
     models,
     conversation.model,
     conversation.effort,
     ai.config.defaultModel,
+    conversation.manualModel,
+    conversation.manualEffort,
   );
+  function openManual(kind: "model" | "effort") {
+    setEditing(kind);
+    setManualDraft(
+      kind === "model"
+        ? selection.model
+        : selection.effort === "default"
+          ? ""
+          : selection.effort,
+    );
+    setManualError("");
+  }
+  function commitManual() {
+    if (busy) return;
+    const value = manualDraft.trim();
+    if (editing === "model") {
+      if (
+        !value ||
+        new TextEncoder().encode(value).length > 200 ||
+        /[\u0000-\u001f\u007f]/.test(value)
+      ) {
+        setManualError("请输入 1–200 字节的模型 ID");
+        return;
+      }
+      patch({
+        model: value,
+        manualModel: true,
+        effort: "default",
+        manualEffort: false,
+      });
+    } else {
+      if (!/^[a-zA-Z0-9_-]{1,64}$/.test(value)) {
+        setManualError("请输入 1–64 位字母、数字、下划线或短横线");
+        return;
+      }
+      patch({ effort: value, manualEffort: value !== "default" });
+    }
+    setEditing(null);
+  }
   const permission = permissionOptions.find(
     (option) => option.value === conversation.permission,
   )!;
@@ -442,6 +490,52 @@ export function AiPanel({
           <ChevronDown size={15} />
         </button>
       )}
+      {editing && (
+        <form
+          className="ai-manual-editor"
+          role="dialog"
+          aria-label={editing === "model" ? "手动输入模型" : "手动输入思考程度"}
+          onSubmit={(event) => {
+            event.preventDefault();
+            commitManual();
+          }}
+        >
+          <label>
+            {editing === "model" ? "模型 ID" : "reasoning_effort 参数"}
+            <input
+              autoFocus
+              aria-label="手动值"
+              disabled={busy}
+              value={manualDraft}
+              maxLength={editing === "model" ? 200 : 64}
+              placeholder={
+                editing === "model"
+                  ? "输入服务支持的模型 ID"
+                  : "输入服务支持的思考程度值"
+              }
+              spellCheck={false}
+              onChange={(event) => setManualDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setEditing(null);
+              }}
+            />
+          </label>
+          <small>优先使用 /models 元数据；手动值会按原样发送给模型服务。</small>
+          {manualError && (
+            <span className="ai-error" role="alert">
+              {manualError}
+            </span>
+          )}
+          <div>
+            <button type="button" onClick={() => setEditing(null)}>
+              取消
+            </button>
+            <button type="submit" disabled={busy}>
+              应用
+            </button>
+          </div>
+        </form>
+      )}
       <form
         className="ai-composer"
         onSubmit={(event) => {
@@ -480,14 +574,21 @@ export function AiPanel({
             aria-label="AI 模型"
             title={selection.model || "选择模型"}
             value={selection.model}
-            disabled={busy || ai.modelsLoading}
+            disabled={busy}
             onChange={(e) =>
-              patch({
-                model: e.target.value,
-                effort:
-                  models.find((model) => model.id === e.target.value)
-                    ?.defaultReasoningEffort || "default",
-              })
+              e.target.value === "__ishell_manual__"
+                ? openManual("model")
+                : patch({
+                    model: e.target.value,
+                    manualModel: Boolean(
+                      models.find((model) => model.id === e.target.value)
+                        ?.manual,
+                    ),
+                    manualEffort: false,
+                    effort:
+                      models.find((model) => model.id === e.target.value)
+                        ?.defaultReasoningEffort || "default",
+                  })
             }
           >
             <option value="" disabled>
@@ -498,6 +599,7 @@ export function AiPanel({
                 {model.name}
               </option>
             ))}
+            <option value="__ishell_manual__">手动输入模型…</option>
           </select>
           <select
             aria-label="思考程度"
@@ -507,11 +609,17 @@ export function AiPanel({
                 : "服务未声明思考档位，使用默认值"
             }
             value={selection.effort}
-            disabled={
-              busy || ai.modelsLoading || selection.efforts.length === 1
-            }
+            disabled={busy}
             onChange={(e) =>
-              patch({ effort: e.target.value as typeof conversation.effort })
+              e.target.value === "__ishell_manual__"
+                ? openManual("effort")
+                : patch({
+                    effort: e.target.value,
+                    manualEffort: Boolean(
+                      conversation.manualEffort &&
+                      e.target.value === conversation.effort,
+                    ),
+                  })
             }
           >
             {selection.efforts.map(({ value, label }) => (
@@ -519,6 +627,7 @@ export function AiPanel({
                 {label}
               </option>
             ))}
+            <option value="__ishell_manual__">手动输入…</option>
           </select>
           <label className="ai-permission-control">
             <ShieldCheck size={12} />
@@ -561,7 +670,7 @@ export function AiPanel({
               disabled={
                 !connected ||
                 !selection.model ||
-                ai.modelsLoading ||
+                (ai.modelsLoading && !selection.manualModel) ||
                 !conversation.draft.trim()
               }
             >

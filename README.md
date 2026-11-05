@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.5.2](https://github.com/Raymanhan/ishell/releases/tag/v1.5.2)**
+**[Download iShell v1.5.3](https://github.com/Raymanhan/ishell/releases/tag/v1.5.3)**
 
 Available packages:
 
@@ -207,8 +207,8 @@ The status panel samples remote host information through SSH:
 
 ### AI Server Assistant
 
-1. Open **Settings → AI Assistant**, enter an OpenAI-compatible API base URL and key, read model metadata from the service’s `/models` endpoint, select a default model, and save. Keys are encrypted in the local SQLite database with the existing local encryption key; they are not stored in browser storage or connection exports.
-2. Connect to a server and click the **sparkles SVG button** at the top right. Model, reasoning effort, and agent permissions share one row below the composer. Models and available efforts come from service metadata, including `supported_reasoning_efforts` and Codex `supported_reasoning_levels`; only **Default** is offered when no levels are declared. Metadata refreshes on startup, after saving settings, or from the sidebar refresh button. Model/effort selections are validated before requests.
+1. Open **Settings → AI Assistant**, enter an OpenAI-compatible API base URL and key, read model metadata from the service’s `/models` endpoint, select a default model, and save. Models missing from discovery can be added under manual model IDs. Keys are encrypted in the local SQLite database with the existing local encryption key; they are not stored in browser storage or connection exports.
+2. Connect to a server and click the **sparkles SVG button** at the top right. Model, reasoning effort, and agent permissions share one row below the composer. Models and available efforts come from service metadata, including `supported_reasoning_efforts` and Codex `supported_reasoning_levels`; **Default** is used when no levels are declared. The model and effort menus also offer manual input; manually entered models work without `/models`, and explicit effort values are forwarded as entered. Metadata refreshes on startup, after saving settings, or from the sidebar refresh button. Model/effort selections are validated before requests.
 3. Describe a deployment or operations task. The agent can run Shell commands, read/write files, and execute generated Python, Shell, or Node.js code. Every step exposes its command/code, output, and exit status. The server needs Python 3; JavaScript also needs Node.js. Non-interactive elevation uses existing `sudo -n` privileges.
 
 Choose permissions below the composer, or set the default for new chats in settings:
@@ -320,8 +320,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.5.2
-git push origin v1.5.2
+git tag v1.5.3
+git push origin v1.5.3
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -382,7 +382,7 @@ src-tauri/src/
 
 ## Recent Changes
 
-- `v1.5.2` reads AI models and reasoning levels from the configured service metadata, removes manual model IDs and fixed effort presets, and refreshes/reset stale selections. Model, effort, and permissions now share one row; context usage moves to the footer.
+- `v1.5.3` reads AI models and reasoning levels from the configured service metadata, refreshes stale selections, and supports manual model IDs / reasoning efforts when discovery is unavailable or incomplete. Model, effort, and permissions now share one row; context usage moves to the footer.
 
 - `v1.5.1` adds an AI server assistant sidebar with OpenAI-compatible configuration, encrypted keys, model/reasoning selection, multi-step Shell and code tools, streamed output, and cancellation. Four permission modes enforce risk-based one-time approvals; context compacts automatically at 200k estimated tokens while preserving recent tool groups and visible history.
 

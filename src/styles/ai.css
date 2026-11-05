@@ -646,3 +646,63 @@
 .ai-context-usage {
   flex-shrink: 0;
 }
+.ai-manual-editor {
+  position: absolute;
+  z-index: 3;
+  bottom: 128px;
+  left: 11px;
+  right: 11px;
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid var(--hairline-2);
+  border-radius: 10px;
+  background: var(--panel);
+  backdrop-filter: blur(24px);
+  box-shadow: 0 8px 28px #0005;
+}
+.ai-manual-editor label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+}
+.ai-manual-editor input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--hairline-2);
+  border-radius: 6px;
+  background: var(--inset);
+  color: var(--text);
+  font: 12px var(--font-mono);
+}
+.ai-manual-editor small {
+  color: var(--dim);
+  font-size: 10px;
+  line-height: 1.6;
+}
+.ai-manual-editor > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+}
+.ai-manual-editor button {
+  border: 1px solid var(--hairline-2);
+  border-radius: 6px;
+  padding: 5px 12px;
+  color: var(--text);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.ai-manual-editor button[type="submit"] {
+  background: var(--solid-bg, #f0f1f5);
+  color: var(--solid-text, #1f2025);
+}
+.ai-manual-models summary {
+  cursor: pointer;
+  color: var(--dim);
+  font-size: 11px;
+}
+.ai-manual-models textarea {
+  margin-top: 8px;
+}

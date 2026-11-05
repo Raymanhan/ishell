@@ -220,6 +220,10 @@ pub struct ChatInput {
     session_id: String,
     model: String,
     effort: String,
+    #[serde(default)]
+    manual_model: bool,
+    #[serde(default)]
+    manual_effort: bool,
     permission: String,
     cwd: String,
     messages: Vec<Value>,
@@ -308,19 +312,29 @@ pub async fn ai_chat(
     })
     .await
     .map_err(|e| e.to_string())??;
-    let available_models = match provider::models_cancellable(&config, Some(&cancel)).await {
-        Ok(models) => models,
-        Err(_) if cancel.load(Ordering::Relaxed) => {
-            return Ok(ChatResult {
-                context_tokens: context::tokens(&input.messages),
-                messages: input.messages,
-                stopped: true,
-                error: None,
-            })
+    let available_models = if input.manual_model {
+        config.model_metadata.clone()
+    } else {
+        match provider::models_cancellable(&config, Some(&cancel)).await {
+            Ok(models) => models,
+            Err(_) if cancel.load(Ordering::Relaxed) => {
+                return Ok(ChatResult {
+                    context_tokens: context::tokens(&input.messages),
+                    messages: input.messages,
+                    stopped: true,
+                    error: None,
+                })
+            }
+            Err(error) => return Err(error),
         }
-        Err(error) => return Err(error),
     };
-    metadata::validate_selection(&available_models, &input.model, &input.effort)?;
+    metadata::validate_selection(
+        &available_models,
+        &input.model,
+        &input.effort,
+        input.manual_model,
+        input.manual_effort,
+    )?;
     // Retrieve the server ID from the immutable server snapshot, not the selected UI tab.
     let mut messages = input.messages.clone();
     let active_request = input

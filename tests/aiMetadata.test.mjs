@@ -21,3 +21,18 @@ test('a model without declared levels exposes default only, and removed IDs are 
   assert.equal(modelSelection(models, 'removed', 'default', 'plain').model, 'plain');
   assert.equal(modelSelection([], 'old-manual-id', 'high').model, '');
 });
+
+test('manual models survive discovery failures and custom levels are kept only when explicitly entered', async () => {
+  const { mergeModelSources } = await import('../src/features/ai/types.ts');
+  const merged = mergeModelSources(models, ['private-model', 'custom']);
+  assert.equal(merged.length, 3);
+  assert.equal(merged.find(m=>m.id==='custom').reasoningEfforts.length, 2);
+  assert.equal(merged.find(m=>m.id==='custom').manual, true);
+  assert.equal(merged.find(m=>m.id==='private-model').manual, true);
+  const manual = modelSelection([], 'private-model', 'max-custom', '', true, true);
+  assert.equal(manual.model, 'private-model');
+  assert.equal(manual.effort, 'max-custom');
+  assert.equal(manual.manualModel, true);
+  assert.equal(manual.manualEffort, true);
+  assert.equal(modelSelection(models, 'custom', 'max-custom').effort, 'minimal');
+});

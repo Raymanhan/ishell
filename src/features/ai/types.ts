@@ -1,6 +1,7 @@
 export interface AiConfig {
   baseUrl: string;
   models: string[];
+  manualModels: string[];
   modelMetadata: AiModel[];
   metadataError?: string | null;
   defaultModel: string;
@@ -10,6 +11,7 @@ export interface AiConfig {
 export interface AiConfigInput {
   baseUrl: string;
   models: string[];
+  manualModels: string[];
   defaultModel: string;
   apiKey: string | null;
   defaultPermission: AiPermission;
@@ -20,6 +22,25 @@ export interface AiModel {
   name: string;
   reasoningEfforts: { value: string; label: string; description: string }[];
   defaultReasoningEffort: string | null;
+  manual?: boolean;
+}
+export function mergeModelSources(
+  models: AiModel[],
+  manualIds: string[] = [],
+): AiModel[] {
+  const merged = models.map((model) =>
+    manualIds.includes(model.id) ? { ...model, manual: true } : model,
+  );
+  for (const id of manualIds)
+    if (id && !merged.some((model) => model.id === id))
+      merged.push({
+        id,
+        name: `${id}（手动）`,
+        reasoningEfforts: [],
+        defaultReasoningEffort: null,
+        manual: true,
+      });
+  return merged;
 }
 export type AiPermission = "suggest" | "ask" | "auto" | "full";
 export const permissionOptions: {
@@ -54,27 +75,37 @@ export function modelSelection(
   modelId: string,
   effort: string,
   preferredModel = "",
+  manualModel = false,
+  manualEffort = false,
 ) {
+  if (manualModel) models = mergeModelSources(models, [modelId]);
   const model =
     models.find((item) => item.id === modelId) ||
     models.find((item) => item.id === preferredModel) ||
     models[0];
   const supported = model?.reasoningEfforts || [];
   const selectedEffort =
-    effort === "default" || supported.some((item) => item.value === effort)
+    manualEffort ||
+    effort === "default" ||
+    supported.some((item) => item.value === effort)
       ? effort
       : model?.defaultReasoningEffort || "default";
+  const efforts = [
+    { value: "default", label: "默认", description: "使用服务默认的思考程度" },
+    ...supported,
+  ];
+  if (manualEffort && effort && !efforts.some((item) => item.value === effort))
+    efforts.push({
+      value: effort,
+      label: `${effort}（手动）`,
+      description: "手动指定的 API 参数",
+    });
   return {
     model: model?.id || "",
     effort: selectedEffort,
-    efforts: [
-      {
-        value: "default",
-        label: "默认",
-        description: "使用服务默认的思考程度",
-      },
-      ...supported,
-    ],
+    manualModel: Boolean(manualModel || model?.manual),
+    manualEffort,
+    efforts,
   };
 }
 export interface ToolResult {
@@ -107,6 +138,8 @@ export interface AiConversation {
   messages: Record<string, unknown>[];
   model: string;
   effort: AiEffort;
+  manualModel: boolean;
+  manualEffort: boolean;
   permission: AiPermission;
   contextTokens: number;
   compacting: boolean;
@@ -141,6 +174,7 @@ export interface AiEvent {
 export const defaultAiConfig: AiConfig = {
   baseUrl: "https://api.openai.com/v1",
   models: [],
+  manualModels: [],
   modelMetadata: [],
   defaultModel: "",
   hasApiKey: false,
@@ -152,6 +186,8 @@ export function emptyConversation(config: AiConfig): AiConversation {
     messages: [],
     model: config.defaultModel || config.models[0] || "",
     effort: "default",
+    manualModel: false,
+    manualEffort: false,
     permission: config.defaultPermission || "auto",
     contextTokens: 0,
     compacting: false,

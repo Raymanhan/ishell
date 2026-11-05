@@ -7,6 +7,7 @@ import {
   type AiConfigInput,
   type AiPermission,
   type AiModel,
+  mergeModelSources,
 } from "../features/ai/types";
 
 export function AiSettings({
@@ -20,6 +21,9 @@ export function AiSettings({
   const [apiKey, setApiKey] = useState("");
   const [clearKey, setClearKey] = useState(false);
   const [models, setModels] = useState<AiModel[]>(config.modelMetadata || []);
+  const [manualModels, setManualModels] = useState(
+    (config.manualModels || []).join("\n"),
+  );
   const generation = useRef(0);
   const [defaultModel, setDefaultModel] = useState(config.defaultModel);
   const [defaultPermission, setDefaultPermission] = useState<AiPermission>(
@@ -28,7 +32,16 @@ export function AiSettings({
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const modelList = models.map((model) => model.id);
+  const manualIds = [
+    ...new Set(
+      manualModels
+        .split(/[\n,]/)
+        .map((id) => id.trim())
+        .filter(Boolean),
+    ),
+  ];
+  const choices = mergeModelSources(models, manualIds);
+  const modelList = choices.map((model) => model.id);
   function invalidateMetadata() {
     generation.current += 1;
     setModels([]);
@@ -41,6 +54,7 @@ export function AiSettings({
       baseUrl,
       apiKey: clearKey ? "" : apiKey.trim() || null,
       models: modelList,
+      manualModels: manualIds,
       defaultModel: modelList.includes(defaultModel)
         ? defaultModel
         : modelList[0] || "",
@@ -62,6 +76,7 @@ export function AiSettings({
       setApiKey("");
       setClearKey(false);
       setModels(value.modelMetadata || []);
+      setManualModels((value.manualModels || []).join("\n"));
       setDefaultModel(value.defaultModel);
       setNotice("设置已保存，密钥已在本机加密。");
       if (value.metadataError)
@@ -164,7 +179,7 @@ export function AiSettings({
           </button>
         </div>
         <small>
-          从当前服务的 /models 接口读取模型与思考档位，不再手动填写模型 ID。
+          从当前服务的 /models 接口读取模型与思考档位；未列出的模型可手动补充。
         </small>
         <label>
           默认模型
@@ -179,13 +194,24 @@ export function AiSettings({
             <option value="" disabled>
               请先读取元数据
             </option>
-            {models.map((model) => (
+            {choices.map((model) => (
               <option key={model.id} value={model.id}>
                 {model.name}
               </option>
             ))}
           </select>
         </label>
+        <details className="ai-manual-models">
+          <summary>手动补充模型 ID（可选）</summary>
+          <textarea
+            aria-label="手动模型 ID"
+            value={manualModels}
+            onChange={(event) => setManualModels(event.target.value)}
+            rows={3}
+            placeholder="每行一个模型 ID，支持 /models 不可用的服务"
+            spellCheck={false}
+          />
+        </details>
         <small>
           {models.find((model) => model.id === defaultModel)?.reasoningEfforts
             .length
@@ -193,7 +219,7 @@ export function AiSettings({
                 .find((model) => model.id === defaultModel)!
                 .reasoningEfforts.map((effort) => effort.label)
                 .join("、")}`
-            : "服务未声明此模型的思考档位，对话中仅提供默认选项。"}
+            : "服务未声明此模型的思考档位，默认使用服务默认值，也可在对话中手动输入。"}
           远端工具需要 Python 3，JavaScript 执行另需 Node.js。
         </small>
         <label>

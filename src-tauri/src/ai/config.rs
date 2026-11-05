@@ -10,6 +10,7 @@ use crate::store::{decrypt_secret, encrypt_secret, open_db};
 pub struct Config {
     pub base_url: String,
     pub models: Vec<String>,
+    pub manual_models: Vec<String>,
     pub model_metadata: Vec<Model>,
     pub default_model: String,
     pub api_key: String,
@@ -21,6 +22,7 @@ impl Default for Config {
         Self {
             base_url: "https://api.openai.com/v1".into(),
             models: vec![],
+            manual_models: vec![],
             model_metadata: vec![],
             default_model: String::new(),
             api_key: String::new(),
@@ -34,6 +36,7 @@ impl Default for Config {
 pub struct PublicConfig {
     pub base_url: String,
     pub models: Vec<String>,
+    pub manual_models: Vec<String>,
     pub model_metadata: Vec<Model>,
     pub default_model: String,
     pub has_api_key: bool,
@@ -46,6 +49,7 @@ impl From<&Config> for PublicConfig {
         Self {
             base_url: value.base_url.clone(),
             models: value.models.clone(),
+            manual_models: value.manual_models.clone(),
             model_metadata: value.model_metadata.clone(),
             default_model: value.default_model.clone(),
             has_api_key: !value.api_key.is_empty(),
@@ -61,6 +65,8 @@ pub struct ConfigInput {
     pub base_url: String,
     #[serde(default)]
     pub models: Vec<String>,
+    #[serde(default)]
+    pub manual_models: Vec<String>,
     pub default_model: String,
     /// None preserves the stored key; Some("") explicitly clears it.
     pub api_key: Option<String>,
@@ -104,7 +110,12 @@ pub fn load(app: &AppHandle) -> Result<Config, String> {
         .map_err(|e| e.to_string())?;
     match blob {
         Some(blob) => {
-            serde_json::from_str(&decrypt_secret(app, &blob)?).map_err(|_| "AI 设置无法读取".into())
+            let mut config: Config = serde_json::from_str(&decrypt_secret(app, &blob)?)
+                .map_err(|_| "AI 设置无法读取".to_string())?;
+            if config.model_metadata.is_empty() && config.manual_models.is_empty() {
+                config.manual_models = config.models.clone();
+            }
+            Ok(config)
         }
         None => Ok(Config::default()),
     }
@@ -124,8 +135,22 @@ pub fn merge(old: Config, input: ConfigInput) -> Result<Config, String> {
             models.push(model);
         }
     }
-    if models.len() > 500 {
-        return Err("最多配置 500 个模型".into());
+    if models.len() > 1000 {
+        return Err("最多配置 1000 个模型（含手动补充）".into());
+    }
+    let mut manual_models = Vec::new();
+    for model in input.manual_models {
+        let id = model.trim().to_string();
+        if !id.is_empty()
+            && id.len() <= 200
+            && !id.chars().any(char::is_control)
+            && !manual_models.contains(&id)
+        {
+            manual_models.push(id);
+        }
+    }
+    if manual_models.len() > 500 {
+        return Err("最多配置 500 个手动模型".into());
     }
     let default_model = input.default_model.trim().to_string();
     if default_model.len() > 200 {
@@ -141,6 +166,7 @@ pub fn merge(old: Config, input: ConfigInput) -> Result<Config, String> {
     Ok(Config {
         base_url: normalize_url(&input.base_url)?,
         models,
+        manual_models,
         model_metadata: vec![],
         default_model,
         api_key,
@@ -174,6 +200,11 @@ pub fn apply_metadata(config: &mut Config, result: Result<Vec<Model>, String>) -
         .iter()
         .map(|model| model.id.clone())
         .collect();
+    for id in &config.manual_models {
+        if !config.models.contains(id) {
+            config.models.push(id.clone());
+        }
+    }
     if !config.models.contains(&config.default_model) {
         config.default_model = config.models.first().cloned().unwrap_or_default();
     }
@@ -204,6 +235,10 @@ mod tests {
         assert!(config.model_metadata.is_empty());
         assert!(config.models.is_empty());
         assert!(config.api_key.is_empty());
+        config.manual_models = vec!["private-model".into()];
+        apply_metadata(&mut config, Err("metadata unavailable".into()));
+        assert_eq!(config.models, ["private-model"]);
+        assert_eq!(config.default_model, "private-model");
     }
     #[test]
     fn endpoint_normalization() {
@@ -233,6 +268,7 @@ mod tests {
         let input = |key| ConfigInput {
             base_url: "https://example.com/v1".into(),
             models: vec![" a ".into(), "a".into()],
+            manual_models: vec![],
             default_model: "b".into(),
             api_key: key,
             default_permission: "auto".into(),
