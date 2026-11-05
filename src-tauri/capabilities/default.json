@@ -25,6 +25,10 @@
     "dialog:default",
     "opener:allow-reveal-item-in-dir",
     {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "http://*" }, { "url": "https://*" }]
+    },
+    {
       "identifier": "opener:allow-open-path",
       "allow": [{ "path": "$DOWNLOAD/**" }]
     },

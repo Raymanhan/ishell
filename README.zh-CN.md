@@ -12,7 +12,7 @@ iShell 是一个基于 Tauri + React + Rust 的轻量级 SSH 桌面工作台，�
 
 请从 GitHub Releases 下载最新版安装包：
 
-**[下载 iShell v1.5.0](https://github.com/Raymanhan/ishell/releases/tag/v1.5.0)**
+**[下载 iShell v1.5.1](https://github.com/Raymanhan/ishell/releases/tag/v1.5.1)**
 
 可用安装包：
 
@@ -252,8 +252,8 @@ npm run tauri -- build --target aarch64-apple-darwin
 推送 `v*` 标签后，GitHub Actions 会自动构建 Release。也可以在 GitHub Actions 页面手动运行 **Build installers** 工作流。
 
 ```bash
-git tag v1.5.0
-git push origin v1.5.0
+git tag v1.5.1
+git push origin v1.5.1
 ```
 
 发布工作流会构建 Windows、Linux、macOS Intel 和 macOS Apple Silicon 安装包，并把产物上传到 GitHub Release。
@@ -303,7 +303,7 @@ src-tauri/src/
 
 ## 最近更新
 
-- `v1.5.0` 新增 AI 服务器助手侧栏：OpenAI 兼容模型配置、密钥本机加密、模型/思考程度选择、多轮 Shell 与代码工具调用、输出回传和停止；支持四档权限、保守风险判断与一次性执行确认；上下文达到 200k 估算 tokens 时自动压缩，保留近期工具链与聊天记录。
+- `v1.5.1` 新增 AI 服务器助手侧栏：OpenAI 兼容模型配置、密钥本机加密、模型/思考程度选择、多轮 Shell 与代码工具调用、输出回传和停止；支持四档权限、保守风险判断与一次性执行确认；上下文达到 200k 估算 tokens 时自动压缩，保留近期工具链与聊天记录。
 
 - `v1.4.6` 进入目录时，左侧目录树自动展开祖先节点并滚动到当前目录；支持按住 Command（macOS）或 Ctrl（Windows/Linux）点击终端提示符，在文件面板打开对应目录，正确解析远端主目录，并支持中文、空格和换行路径。
 - `v1.4.5` 下载完成后新增 SVG 图标按钮：文件可打开所在文件夹或使用系统默认应用打开；原样下载的文件夹可直接打开，压缩下载的归档按文件处理；按钮提供悬停提示，打开失败时显示通知。

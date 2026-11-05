@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.5.0](https://github.com/Raymanhan/ishell/releases/tag/v1.5.0)**
+**[Download iShell v1.5.1](https://github.com/Raymanhan/ishell/releases/tag/v1.5.1)**
 
 Available packages:
 
@@ -320,8 +320,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.5.0
-git push origin v1.5.0
+git tag v1.5.1
+git push origin v1.5.1
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -382,7 +382,7 @@ src-tauri/src/
 
 ## Recent Changes
 
-- `v1.5.0` adds an AI server assistant sidebar with OpenAI-compatible configuration, encrypted keys, model/reasoning selection, multi-step Shell and code tools, streamed output, and cancellation. Four permission modes enforce risk-based one-time approvals; context compacts automatically at 200k estimated tokens while preserving recent tool groups and visible history.
+- `v1.5.1` adds an AI server assistant sidebar with OpenAI-compatible configuration, encrypted keys, model/reasoning selection, multi-step Shell and code tools, streamed output, and cancellation. Four permission modes enforce risk-based one-time approvals; context compacts automatically at 200k estimated tokens while preserving recent tool groups and visible history.
 
 - `v1.4.6` expands and scrolls the directory tree to the current folder when navigating; Command-click (macOS) or Ctrl-click (Windows/Linux) a terminal prompt to open its directory in the file panel, including remote home directories, Unicode, spaces, and wrapped prompts.
 - `v1.4.5` adds compact SVG actions for completed downloads: reveal files in their containing folder or open them with the default app, and open downloaded folders directly. Archived folder downloads use file actions; buttons include tooltips and failures show a notice.
