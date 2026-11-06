@@ -560,20 +560,33 @@
   padding: 5px;
   border: 1px solid var(--hairline-2);
   border-radius: 12px;
-  /* Nearly opaque: the theme panels are translucent, and the chat text
-     behind would show through the list. */
+  animation: ai-rise 140ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+/*
+ * Layers that float over the chat (command menu, history, manual model
+ * entry, scroll-to-latest) are nearly opaque: the theme panels are
+ * translucent, and the conversation behind would show through them.
+ */
+.ai-command-menu,
+.ai-panel .ai-history,
+.ai-panel .ai-manual-editor,
+.ai-panel .ai-scroll-bottom {
   background: rgba(22, 24, 29, 0.96);
   -webkit-backdrop-filter: blur(24px) saturate(140%);
   backdrop-filter: blur(24px) saturate(140%);
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.38);
-  animation: ai-rise 140ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 :root:is(
     [data-theme="liquid-glass-pearl"],
     [data-theme="liquid-glass-cloud"],
     [data-theme="liquid-glass-clay-light"]
   )
-  .ai-command-menu {
+  :is(
+    .ai-command-menu,
+    .ai-panel .ai-history,
+    .ai-panel .ai-manual-editor,
+    .ai-panel .ai-scroll-bottom
+  ) {
   border-color: rgba(0, 0, 0, 0.1);
   background: rgba(252, 251, 248, 0.97);
   box-shadow: 0 14px 36px rgba(40, 36, 30, 0.16);
