@@ -556,6 +556,7 @@ export function useAi(tabs: ShellTab[]) {
       requestId,
       stopping: false,
       compacting: true,
+      sessionId: tab.sessionId,
       entries: [
         ...value.entries,
         { id: crypto.randomUUID(), kind: "user", text },
