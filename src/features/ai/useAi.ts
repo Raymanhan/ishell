@@ -18,6 +18,7 @@ import {
   modelSelection,
   mergeModelSources,
   parseCompactCommand,
+  rewindTo,
   type AiConfig,
   type AiConversation,
   type AiEvent,
@@ -332,7 +333,16 @@ export function useAi(tabs: ShellTab[]) {
     }
   }
 
-  async function send(tab: ShellTab) {
+  /**
+   * Sends the composer draft. With `edit`, replaces the user message
+   * `edit.entryId` with `edit.text` instead: everything after it, in the chat
+   * and in the model context, is dropped and the task runs again from there.
+   * Returns whether the message was sent.
+   */
+  async function send(
+    tab: ShellTab,
+    edit?: { entryId: string; text: string },
+  ): Promise<boolean> {
     const id = active.current[tab.id];
     const conversation = current.current[id];
     if (
@@ -340,7 +350,7 @@ export function useAi(tabs: ShellTab[]) {
       !historyLoaded ||
       pendingWrites.current.get(id) === null
     )
-      return;
+      return false;
     const selection = modelSelection(
       availableModels,
       conversation.model,
@@ -349,14 +359,16 @@ export function useAi(tabs: ShellTab[]) {
       conversation.manualModel,
       conversation.manualEffort,
     );
-    const text = conversation.draft.trim();
-    const compactFocus = parseCompactCommand(text);
+    const text = (edit ? edit.text : conversation.draft).trim();
+    const compactFocus = edit ? null : parseCompactCommand(text);
     if (compactFocus !== null) {
       await compactConversation(tab, id, selection.model, text, compactFocus);
-      return;
+      return true;
     }
+    const rewound = edit ? rewindTo(conversation, edit.entryId) : null;
     if (
       !text ||
+      (edit && (!rewound || parseCompactCommand(text) !== null)) ||
       Object.values(current.current).some(
         (value) => value.serverId === tab.serverId && value.requestId,
       ) ||
@@ -364,7 +376,7 @@ export function useAi(tabs: ShellTab[]) {
       !selection.model ||
       (modelsLoading && !selection.manualModel)
     )
-      return;
+      return false;
     if (!isTauri) {
       update(id, (value) => ({
         ...value,
@@ -377,16 +389,17 @@ export function useAi(tabs: ShellTab[]) {
           },
         ],
       }));
-      return;
+      return false;
     }
     const requestId = crypto.randomUUID();
     const messages = [
-      ...conversation.messages,
+      ...(rewound ? rewound.messages : conversation.messages),
       { role: "user", content: text },
     ];
     update(id, (value) => ({
       ...value,
-      draft: "",
+      // An edit leaves whatever is being typed in the composer alone.
+      draft: edit ? value.draft : "",
       model: selection.model,
       effort: selection.effort,
       manualModel: selection.manualModel,
@@ -396,7 +409,7 @@ export function useAi(tabs: ShellTab[]) {
       stopping: false,
       sessionId: tab.sessionId,
       entries: [
-        ...value.entries,
+        ...(rewound ? rewound.entries : value.entries),
         { id: crypto.randomUUID(), kind: "user", text },
       ],
     }));
@@ -510,6 +523,7 @@ export function useAi(tabs: ShellTab[]) {
       }));
       void flushHistory();
     }
+    return true;
   }
 
   /** `/compact`: summarize this conversation now, between tasks. */
@@ -732,7 +746,9 @@ export function useAi(tabs: ShellTab[]) {
       tabId: string,
       change: (value: AiConversation) => AiConversation,
     ) => update(active.current[tabId], change),
-    send,
+    send: (tab: ShellTab) => send(tab),
+    editAndResend: (tab: ShellTab, entryId: string, text: string) =>
+      send(tab, { entryId, text }),
     stop: (tabId: string) => stop(active.current[tabId]),
     approve: (tabId: string, entryId: string, allow: boolean) =>
       approve(active.current[tabId], entryId, allow),

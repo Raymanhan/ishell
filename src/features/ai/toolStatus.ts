@@ -41,3 +41,47 @@ export function toolStatus(entry: AiEntry) {
     return { kind: "success", label: label(entry, "done") };
   return { kind: "neutral", label: t("未完成") };
 }
+
+/**
+ * The tool card heading: what the call is for, in the model's own words
+ * (`description`), so a list of calls reads as a list of steps. Without one,
+ * the command itself (`literal`, shown in monospace) or the file it touches.
+ */
+export function toolTitle(entry: AiEntry): { title: string; literal: boolean } {
+  const args = entry.arguments || {};
+  const described =
+    typeof args.description === "string"
+      ? args.description.replace(/\s+/g, " ").trim().slice(0, 120)
+      : "";
+  if (described) return { title: described, literal: false };
+  const firstLine = (value: unknown) =>
+    String(value ?? "")
+      .split("\n")
+      .map((line) => line.trim())
+      .find(Boolean) || "";
+  switch (entry.name) {
+    case "shell": {
+      const command = firstLine(args.command) || firstLine(entry.rawArguments);
+      return command
+        ? { title: command, literal: true }
+        : { title: t("执行命令"), literal: false };
+    }
+    case "run_code":
+      return {
+        title: args.language
+          ? t("运行 {0} 代码", String(args.language))
+          : t("运行代码"),
+        literal: false,
+      };
+    case "read_file":
+      return args.path
+        ? { title: t("读取 {0}", String(args.path)), literal: false }
+        : { title: t("读取文件"), literal: false };
+    case "write_file":
+      return args.path
+        ? { title: t("写入 {0}", String(args.path)), literal: false }
+        : { title: t("写入文件"), literal: false };
+    default:
+      return { title: entry.name || "", literal: true };
+  }
+}

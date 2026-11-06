@@ -361,3 +361,70 @@ export function parseCompactCommand(text: string): string | null {
   const match = /^\/compact(?:\s+([\s\S]*))?$/i.exec(text.trim());
   return match ? (match[1] || "").trim() : null;
 }
+
+/** Start of the message that replaces compacted history (`context::compact`). */
+const COMPACTED_HISTORY_PREFIX = "[已压缩的历史上下文";
+
+/** A user bubble that was sent to the model (a `/compact` command is not). */
+function sentToModel(entry: AiEntry): boolean {
+  return (
+    entry.kind === "user" &&
+    Boolean(entry.text) &&
+    parseCompactCommand(entry.text || "") === null
+  );
+}
+
+/**
+ * The conversation as it was just before the user message `entryId` was sent,
+ * for editing that message and running the task again from there. The model
+ * context keeps each request verbatim as `{role: "user", content}`, so the
+ * message is found by counting the user requests sent after it from the end,
+ * and checked by its text. Null when it cannot be rewound exactly: it was
+ * folded into a compaction summary, or it is not a sent message.
+ */
+export function rewindTo(
+  conversation: Pick<AiConversation, "entries" | "messages">,
+  entryId: string,
+): { entries: AiEntry[]; messages: Record<string, unknown>[] } | null {
+  const { entries, messages } = conversation;
+  const index = entries.findIndex((entry) => entry.id === entryId);
+  const entry = entries[index];
+  if (!entry || !sentToModel(entry)) return null;
+  const later = entries.slice(index + 1).filter(sentToModel).length;
+  let seen = 0;
+  for (let at = messages.length - 1; at >= 0; at--) {
+    const message = messages[at];
+    if (message.role !== "user" || typeof message.content !== "string")
+      continue;
+    if (message.content.startsWith(COMPACTED_HISTORY_PREFIX)) return null;
+    if (seen++ < later) continue;
+    return message.content === entry.text
+      ? { entries: entries.slice(0, index), messages: messages.slice(0, at) }
+      : null;
+  }
+  return null;
+}
+
+/** The user messages `rewindTo` can rewind to, found in one pass. */
+export function editableUserEntries(
+  conversation: Pick<AiConversation, "entries" | "messages">,
+): Set<string> {
+  const { entries, messages } = conversation;
+  const ids = new Set<string>();
+  let at = messages.length - 1;
+  for (let index = entries.length - 1; index >= 0; index--) {
+    const entry = entries[index];
+    if (!sentToModel(entry)) continue;
+    while (
+      at >= 0 &&
+      (messages[at].role !== "user" || typeof messages[at].content !== "string")
+    )
+      at--;
+    const content = at >= 0 ? (messages[at].content as string) : null;
+    if (content === null || content.startsWith(COMPACTED_HISTORY_PREFIX))
+      break;
+    if (content === entry.text) ids.add(entry.id);
+    at--;
+  }
+  return ids;
+}

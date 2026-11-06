@@ -183,6 +183,89 @@
   margin: 0;
   white-space: pre-wrap;
 }
+/* Copy / edit float on the bubble's lower edge while it is hovered. */
+.ai-message.user {
+  position: relative;
+}
+.ai-message-actions {
+  position: absolute;
+  right: 8px;
+  bottom: -13px;
+  display: flex;
+  gap: 1px;
+  padding: 1px;
+  border: 1px solid var(--hairline-2);
+  border-radius: 7px;
+  background: var(--panel);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms;
+}
+.ai-message.user:hover .ai-message-actions,
+.ai-message-actions:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+.ai-message-actions .ai-icon {
+  width: 22px;
+  height: 22px;
+}
+.ai-message-actions .ai-icon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.ai-message-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-left: 0;
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.45);
+}
+.ai-message-editor textarea {
+  width: 100%;
+  min-height: 40px;
+  max-height: 240px;
+  padding: 0;
+  resize: none;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  line-height: 1.65;
+}
+.ai-message-editor textarea:focus-visible {
+  outline: none;
+}
+.ai-message-editor small {
+  color: var(--faint);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.ai-message-editor > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.ai-message-editor button {
+  padding: 4px 11px;
+  border: 1px solid var(--hairline-2);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dim);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.ai-message-editor button[type="submit"] {
+  border-color: transparent;
+  background: var(--solid-bg, #f0f1f5);
+  color: var(--solid-text, #1f2025);
+}
+.ai-message-editor button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
 .ai-markdown > :first-child {
   margin-top: 0;
 }
@@ -279,12 +362,26 @@
   display: none;
 }
 .ai-tool summary > strong {
+  min-width: 0;
+  overflow: hidden;
   font-weight: 550;
   color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A bare command, when the model gave no description. */
+.ai-tool summary > strong.literal {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
 }
 .ai-tool summary > span {
+  flex-shrink: 0;
   margin-left: auto;
   font-size: 10px;
+}
+.ai-tool summary > svg {
+  flex-shrink: 0;
 }
 .ai-tool summary > svg:first-child {
   color: var(--vivid-green);
@@ -621,29 +718,70 @@
   border-color: transparent;
   color: var(--solid-text, #1f2025);
 }
-.ai-permission-control {
+/*
+ * Model, effort and permission pickers: fixed-width chips with the arrow
+ * drawn by us, so every platform shows the same compact control instead of
+ * a native select whose arrow drifts to the far edge of a stretched box.
+ */
+.ai-select {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  flex: 0 1 118px;
   min-width: 0;
+  height: 26px;
+  border-radius: 7px;
   color: var(--dim);
 }
-.ai-permission-control > svg {
+.ai-select:hover,
+.ai-select:focus-within {
+  background: var(--control-hover-bg);
+  color: var(--text);
+}
+.ai-select > svg {
+  position: absolute;
   flex: 0 0 auto;
+  pointer-events: none;
+  opacity: 0.75;
 }
-.ai-composer-controls > select.ai-model-select {
-  flex: 1 1 70px;
-  max-width: none;
-}
-.ai-composer-controls > select.ai-effort-select {
-  flex: 0 1 64px;
-  max-width: 22%;
-}
-.ai-permission-control select {
+.ai-composer-controls .ai-select select {
+  flex: 1 1 auto;
   width: 100%;
   max-width: none;
-  font-size: 10px;
+  height: 100%;
+  padding: 0 16px 0 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  color: inherit;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ai-composer-controls .ai-select select:focus-visible {
+  outline: 1px solid rgba(var(--accent-rgb), 0.55);
+  outline-offset: -1px;
+}
+/* Fixed widths; when the panel is narrow the model name gives way first. */
+.ai-select-model {
+  flex: 0 1 132px;
+  min-width: 64px;
+}
+.ai-select-effort {
+  flex: 0 0 58px;
+}
+.ai-select-permission {
+  flex: 0 0.3 100px;
+  min-width: 80px;
+}
+.ai-select > svg:last-child {
+  right: 4px;
+}
+/* The shield sits inside the chip, ahead of the label. */
+.ai-select-permission > svg:first-child {
+  position: absolute;
+  left: 6px;
+}
+.ai-composer-controls .ai-select-permission select {
+  padding-left: 21px;
 }
 .ai-foot {
   display: flex;
