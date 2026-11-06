@@ -773,6 +773,11 @@
   left: -5px;
   width: 10px;
 }
+/* Closed, the divider sits on the window's right edge; its hit area would
+   overflow the clipped workbench by 5px (see .dock-divider). */
+.status-divider:not(.open)::before {
+  content: none;
+}
 .status-panel {
   display: flex;
   flex-direction: column;
@@ -1239,6 +1244,13 @@
   right: 0;
   left: 0;
   height: 10px;
+}
+/* With the file panel closed the divider sits on the dock's bottom edge, and
+   its hit area would hang 5px below it. That made the overflow-hidden dock
+   scrollable by 5px; macOS WebKit scrolls it when the terminal takes focus,
+   shifting the terminal card above the neighbouring cards. */
+.dock-divider:not(.open)::before {
+  content: none;
 }
 .dock-divider::after {
   content: none;
