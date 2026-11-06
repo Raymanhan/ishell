@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.5.7](https://github.com/Raymanhan/ishell/releases/tag/v1.5.7)**
+**[Download iShell v1.5.8](https://github.com/Raymanhan/ishell/releases/tag/v1.5.8)**
 
 Available packages:
 
@@ -349,8 +349,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.5.7
-git push origin v1.5.7
+git tag v1.5.8
+git push origin v1.5.8
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -410,6 +410,8 @@ src-tauri/src/
 ```
 
 ## Recent Changes
+
+- `v1.5.8` adds interface languages: Simplified Chinese, Traditional Chinese, and English, following the system language and switchable live in Settings → Appearance (open windows update too). App error messages are translated, including errors from the desktop backend; server output and AI replies stay as they are, and dates follow the chosen language. AI context compaction now follows the context window declared in the model metadata (at 75% of the window, no longer capped at 200k), with 200k estimated tokens as the default when none is declared. Type `/compact` in the AI chat to compact on demand, optionally followed by what the summary should keep. About and Updates shows the latest versions, with older ones in a collapsible, scrollable list.
 
 - `v1.5.7` hardens AI automatic mode: commands with wildcards, device files, credential-like paths, `docker inspect`/`systemctl show` and endless `tail -f`/`docker stats` now require approval, paths are normalized before checks, and auto-approved reads refuse symlinks to credential files. Long reasoning streams are no longer cut off after five minutes; repeated tool-call IDs from compatible gateways and earlier-turn `reasoning_content` (rejected by DeepSeek) are handled. Compaction follows the model's declared context window (75%, up to 200k), and more context-overflow errors are recognized. Unreadable history records are skipped instead of disabling the AI panel, history saves no longer rewrite continuously while a reply streams, a temporary `/models` failure no longer clears saved models, tool polling backs off when idle, and abandoned remote temp files are cleaned up.
 

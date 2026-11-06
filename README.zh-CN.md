@@ -12,7 +12,7 @@ iShell 是一个基于 Tauri + React + Rust 的轻量级 SSH 桌面工作台，�
 
 请从 GitHub Releases 下载最新版安装包：
 
-**[下载 iShell v1.5.7](https://github.com/Raymanhan/ishell/releases/tag/v1.5.7)**
+**[下载 iShell v1.5.8](https://github.com/Raymanhan/ishell/releases/tag/v1.5.8)**
 
 可用安装包：
 
@@ -269,8 +269,8 @@ npm run tauri -- build --target aarch64-apple-darwin
 推送 `v*` 标签后，GitHub Actions 会自动构建 Release。也可以在 GitHub Actions 页面手动运行 **Build installers** 工作流。
 
 ```bash
-git tag v1.5.7
-git push origin v1.5.7
+git tag v1.5.8
+git push origin v1.5.8
 ```
 
 发布工作流会构建 Windows、Linux、macOS Intel 和 macOS Apple Silicon 安装包，并把产物上传到 GitHub Release。
@@ -319,6 +319,8 @@ src-tauri/src/
 ```
 
 ## 最近更新
+
+- `v1.5.8` 新增多语言界面：支持简体中文、繁體中文和 English，默认跟随系统语言，可在“设置 → 外观”中随时切换，已打开的窗口同步生效；应用及后端返回的错误提示也会翻译，服务器输出和 AI 回复保持原样，日期格式跟随所选语言。AI 上下文自动压缩改为按模型元数据声明的上下文窗口计算（达到窗口的 75% 时压缩，不再限制在 200k），未声明时默认 200k；在 AI 对话中输入 `/compact` 可随时手动压缩，后面可附上需要重点保留的内容。“关于与更新”只显示最近的版本，更早的版本可展开在滚动区域中查看，页面不再被拉长。
 
 - `v1.5.7` 加强 AI 自动模式的权限判断：含通配符、设备文件、疑似凭证路径的命令，以及 `docker inspect`、`systemctl show` 和持续输出的 `tail -f`、`docker stats` 改为需要确认；路径先规范化再判断，自动读取的文件若实际指向凭证会被拒绝。修复长时间推理超过 5 分钟被中断的问题，兼容重复发送工具调用 ID 的网关，不再回传旧轮次的 `reasoning_content`（DeepSeek 会报错）。自动压缩阈值按模型声明的上下文窗口计算（75%，最高 200k），并识别更多上下文超限报错。个别历史记录无法解密时跳过并提示，不再导致 AI 面板不可用；流式回复时不再持续重写历史记录；模型列表接口临时不可用时保存设置不再清空模型；工具输出无变化时降低轮询频率，并自动清理服务器上遗留的临时文件。
 
