@@ -12,7 +12,7 @@ iShell 是一个基于 Tauri + React + Rust 的轻量级 SSH 桌面工作台，�
 
 请从 GitHub Releases 下载最新版安装包：
 
-**[下载 iShell v1.5.11](https://github.com/Raymanhan/ishell/releases/tag/v1.5.11)**
+**[下载 iShell v1.5.12](https://github.com/Raymanhan/ishell/releases/tag/v1.5.12)**
 
 可用安装包：
 
@@ -269,8 +269,8 @@ npm run tauri -- build --target aarch64-apple-darwin
 推送 `v*` 标签后，GitHub Actions 会自动构建 Release。也可以在 GitHub Actions 页面手动运行 **Build installers** 工作流。
 
 ```bash
-git tag v1.5.11
-git push origin v1.5.11
+git tag v1.5.12
+git push origin v1.5.12
 ```
 
 发布工作流会构建 Windows、Linux、macOS Intel 和 macOS Apple Silicon 安装包，并把产物上传到 GitHub Release。
@@ -319,6 +319,8 @@ src-tauri/src/
 ```
 
 ## 最近更新
+
+- `v1.5.12` AI 助手恢复在工具卡片内审核操作：需要确认时对应卡片自动展开，展示目标服务器、目录和完整命令，可直接拒绝或仅允许此次，不再弹出确认窗口。卡片上不再显示“高风险”等风险等级和原因，风险判断仍决定哪些操作需要确认。
 
 - `v1.5.11` 优化 AI 助手的交互与输出：使用输入法时按回车确认候选词不再直接发送消息（macOS 上同样有效）；模型、思考程度和权限选择框改为固定宽度，箭头紧跟文字，面板较窄时模型名优先省略。可以编辑自己发出的消息并从这里重新开始，之后的对话和模型上下文随之替换。输入 `/` 会弹出命令菜单（`/compact`、`/new`、`/history`、`/settings`），支持方向键、Tab、回车和 Esc。工具卡片的标题改为模型对这一步用途的简短说明（如“检查磁盘占用”），未提供时显示命令本身；卡片执行时保持折叠，连续的工具调用合并为一组，新步骤从下方滑入。回复文字经过缓冲后匀速显示，不再按网络分块跳动；“正在处理”改为文字滑动高亮。风险等级不再显示在卡片上，需要确认时弹出确认窗口，展示用途、风险原因、目标服务器、目录和完整命令，高风险操作默认聚焦“拒绝”，点击窗口外不会误操作。
 

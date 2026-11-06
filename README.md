@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.5.11](https://github.com/Raymanhan/ishell/releases/tag/v1.5.11)**
+**[Download iShell v1.5.12](https://github.com/Raymanhan/ishell/releases/tag/v1.5.12)**
 
 Available packages:
 
@@ -349,8 +349,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.5.11
-git push origin v1.5.11
+git tag v1.5.12
+git push origin v1.5.12
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -410,6 +410,8 @@ src-tauri/src/
 ```
 
 ## Recent Changes
+
+- `v1.5.12` brings AI approvals back into the tool card: a step that needs approval opens its card with the target server, directory and full command, and Deny / Allow once buttons, instead of a dialog. Risk levels and reasons such as "高风险" are no longer shown; the risk assessment still decides which steps need approval.
 
 - `v1.5.11` refines the AI assistant. Pressing Enter to commit an input-method candidate no longer sends the message (including on macOS). The model, reasoning and permission pickers have fixed widths with the arrow next to the label, and the model name gives way first in a narrow panel. Your own messages can be edited to run the task again from that point, replacing the conversation and model context after it. Typing `/` opens a command menu (`/compact`, `/new`, `/history`, `/settings`) driven by the arrow keys, Tab, Enter and Esc. Tool cards are titled with the model's short description of the step (such as "检查磁盘占用"), or the command itself when none is given; they stay collapsed while running, consecutive calls are grouped into one list, and new steps slide in. Reply text is buffered and revealed at an even pace instead of jumping by network chunks, and the working status uses a sliding highlight. Risk levels no longer appear on the cards: approvals open a dialog with the step's purpose, risk reason, target server, directory and full command; high-risk steps focus Deny, and a click outside the dialog does not answer it.
 
