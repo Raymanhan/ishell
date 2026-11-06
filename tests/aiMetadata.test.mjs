@@ -42,8 +42,19 @@ test('compaction threshold follows the declared context window like the backend 
   // Same samples as context::tests in src-tauri/src/ai/context.rs.
   assert.equal(compactionThreshold(undefined), 200000);
   assert.equal(compactionThreshold(null), 200000);
-  assert.equal(compactionThreshold(1000000), 200000);
+  assert.equal(compactionThreshold(1000000), 750000);
   assert.equal(compactionThreshold(128000), 96000);
   assert.equal(compactionThreshold(2000), 8000);
   assert.ok(historyWriteDelay(true) > historyWriteDelay(false));
+});
+
+test('/compact is recognized with optional focus text and nothing else is', async () => {
+  const { parseCompactCommand } = await import('../src/features/ai/types.ts');
+  assert.equal(parseCompactCommand('/compact'), '');
+  assert.equal(parseCompactCommand('  /compact  '), '');
+  assert.equal(parseCompactCommand('/compact 保留 nginx 配置\n和端口'), '保留 nginx 配置\n和端口');
+  assert.equal(parseCompactCommand('/COMPACT keep logs'), 'keep logs');
+  assert.equal(parseCompactCommand('/compactness'), null);
+  assert.equal(parseCompactCommand('please /compact'), null);
+  assert.equal(parseCompactCommand('检查服务器'), null);
 });

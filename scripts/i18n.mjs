@@ -58,7 +58,7 @@ export function frontendKeys() {
 
 // Text that only the model reads (system prompts, tool schemas, compaction
 // prompts) is never shown to users and stays in Chinese.
-const MODEL_FACING = ["你只负责压缩", "历史片段", "[已自动压缩", "{system}", "当前权限模式"];
+const MODEL_FACING = ["你只负责压缩", "历史片段", "[已压缩", "[已自动压缩", "（用户要求摘要", "{system}", "当前权限模式"];
 // Messages assembled by string concatenation in the remote runner.
 const EXTRA_BACKEND = ["已写入 {0}"];
 // Hand-reviewed Traditional Chinese that should override the OpenCC output.

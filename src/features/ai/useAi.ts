@@ -17,6 +17,7 @@ import {
   serverHistory,
   modelSelection,
   mergeModelSources,
+  parseCompactCommand,
   type AiConfig,
   type AiConversation,
   type AiEvent,
@@ -349,6 +350,11 @@ export function useAi(tabs: ShellTab[]) {
       conversation.manualEffort,
     );
     const text = conversation.draft.trim();
+    const compactFocus = parseCompactCommand(text);
+    if (compactFocus !== null) {
+      await compactConversation(tab, id, selection.model, text, compactFocus);
+      return;
+    }
     if (
       !text ||
       Object.values(current.current).some(
@@ -501,6 +507,132 @@ export function useAi(tabs: ShellTab[]) {
           running: false,
           approvalPending: false,
         })),
+      }));
+      void flushHistory();
+    }
+  }
+
+  /** `/compact`: summarize this conversation now, between tasks. */
+  async function compactConversation(
+    tab: ShellTab,
+    id: string,
+    model: string,
+    text: string,
+    focus: string,
+  ) {
+    const conversation = current.current[id];
+    if (
+      !conversation ||
+      Object.values(current.current).some(
+        (value) => value.serverId === tab.serverId && value.requestId,
+      )
+    )
+      return;
+    const notice = (message: string) =>
+      update(id, (value) => ({
+        ...value,
+        draft: "",
+        entries: [
+          ...value.entries,
+          { id: crypto.randomUUID(), kind: "user", text },
+          { id: crypto.randomUUID(), kind: "notice", text: message },
+        ],
+      }));
+    if (!conversation.messages.length) {
+      notice(t("暂无可压缩的上下文。"));
+      return;
+    }
+    if (!isTauri) {
+      notice(t("请在桌面客户端使用 /compact，浏览器预览不会调用模型。"));
+      return;
+    }
+    if (!model || (modelsLoading && !conversation.manualModel)) return;
+    const requestId = crypto.randomUUID();
+    const noticeId = crypto.randomUUID();
+    let finished = false;
+    update(id, (value) => ({
+      ...value,
+      draft: "",
+      requestId,
+      stopping: false,
+      compacting: true,
+      entries: [
+        ...value.entries,
+        { id: crypto.randomUUID(), kind: "user", text },
+        {
+          id: noticeId,
+          kind: "notice",
+          text: focus
+            ? t("正在压缩上下文，重点保留：{0}…", focus)
+            : t("正在压缩上下文…"),
+        },
+      ],
+    }));
+    const setNotice = (message: string) =>
+      update(id, (value) => ({
+        ...value,
+        entries: value.entries.map((entry) =>
+          entry.id === noticeId ? { ...entry, text: message } : entry,
+        ),
+      }));
+    const onEvent = new Channel<AiEvent>();
+    onEvent.onmessage = (event) => {
+      if (current.current[id]?.requestId !== requestId) return;
+      if (event.type === "compaction_end") {
+        finished = true;
+        setNotice(
+          t(
+            "已压缩上下文：约 {0}k → {1}k tokens。聊天记录仍可查看。",
+            Math.round((event.beforeTokens || 0) / 1000),
+            Math.round((event.afterTokens || 0) / 1000),
+          ),
+        );
+      }
+    };
+    try {
+      const result = await command<ChatResult>("ai_compact", {
+        input: {
+          requestId,
+          serverId: tab.serverId,
+          model,
+          focus,
+          messages: conversation.messages,
+        },
+        onEvent,
+      });
+      update(id, (value) => ({
+        ...value,
+        messages: result.messages,
+        contextTokens: result.contextTokens ?? value.contextTokens,
+        entries: [
+          ...value.entries,
+          ...(result.error
+            ? [
+                {
+                  id: crypto.randomUUID(),
+                  kind: "error" as const,
+                  text: result.error,
+                },
+              ]
+            : []),
+        ],
+      }));
+    } catch (error) {
+      update(id, (value) => ({
+        ...value,
+        entries: [
+          ...value.entries,
+          { id: crypto.randomUUID(), kind: "error", text: String(error) },
+        ],
+      }));
+    } finally {
+      if (!finished) setNotice(t("本次压缩未完成，原上下文已保留。"));
+      automaticStops.current.delete(requestId);
+      update(id, (value) => ({
+        ...value,
+        requestId: null,
+        stopping: false,
+        compacting: false,
       }));
       void flushHistory();
     }

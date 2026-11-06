@@ -28,14 +28,12 @@ export interface AiModel {
   contextWindow?: number | null;
   manual?: boolean;
 }
+/** Used when the model metadata declares no context window. */
 export const DEFAULT_COMPACTION_THRESHOLD = 200_000;
 /** Mirrors `context::Budget::for_window` in the desktop backend. */
 export function compactionThreshold(contextWindow?: number | null): number {
   if (!contextWindow || contextWindow <= 0) return DEFAULT_COMPACTION_THRESHOLD;
-  return Math.min(
-    DEFAULT_COMPACTION_THRESHOLD,
-    Math.max(8_000, Math.floor((contextWindow * 3) / 4)),
-  );
+  return Math.max(8_000, Math.floor((contextWindow * 3) / 4));
 }
 /** Saving re-encrypts the whole conversation; batch more while a task streams. */
 export function historyWriteDelay(running: boolean): number {
@@ -353,4 +351,13 @@ export function restoreConversation(saved: AiConversation): AiConversation {
         : []),
     ],
   };
+}
+
+/**
+ * `/compact [what to keep]` compacts the conversation instead of sending a
+ * message. Returns the focus text ("" when none), or null for other input.
+ */
+export function parseCompactCommand(text: string): string | null {
+  const match = /^\/compact(?:\s+([\s\S]*))?$/i.exec(text.trim());
+  return match ? (match[1] || "").trim() : null;
 }

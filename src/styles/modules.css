@@ -2788,3 +2788,33 @@ button.detail-row:hover {
   min-height: 0;
   padding: 11px 12px;
 }
+
+/* Older releases open inside a bounded area so Settings stays short. */
+.release-history-older {
+  max-height: 260px;
+  overflow-y: auto;
+  border-top: 1px solid var(--hairline);
+  overscroll-behavior: contain;
+}
+.release-history-older .release-history-item:first-child {
+  border-top: 0;
+}
+.release-history-more {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.release-history-more:hover {
+  color: var(--text);
+}
+.release-history-more[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}

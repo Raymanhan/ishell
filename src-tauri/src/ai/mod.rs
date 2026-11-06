@@ -275,6 +275,15 @@ impl Drop for RunGuard {
 }
 
 fn validate_history(messages: &[Value]) -> Result<(), String> {
+    validate_messages(messages)?;
+    if messages.last().and_then(|m| m["role"].as_str()) != Some("user") {
+        return Err("缺少用户消息".into());
+    }
+    Ok(())
+}
+
+/// Shape checks shared by chats and manual compaction.
+fn validate_messages(messages: &[Value]) -> Result<(), String> {
     if messages.is_empty()
         || messages.len() > 5000
         || serde_json::to_vec(messages)
@@ -295,10 +304,92 @@ fn validate_history(messages: &[Value]) -> Result<(), String> {
             return Err("仅支持文本对话".into());
         }
     }
-    if messages.last().and_then(|m| m["role"].as_str()) != Some("user") {
-        return Err("缺少用户消息".into());
-    }
     Ok(())
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompactInput {
+    request_id: String,
+    server_id: String,
+    model: String,
+    /// Text after `/compact`: what the summary should retain.
+    #[serde(default)]
+    focus: String,
+    messages: Vec<Value>,
+}
+
+/// `/compact`: summarize a conversation between tasks. It only talks to the
+/// model API, but it is registered like a task so it can be stopped and does
+/// not race a running task on the same server.
+#[tauri::command]
+pub async fn ai_compact(
+    app: AppHandle,
+    registry: State<'_, Arc<AiRegistry>>,
+    input: CompactInput,
+    on_event: Channel<Event>,
+) -> Result<ChatResult, String> {
+    uuid::Uuid::parse_str(&input.request_id).map_err(|_| "AI 请求 ID 无效")?;
+    if input.messages.is_empty() {
+        return Err("暂无可压缩的上下文".into());
+    }
+    validate_messages(&input.messages)?;
+    if input.model.trim().is_empty() || input.model.len() > 200 {
+        return Err("请选择模型".into());
+    }
+    if input.focus.len() > 4000 {
+        return Err("压缩要求过长，请控制在 4000 字节以内".into());
+    }
+    let cancel = registry.begin(&input.request_id, &input.server_id)?;
+    let _guard = RunGuard {
+        registry: registry.inner().clone(),
+        id: input.request_id.clone(),
+    };
+    let config = tauri::async_runtime::spawn_blocking(move || config::load(&app))
+        .await
+        .map_err(|e| e.to_string())??;
+    let budget = context::Budget::for_window(
+        config
+            .model_metadata
+            .iter()
+            .find(|model| model.id == input.model)
+            .and_then(|model| model.context_window),
+    );
+    let mut messages = input.messages;
+    let active_request = messages
+        .iter()
+        .rev()
+        .find(|m| m["role"] == "user")
+        .and_then(|m| m["content"].as_str())
+        .unwrap_or_default()
+        .to_string();
+    let result = context::compact(
+        &config,
+        &input.model,
+        &budget,
+        context::Mode::Manual {
+            focus: &input.focus,
+        },
+        &mut messages,
+        &active_request,
+        cancel.clone(),
+        &on_event,
+    )
+    .await;
+    let stopped = cancel.load(Ordering::Relaxed);
+    Ok(ChatResult {
+        context_tokens: context::tokens(&messages),
+        messages,
+        stopped,
+        error: match result {
+            Err(reason) if !stopped => Some(if config.api_key.is_empty() {
+                reason
+            } else {
+                reason.replace(&config.api_key, "[密钥]")
+            }),
+            _ => None,
+        },
+    })
 }
 
 #[tauri::command]
@@ -399,6 +490,7 @@ pub async fn ai_chat(
                 &config,
                 &input.model,
                 &budget,
+                context::Mode::Automatic,
                 &mut messages,
                 active_request,
                 cancel.clone(),
@@ -435,6 +527,7 @@ pub async fn ai_chat(
                         &config,
                         &input.model,
                         &budget,
+                        context::Mode::Automatic,
                         &mut messages,
                         active_request,
                         cancel.clone(),

@@ -55,6 +55,7 @@ pub fn run() {
             ai::ai_save_config,
             ai::ai_list_models,
             ai::ai_chat,
+            ai::ai_compact,
             ai::ai_cancel,
             ai::ai_approve,
             commands::list_servers,

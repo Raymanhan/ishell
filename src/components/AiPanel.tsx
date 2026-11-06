@@ -596,7 +596,7 @@ export function AiPanel({
               : awaiting
                 ? t("请确认上述操作后继续")
                 : conversation.compacting
-                  ? t("正在自动压缩上下文…")
+                  ? t("正在压缩上下文…")
                   : t("正在处理…")}
           </div>
         )}
@@ -810,7 +810,7 @@ export function AiPanel({
             ? t("设置修改于下次发送生效")
             : serverBusy
               ? t("此服务器另有任务执行中，可从历史记录查看")
-              : t("{0} · Shift + Enter 换行", tab.title)}
+              : t("{0} · Shift + Enter 换行 · /compact 压缩上下文", tab.title)}
         </span>
         <span
           className="ai-context-usage"
