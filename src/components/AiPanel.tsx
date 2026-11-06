@@ -5,6 +5,8 @@ import {
   ChevronDown,
   Copy,
   LoaderCircle,
+  History,
+  Trash2,
   Plus,
   RefreshCw,
   Settings,
@@ -22,6 +24,8 @@ import {
   mergeModelSources,
   emptyConversation,
   permissionOptions,
+  serverHistory,
+  conversationTitle,
   type AiEntry,
 } from "../features/ai/types";
 import type { ShellTab } from "../features/shell/types";
@@ -242,11 +246,15 @@ export function AiPanel({
 }) {
   const conversation = ai.conversations[tab.id] || emptyConversation(ai.config);
   const busy = Boolean(conversation.requestId);
+  const serverBusy = ai.serverBusy(tab.serverId);
   const connected = tab.state === "connected";
   const scroller = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const [scrolled, setScrolled] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const history = serverHistory(ai.history, tab.serverId);
   const [editing, setEditing] = useState<"model" | "effort" | null>(null);
   const [manualDraft, setManualDraft] = useState("");
   const [manualError, setManualError] = useState("");
@@ -264,11 +272,11 @@ export function AiPanel({
     follow.current = true;
     setScrolled(false);
     setEditing(null);
-  }, [tab.id]);
+  }, [tab.id, conversation.id]);
   useEffect(() => {
     if (follow.current && scroller.current)
       scroller.current.scrollTop = scroller.current.scrollHeight;
-  }, [conversation.entries, busy, tab.id]);
+  }, [conversation.entries, busy, tab.id, conversation.id]);
   useEffect(() => {
     if (textarea.current) {
       textarea.current.style.height = "auto";
@@ -299,7 +307,6 @@ export function AiPanel({
     setManualError("");
   }
   function commitManual() {
-    if (busy) return;
     const value = manualDraft.trim();
     if (editing === "model") {
       if (
@@ -342,7 +349,7 @@ export function AiPanel({
             type="button"
             title="刷新模型元数据"
             aria-label="刷新模型元数据"
-            disabled={busy || ai.modelsLoading}
+            disabled={ai.modelsLoading}
             onClick={() => void ai.refreshModels()}
           >
             <RefreshCw
@@ -353,10 +360,26 @@ export function AiPanel({
           <button
             className="ai-icon"
             type="button"
+            title="历史记录"
+            aria-label="AI 历史记录"
+            aria-expanded={historyOpen}
+            onClick={() => {
+              setHistoryOpen(!historyOpen);
+              setDeleteId(null);
+            }}
+          >
+            <History size={15} />
+          </button>
+          <button
+            className="ai-icon"
+            type="button"
             title="新建对话"
             aria-label="新建 AI 对话"
-            disabled={busy || !conversation.entries.length}
-            onClick={() => ai.clear(tab.id)}
+            disabled={!ai.historyLoaded || !conversation.entries.length}
+            onClick={() => {
+              ai.newChat(tab);
+              setHistoryOpen(false);
+            }}
           >
             <Plus size={16} />
           </button>
@@ -386,6 +409,105 @@ export function AiPanel({
         <strong>{tab.title}</strong>
         <span>{tab.host}</span>
       </div>
+      {historyOpen && (
+        <div className="ai-history" role="dialog" aria-label="AI 历史记录列表">
+          <header>
+            <strong>历史记录 · {tab.title}</strong>
+            <button
+              type="button"
+              className="ai-icon"
+              aria-label="关闭历史记录"
+              onClick={() => setHistoryOpen(false)}
+            >
+              <X size={14} />
+            </button>
+          </header>
+          <div className="ai-history-list">
+            {!history.length && (
+              <p className="ai-notice">
+                {ai.historyLoaded ? "暂无历史记录" : "正在读取历史记录…"}
+              </p>
+            )}
+            {history.map((item) => (
+              <div
+                key={item.id}
+                className={`ai-history-item${item.id === conversation.id ? " active" : ""}`}
+              >
+                <button
+                  type="button"
+                  className="ai-history-select"
+                  aria-current={
+                    item.id === conversation.id ? "true" : undefined
+                  }
+                  disabled={ai.deletingIds.includes(item.id)}
+                  onClick={() => {
+                    ai.selectHistory(tab, item.id);
+                    setHistoryOpen(false);
+                    setDeleteId(null);
+                  }}
+                >
+                  <strong>{conversationTitle(item)}</strong>
+                  <span>
+                    {new Date(item.updatedAt).toLocaleString()} ·{" "}
+                    {item.requestId
+                      ? "执行中"
+                      : `${item.entries.filter((entry) => entry.kind === "user").length} 条消息`}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="ai-icon"
+                  title={item.requestId ? "请先停止任务再删除" : "删除历史记录"}
+                  aria-label={`删除历史记录：${conversationTitle(item)}`}
+                  disabled={
+                    Boolean(item.requestId) || ai.deletingIds.includes(item.id)
+                  }
+                  onClick={() => setDeleteId(item.id)}
+                >
+                  <Trash2 size={14} />
+                </button>
+                {deleteId === item.id && (
+                  <div className="ai-history-delete">
+                    <span>删除这条对话及其记录？</span>
+                    <button
+                      type="button"
+                      disabled={ai.deletingIds.includes(item.id)}
+                      onClick={() => setDeleteId(null)}
+                    >
+                      取消
+                    </button>
+                    <button
+                      type="button"
+                      disabled={ai.deletingIds.includes(item.id)}
+                      onClick={() => {
+                        void ai
+                          .deleteHistory(item.id)
+                          .then(() => setDeleteId(null));
+                      }}
+                    >
+                      删除
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <small>仅显示当前服务器的记录，保存在本机。</small>
+        </div>
+      )}
+      {ai.historyError && (
+        <div className="ai-error ai-history-error" role="alert">
+          {ai.historyError}
+          <button
+            type="button"
+            className="ai-icon"
+            aria-label="重试历史记录"
+            onClick={() => void ai.retryHistory()}
+          >
+            <RefreshCw size={13} />
+          </button>
+        </div>
+      )}
       <div
         className="ai-messages"
         ref={scroller}
@@ -505,7 +627,6 @@ export function AiPanel({
             <input
               autoFocus
               aria-label="手动值"
-              disabled={busy}
               value={manualDraft}
               maxLength={editing === "model" ? 200 : 64}
               placeholder={
@@ -530,9 +651,7 @@ export function AiPanel({
             <button type="button" onClick={() => setEditing(null)}>
               取消
             </button>
-            <button type="submit" disabled={busy}>
-              应用
-            </button>
+            <button type="submit">应用</button>
           </div>
         </form>
       )}
@@ -574,7 +693,6 @@ export function AiPanel({
             aria-label="AI 模型"
             title={selection.model || "选择模型"}
             value={selection.model}
-            disabled={busy}
             onChange={(e) =>
               e.target.value === "__ishell_manual__"
                 ? openManual("model")
@@ -609,7 +727,6 @@ export function AiPanel({
                 : "服务未声明思考档位，使用默认值"
             }
             value={selection.effort}
-            disabled={busy}
             onChange={(e) =>
               e.target.value === "__ishell_manual__"
                 ? openManual("effort")
@@ -635,7 +752,6 @@ export function AiPanel({
               aria-label="Agent 权限"
               title={`${permission.description}。风险判断是辅助提示，不是隔离沙箱。`}
               value={conversation.permission}
-              disabled={busy}
               onChange={(event) =>
                 patch({
                   permission: event.target
@@ -669,6 +785,9 @@ export function AiPanel({
               aria-label="发送 AI 消息"
               disabled={
                 !connected ||
+                !ai.historyLoaded ||
+                serverBusy ||
+                ai.deletingIds.includes(conversation.id) ||
                 !selection.model ||
                 (ai.modelsLoading && !selection.manualModel) ||
                 !conversation.draft.trim()
@@ -680,7 +799,13 @@ export function AiPanel({
         </div>
       </form>
       <footer className="ai-foot">
-        <span>{tab.title} · Shift + Enter 换行</span>
+        <span>
+          {busy
+            ? "设置修改于下次发送生效"
+            : serverBusy
+              ? "此服务器另有任务执行中，可从历史记录查看"
+              : `${tab.title} · Shift + Enter 换行`}
+        </span>
         <span
           className="ai-context-usage"
           title="估算的模型上下文用量；达到 200k tokens 时自动压缩"

@@ -706,3 +706,105 @@
 .ai-manual-models textarea {
   margin-top: 8px;
 }
+.ai-history {
+  position: absolute;
+  z-index: 4;
+  inset: 72px 11px auto;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100% - 90px);
+  padding: 10px;
+  border: 1px solid var(--hairline-2);
+  border-radius: 11px;
+  background: var(--panel);
+  backdrop-filter: blur(24px);
+  box-shadow: 0 8px 28px #0005;
+}
+.ai-history > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.ai-history > header strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 550;
+}
+.ai-history-list {
+  overflow: auto;
+  min-height: 0;
+}
+.ai-history-item {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-bottom: 4px;
+  border-radius: 7px;
+  padding: 4px;
+}
+.ai-history-item:hover,
+.ai-history-item.active {
+  background: var(--focus-bg);
+}
+.ai-history-select {
+  display: grid;
+  gap: 6px;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.ai-history-select strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.ai-history-select span,
+.ai-history > small {
+  color: var(--dim);
+  font-size: 10px;
+}
+.ai-history > small {
+  padding-top: 9px;
+  line-height: 1.6;
+}
+.ai-history-delete {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+  width: 100%;
+  padding: 6px;
+  font-size: 10px;
+}
+.ai-history-delete span {
+  flex: 1 1 100%;
+  color: var(--dim);
+}
+.ai-history-delete button {
+  padding: 4px 10px;
+  border: 1px solid var(--hairline-2);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.ai-history-delete button:last-child {
+  color: var(--danger);
+}
+.ai-history-error {
+  margin: 8px 13px 0;
+}

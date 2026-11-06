@@ -49,6 +49,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             ai::ai_get_config,
+            ai::history::ai_get_history,
+            ai::history::ai_save_history,
+            ai::history::ai_delete_history,
             ai::ai_save_config,
             ai::ai_list_models,
             ai::ai_chat,

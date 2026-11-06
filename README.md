@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.5.3](https://github.com/Raymanhan/ishell/releases/tag/v1.5.3)**
+**[Download iShell v1.5.4](https://github.com/Raymanhan/ishell/releases/tag/v1.5.4)**
 
 Available packages:
 
@@ -209,7 +209,8 @@ The status panel samples remote host information through SSH:
 
 1. Open **Settings → AI Assistant**, enter an OpenAI-compatible API base URL and key, read model metadata from the service’s `/models` endpoint, select a default model, and save. Models missing from discovery can be added under manual model IDs. Keys are encrypted in the local SQLite database with the existing local encryption key; they are not stored in browser storage or connection exports.
 2. Connect to a server and click the **sparkles SVG button** at the top right. Model, reasoning effort, and agent permissions share one row below the composer. Models and available efforts come from service metadata, including `supported_reasoning_efforts` and Codex `supported_reasoning_levels`; **Default** is used when no levels are declared. The model and effort menus also offer manual input; manually entered models work without `/models`, and explicit effort values are forwarded as entered. Metadata refreshes on startup, after saving settings, or from the sidebar refresh button. Model/effort selections are validated before requests.
-3. Describe a deployment or operations task. The agent can run Shell commands, read/write files, and execute generated Python, Shell, or Node.js code. Every step exposes its command/code, output, and exit status. The server needs Python 3; JavaScript also needs Node.js. Non-interactive elevation uses existing `sudo -n` privileges.
+3. Open the sidebar’s **history icon** to view, continue, or delete conversations for the current server. **+** starts an independent conversation and preserves previous records. Running tasks remain accessible through history and must be stopped before deletion. Model, effort, and permission controls remain editable during execution; changes apply to the next send, while the current task keeps its starting settings.
+4. Describe a deployment or operations task. The agent can run Shell commands, read/write files, and execute generated Python, Shell, or Node.js code. Every step exposes its command/code, output, and exit status. The server needs Python 3; JavaScript also needs Node.js. Non-interactive elevation uses existing `sudo -n` privileges.
 
 Choose permissions below the composer, or set the default for new chats in settings:
 
@@ -224,7 +225,7 @@ Approval cards show the target server, complete command/code, paths, risk level,
 
 Conversations and tasks stay bound to their originating terminal connection. Switching tabs does not redirect a running task. Closing the sidebar preserves the conversation; closing or reconnecting the terminal requests cancellation. Stop is available at any time; completed changes are retained. Tools default to a 120-second timeout, allow up to 1800 seconds, and return bounded output with truncation markers.
 
-Context automatically compacts at **200k estimated tokens** into a summary that retains the original task, recent complete tool groups, key results, and remaining work. Visible chat history remains available; failed/canceled compaction preserves the original context. A provider context-limit error also triggers one compaction attempt. Conversations last for the current window session. Task messages, necessary server details, and tool output are sent to the configured model API.
+Context automatically compacts at **200k estimated tokens** into a summary that retains the original task, recent complete tool groups, key results, and remaining work. Visible chat history remains available; failed/canceled compaction preserves the original context. A provider context-limit error also triggers one compaction attempt. Conversations and tool results are encrypted locally and can be reopened after restarting; interrupted tasks never resume automatically. Task messages, necessary server details, and tool output are sent to the configured model API.
 
 ### Settings
 
@@ -320,8 +321,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.5.3
-git push origin v1.5.3
+git tag v1.5.4
+git push origin v1.5.4
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -381,6 +382,8 @@ src-tauri/src/
 ```
 
 ## Recent Changes
+
+- `v1.5.4` adds per-server AI conversation history with reopen, continue, and delete actions; **+** preserves existing chats and starts an independent conversation. Chats and tool results are encrypted locally and survive restarts. Model, effort, and permissions remain editable during execution and apply to the next send; background output stays with its original task.
 
 - `v1.5.3` reads AI models and reasoning levels from the configured service metadata, refreshes stale selections, and supports manual model IDs / reasoning efforts when discovery is unavailable or incomplete. Model, effort, and permissions now share one row; context usage moves to the footer.
 

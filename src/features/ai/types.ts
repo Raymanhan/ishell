@@ -134,6 +134,10 @@ export interface AiEntry {
   approved?: boolean;
 }
 export interface AiConversation {
+  id: string;
+  serverId: string;
+  createdAt: number;
+  updatedAt: number;
   entries: AiEntry[];
   messages: Record<string, unknown>[];
   model: string;
@@ -182,6 +186,10 @@ export const defaultAiConfig: AiConfig = {
 };
 export function emptyConversation(config: AiConfig): AiConversation {
   return {
+    id: "",
+    serverId: "",
+    createdAt: 0,
+    updatedAt: 0,
     entries: [],
     messages: [],
     model: config.defaultModel || config.models[0] || "",
@@ -257,4 +265,72 @@ export function applyAiEvent(
     );
   }
   return entries;
+}
+
+export function createConversation(
+  config: AiConfig,
+  serverId: string,
+): AiConversation {
+  const now = Date.now();
+  return {
+    ...emptyConversation(config),
+    id: crypto.randomUUID(),
+    serverId,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+export function conversationTitle(conversation: AiConversation): string {
+  return (
+    conversation.entries
+      .find((entry) => entry.kind === "user")
+      ?.text?.trim()
+      .replace(/\s+/g, " ")
+      .slice(0, 80) || "新对话"
+  );
+}
+
+export function serverHistory(
+  conversations: Record<string, AiConversation>,
+  serverId: string,
+): AiConversation[] {
+  return Object.values(conversations)
+    .filter((value) => value.serverId === serverId && value.entries.length > 0)
+    .sort(
+      (a, b) =>
+        b.updatedAt - a.updatedAt ||
+        b.createdAt - a.createdAt ||
+        a.id.localeCompare(b.id),
+    );
+}
+
+/** Restoring history never resumes a tool or reuses an old approval. */
+export function restoreConversation(saved: AiConversation): AiConversation {
+  const interrupted = Boolean(saved.requestId);
+  return {
+    ...saved,
+    requestId: null,
+    sessionId: null,
+    stopping: false,
+    compacting: false,
+    entries: [
+      ...saved.entries.map((entry) => ({
+        ...entry,
+        running: false,
+        approvalPending: false,
+        approvalBusy: false,
+        approvalId: undefined,
+      })),
+      ...(interrupted
+        ? [
+            {
+              id: crypto.randomUUID(),
+              kind: "notice" as const,
+              text: "上次任务在应用关闭前未结束。请先检查服务器现状；继续对话不会自动重放此前操作。",
+            },
+          ]
+        : []),
+    ],
+  };
 }

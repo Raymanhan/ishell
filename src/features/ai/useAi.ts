@@ -6,7 +6,9 @@ import type { ShellTab } from "../shell/types";
 import {
   applyAiEvent,
   defaultAiConfig,
-  emptyConversation,
+  createConversation,
+  restoreConversation,
+  serverHistory,
   modelSelection,
   mergeModelSources,
   type AiConfig,
@@ -28,7 +30,15 @@ export function useAi(tabs: ShellTab[]) {
   const [models, setModels] = useState<AiModel[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState("");
-  const [configLoaded, setConfigLoaded] = useState(false);
+  const [configLoaded, setConfigLoaded] = useState(!isTauri);
+  const [historyLoaded, setHistoryLoaded] = useState(!isTauri);
+  const [historyError, setHistoryError] = useState("");
+  const [activeIds, setActiveIds] = useState<Record<string, string>>({});
+  const active = useRef(activeIds);
+  const pendingWrites = useRef(new Map<string, AiConversation | null>());
+  const writeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const writing = useRef<Promise<void> | null>(null);
+  const [deletingIds, setDeletingIds] = useState<string[]>([]);
   const modelsGeneration = useRef(0);
   const [conversations, setConversations] = useState<
     Record<string, AiConversation>
@@ -39,16 +49,133 @@ export function useAi(tabs: ShellTab[]) {
   configRef.current = config;
   const availableModels = mergeModelSources(models, config.manualModels || []);
 
+  // One serialized queue prevents an older save from reviving a deleted task.
+  function removeHistory(id: string) {
+    const next = { ...current.current };
+    delete next[id];
+    current.current = next;
+    setConversations(next);
+    const remaining = Object.fromEntries(
+      Object.entries(active.current).filter(([, selected]) => selected !== id),
+    );
+    active.current = remaining;
+    setActiveIds(remaining);
+    setDeletingIds((ids) => ids.filter((value) => value !== id));
+  }
+
+  function flushHistory(): Promise<void> {
+    if (!isTauri || !pendingWrites.current.size) return Promise.resolve();
+    if (writing.current) return writing.current;
+    writing.current = (async () => {
+      try {
+        while (pendingWrites.current.size) {
+          const [id, value] = pendingWrites.current.entries().next().value!;
+          if (value) await command("ai_save_history", { input: value });
+          else {
+            await command("ai_delete_history", { id });
+            removeHistory(id);
+          }
+          if (pendingWrites.current.get(id) === value)
+            pendingWrites.current.delete(id);
+        }
+        setHistoryError("");
+      } catch (error) {
+        setHistoryError(`历史记录保存或删除失败：${error}`);
+      } finally {
+        writing.current = null;
+      }
+    })();
+    return writing.current;
+  }
+
+  function persist(id: string, value: AiConversation | null) {
+    if (!isTauri) return;
+    pendingWrites.current.set(id, value);
+    if (!writeTimer.current)
+      writeTimer.current = setTimeout(() => {
+        writeTimer.current = null;
+        void flushHistory();
+      }, 500);
+  }
+
   function update(
     id: string,
     change: (conversation: AiConversation) => AiConversation,
   ) {
-    const value = change(
-      current.current[id] || emptyConversation(configRef.current),
-    );
+    const previous = current.current[id];
+    if (!previous || pendingWrites.current.get(id) === null) return;
+    const value = { ...change(previous), updatedAt: Date.now() };
     current.current = { ...current.current, [id]: value };
     setConversations(current.current);
+    if (value.entries.length) persist(id, value);
   }
+
+  function activate(tabId: string, id: string) {
+    active.current = { ...active.current, [tabId]: id };
+    setActiveIds(active.current);
+  }
+
+  function newChat(tab: ShellTab) {
+    if (!historyLoaded) return;
+    const previous = current.current[active.current[tab.id]];
+    if (previous && !previous.entries.length) return;
+    const value = {
+      ...createConversation(configRef.current, tab.serverId),
+      ...(previous
+        ? {
+            model: previous.model,
+            effort: previous.effort,
+            manualModel: previous.manualModel,
+            manualEffort: previous.manualEffort,
+            permission: previous.permission,
+          }
+        : {}),
+    };
+    current.current = { ...current.current, [value.id]: value };
+    setConversations(current.current);
+    activate(tab.id, value.id);
+  }
+
+  async function loadHistory() {
+    try {
+      const saved = await command<AiConversation[]>("ai_get_history");
+      current.current = Object.fromEntries(
+        saved.map((value) => [value.id, restoreConversation(value)]),
+      );
+      setConversations(current.current);
+      setHistoryLoaded(true);
+      setHistoryError("");
+    } catch (error) {
+      setHistoryError(`历史记录读取失败：${error}`);
+    }
+  }
+
+  async function deleteHistory(id: string) {
+    const value = current.current[id];
+    if (!value || value.requestId) return;
+    if (!isTauri) {
+      removeHistory(id);
+      return;
+    }
+    setDeletingIds((ids) => (ids.includes(id) ? ids : [...ids, id]));
+    persist(id, null);
+    await flushHistory();
+  }
+
+  useEffect(() => {
+    if (isTauri) void loadHistory();
+  }, []);
+
+  useEffect(() => {
+    if (!historyLoaded || !configLoaded) return;
+    for (const tab of tabs) {
+      if (!current.current[active.current[tab.id]]) {
+        const last = serverHistory(current.current, tab.serverId)[0];
+        if (last) activate(tab.id, last.id);
+        else newChat(tab);
+      }
+    }
+  }, [tabs, historyLoaded, configLoaded, activeIds]);
 
   useEffect(() => {
     if (isTauri)
@@ -59,6 +186,8 @@ export function useAi(tabs: ShellTab[]) {
         })
         .catch((e) => setConfigError(String(e)));
     return () => {
+      if (writeTimer.current) clearTimeout(writeTimer.current);
+      void flushHistory();
       for (const conversation of Object.values(current.current)) {
         if (isTauri && conversation.requestId)
           void command("ai_cancel", {
@@ -104,23 +233,20 @@ export function useAi(tabs: ShellTab[]) {
 
   useEffect(() => {
     for (const [id, conversation] of Object.entries(current.current)) {
-      const tab = tabs.find((tab) => tab.id === id);
+      const tab = tabs.find(
+        (tab) =>
+          tab.serverId === conversation.serverId &&
+          tab.sessionId === conversation.sessionId &&
+          tab.state === "connected",
+      );
       if (
         conversation.requestId &&
         !conversation.stopping &&
         !automaticStops.current.has(conversation.requestId) &&
-        (!tab ||
-          tab.state !== "connected" ||
-          tab.sessionId !== conversation.sessionId)
+        !tab
       ) {
         automaticStops.current.add(conversation.requestId);
         void stop(id);
-      }
-      if (!tab && !conversation.requestId) {
-        const next = { ...current.current };
-        delete next[id];
-        current.current = next;
-        setConversations(next);
       }
     }
   }, [tabs, conversations]);
@@ -148,8 +274,14 @@ export function useAi(tabs: ShellTab[]) {
   }
 
   async function send(tab: ShellTab) {
-    const conversation =
-      current.current[tab.id] || emptyConversation(configRef.current);
+    const id = active.current[tab.id];
+    const conversation = current.current[id];
+    if (
+      !conversation ||
+      !historyLoaded ||
+      pendingWrites.current.get(id) === null
+    )
+      return;
     const selection = modelSelection(
       availableModels,
       conversation.model,
@@ -161,14 +293,16 @@ export function useAi(tabs: ShellTab[]) {
     const text = conversation.draft.trim();
     if (
       !text ||
-      conversation.requestId ||
+      Object.values(current.current).some(
+        (value) => value.serverId === tab.serverId && value.requestId,
+      ) ||
       tab.state !== "connected" ||
       !selection.model ||
       (modelsLoading && !selection.manualModel)
     )
       return;
     if (!isTauri) {
-      update(tab.id, (value) => ({
+      update(id, (value) => ({
         ...value,
         entries: [
           ...value.entries,
@@ -186,7 +320,7 @@ export function useAi(tabs: ShellTab[]) {
       ...conversation.messages,
       { role: "user", content: text },
     ];
-    update(tab.id, (value) => ({
+    update(id, (value) => ({
       ...value,
       draft: "",
       model: selection.model,
@@ -202,14 +336,15 @@ export function useAi(tabs: ShellTab[]) {
         { id: crypto.randomUUID(), kind: "user", text },
       ],
     }));
+    void flushHistory();
     let assistantId = crypto.randomUUID();
     let compactionId = crypto.randomUUID();
     const onEvent = new Channel<AiEvent>();
     onEvent.onmessage = (event) => {
-      if (current.current[tab.id]?.requestId !== requestId) return;
+      if (current.current[id]?.requestId !== requestId) return;
       if (event.type === "compaction_start") {
         compactionId = crypto.randomUUID();
-        update(tab.id, (value) => ({
+        update(id, (value) => ({
           ...value,
           compacting: true,
           contextTokens: event.beforeTokens || value.contextTokens,
@@ -223,7 +358,7 @@ export function useAi(tabs: ShellTab[]) {
           ],
         }));
       } else if (event.type === "compaction_end") {
-        update(tab.id, (value) => ({
+        update(id, (value) => ({
           ...value,
           compacting: false,
           contextTokens: event.afterTokens || 0,
@@ -238,7 +373,7 @@ export function useAi(tabs: ShellTab[]) {
         }));
       } else if (event.type === "round") assistantId = crypto.randomUUID();
       else
-        update(tab.id, (value) => ({
+        update(id, (value) => ({
           ...value,
           entries: applyAiEvent(value.entries, event, assistantId),
         }));
@@ -259,7 +394,7 @@ export function useAi(tabs: ShellTab[]) {
         },
         onEvent,
       });
-      update(tab.id, (value) => ({
+      update(id, (value) => ({
         ...value,
         messages: result.messages,
         contextTokens: result.contextTokens ?? value.contextTokens,
@@ -286,7 +421,7 @@ export function useAi(tabs: ShellTab[]) {
         ],
       }));
     } catch (error) {
-      update(tab.id, (value) => ({
+      update(id, (value) => ({
         ...value,
         entries: [
           ...value.entries,
@@ -295,7 +430,7 @@ export function useAi(tabs: ShellTab[]) {
       }));
     } finally {
       automaticStops.current.delete(requestId);
-      update(tab.id, (value) => ({
+      update(id, (value) => ({
         ...value,
         requestId: null,
         stopping: false,
@@ -309,20 +444,10 @@ export function useAi(tabs: ShellTab[]) {
           approvalPending: false,
         })),
       }));
+      void flushHistory();
     }
   }
 
-  function clear(id: string) {
-    if (current.current[id]?.requestId) return;
-    update(id, (value) => ({
-      ...emptyConversation(configRef.current),
-      model: value.model,
-      effort: value.effort,
-      manualModel: value.manualModel,
-      manualEffort: value.manualEffort,
-      permission: value.permission,
-    }));
-  }
   async function approve(id: string, entryId: string, allow: boolean) {
     const conversation = current.current[id];
     const entry = conversation?.entries.find((entry) => entry.id === entryId);
@@ -376,14 +501,34 @@ export function useAi(tabs: ShellTab[]) {
     refreshModels,
     setConfig: (value: AiConfig) => {
       setConfig(value);
+      setConfigLoaded(true);
       setConfigError("");
     },
-    conversations,
-    update,
+    conversations: Object.fromEntries(
+      tabs.map((tab) => [tab.id, conversations[activeIds[tab.id]]]),
+    ),
+    history: conversations,
+    historyLoaded,
+    historyError,
+    deletingIds,
+    retryHistory: () => (historyLoaded ? flushHistory() : loadHistory()),
+    serverBusy: (serverId: string) =>
+      Object.values(conversations).some(
+        (value) => value.serverId === serverId && value.requestId,
+      ),
+    selectHistory: (tab: ShellTab, id: string) => {
+      if (current.current[id]?.serverId === tab.serverId) activate(tab.id, id);
+    },
+    deleteHistory,
+    newChat,
+    update: (
+      tabId: string,
+      change: (value: AiConversation) => AiConversation,
+    ) => update(active.current[tabId], change),
     send,
-    stop,
-    clear,
-    approve,
+    stop: (tabId: string) => stop(active.current[tabId]),
+    approve: (tabId: string, entryId: string, allow: boolean) =>
+      approve(active.current[tabId], entryId, allow),
   };
 }
 export type AiController = ReturnType<typeof useAi>;

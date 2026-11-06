@@ -1,5 +1,6 @@
 mod config;
 mod context;
+pub mod history;
 mod metadata;
 mod permissions;
 mod provider;
