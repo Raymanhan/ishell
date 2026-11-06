@@ -1,415 +1,227 @@
 # iShell
 
-[![Build installers](https://github.com/Raymanhan/ishell/actions/workflows/release.yml/badge.svg)](https://github.com/Raymanhan/ishell/actions/workflows/release.yml)
+**An all-in-one SSH workbench with a built-in AI server assistant.**
+
 [![Release](https://img.shields.io/github/v/release/Raymanhan/ishell?label=release)](https://github.com/Raymanhan/ishell/releases/latest)
+[![CI](https://github.com/Raymanhan/ishell/actions/workflows/ci.yml/badge.svg)](https://github.com/Raymanhan/ishell/actions/workflows/ci.yml)
+[![Build installers](https://github.com/Raymanhan/ishell/actions/workflows/release.yml/badge.svg)](https://github.com/Raymanhan/ishell/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-iShell is a lightweight Tauri + React + Rust SSH workbench for managing remote
-servers from one compact desktop interface. It combines server profiles,
-interactive terminals, SFTP file operations, small-file text editing, command
-history, live telemetry, and a translucent desktop UI.
+iShell is an open-source SSH desktop workbench for developers, operators, and self-hosters. Connect to your servers, work across split terminals, transfer files, edit configurations, follow logs, and inspect resource usage from a single window.
+
+The built-in **AI server assistant** turns deployment and troubleshooting requests into tool-assisted steps over the active SSH connection: run commands, read and write files, and generate and execute code, with visible output for each step. Connect your own OpenAI-compatible model service and choose the model, reasoning effort, and operation permissions.
+
+You can also launch installed AI CLIs such as Codex and Claude Code in remote projects and keep **AI sessions, code diffs, tests, and logs** side by side.
+
+Built with **Tauri 2 + React 19 + Rust**, available for Windows, macOS, and Linux, and released under the MIT license.
+
+**[Download the latest release](https://github.com/Raymanhan/ishell/releases/latest)** · [AI assistant setup](#ai-assistant-quick-start) · [AI coding workflow](#ai-coding-workflow) · [Features](#features) · [Report an issue](https://github.com/Raymanhan/ishell/issues)
 
 **Languages**: English | [简体中文](README.zh-CN.md)
 
-## Download
+## Why iShell?
 
-Get the latest installers from GitHub Releases:
-
-**[Download iShell v1.5.12](https://github.com/Raymanhan/ishell/releases/tag/v1.5.12)**
-
-Available packages:
-
-- **Windows x64**: `.exe` and `.msi`
-- **macOS Intel**: `.dmg`
-- **macOS Apple Silicon**: `.dmg`
-- **Linux x64**: `.AppImage`, `.deb`, and `.rpm`
-
-## Highlights
-
-- **Interface languages**: Simplified Chinese, Traditional Chinese, and
-  English, following the system language by default and switchable live in
-  Settings → Appearance.
-- **SSH manager**: grouped and searchable connection tree with tags, notes, and
-  per-host colors.
-- **Persistent ordering**: connection order and folder placement are stored in
-  the local database.
-- **Secure secrets**: passwords are stored through the OS keychain/secret store,
-  not as plain text in exported connection files.
-- **Import and export**: export selected hosts or folders as JSON/ZIP, with
-  optional passphrase-protected secrets.
-- **Interactive terminals**: xterm-powered tabs backed by real PTY sessions,
-  reconnect support, tab cloning, tab reordering, tab handoff between windows,
-  command history, and search in the terminal output.
-- **Split panes and broadcast input**: split a tab into up to four nested
-  panes, and mirror typing to several sessions at once.
-- **Command snippets**: save frequent commands and send or run them with one
-  click, on every broadcast session if broadcasting.
-- **Jump hosts**: reach a server through another saved server, chained if
-  needed, with each hop using its own user and password or key.
-- **Port forwarding**: local (-L), remote (-R) and dynamic SOCKS5 (-D) forwards
-  per server, running in the background with live status.
-- **OpenSSH and russh transports**: macOS/Linux use the system OpenSSH client;
-  Windows uses a pure-Rust `russh` backend with pooled sessions.
-- **SFTP browser**: column or tree browsing, upload, download, rename, delete,
-  mkdir, context menus, symlink-aware entries, terminal directory jump, remote
-  text editing for small files, and a separate live tail viewer for log files.
-- **Live monitoring**: CPU, GPU, memory, swap, disk, load, process rankings,
-  and network throughput per connected host, plus one-click host/IP copy.
-- **Glass desktop UI**: transparent native window, nine themes (including
-  Otty-style and Claude Code-style floating-card themes), xterm transparency,
-  and platform-tuned font rendering.
-
-## Quick Start
-
-1. Download the installer for your platform from
-   [Releases](https://github.com/Raymanhan/ishell/releases/latest).
-2. Install and open iShell.
-3. Open the connection manager from the top bar.
-4. Create a folder if needed, then add a server profile.
-5. Choose password or SSH key authentication and save the profile.
-6. Double-click a server, or use the context menu, to open a terminal tab.
-7. Use the top bar to open SFTP, live status, command history, settings, or
-   connection management.
-
-## User Guide
-
-### Connections
-
-- Use the connection manager to search, select, group, edit, import, export, and
-  delete server profiles.
-- Right-click a server to connect, clone, rename, edit, export, or delete it.
-- Right-click a folder or empty area to rename folders, create folders, add
-  servers, import, or export.
-- Multi-select supported items before running bulk export or delete actions.
-- New and edited servers keep a `sortOrder`, so the connection tree remains
-  stable after restart.
-- Connection groups are sorted by saved order, then by natural name order for
-  predictable browsing.
-
-### Server Profiles
-
-Each profile includes:
-
-- Name, host, port, username, group, tags, color, and notes
-- Authentication type: password or private key
-- Optional private key path
-- Optional jump host: another saved server to connect through first; a jump
-  host can have its own jump host (up to three hops)
-- A built-in connection test before saving
-- Password visibility toggle while editing
-
-Secrets are stored separately from profile metadata. When exporting
-connections, secret export is optional and can be passphrase-protected.
-
-### Terminal Tabs
-
-- Each connected host opens as a tab.
-- Tabs can be activated, closed, cloned, reconnected, and reordered.
-- Tabs can be dragged out and handed off to another iShell window.
-- Closing the native window closes active terminal tabs and hides the app
-  instead of leaving background sessions behind.
-- Right-click a tab for tab-level actions.
-- The top bar can stay visible or auto-hide until the pointer reaches the top
-  edge.
-- The terminal font size is configurable in Settings.
-- Command history can be searched and pasted back into the active terminal.
-- Search the terminal output with `⌘F` (macOS) or `Ctrl+Shift+F`
-  (Windows/Linux), with case, whole-word and regex options.
-
-### Split Panes and Broadcast Input
-
-- Right-click a tab and choose **Split right** or **Split down**, or press
-  `⌘D` / `⇧⌘D` (macOS) or `Ctrl+Shift+D` / `Ctrl+Shift+E` (Windows/Linux) in
-  a terminal. The new pane connects to the same server.
-- Right-click a server in the connection manager and choose **Connect in
-  split** to open a different server next to the current pane.
-- Splits nest, up to four panes per tab. Drag the dividers to resize, click a
-  pane to focus it; the file and monitoring panels follow the focused pane.
-- The broadcast button in the top bar mirrors what you type in one selected
-  session to the others. It starts with the panes of the current tab (or every
-  session when the tab is not split); the bar below the terminals toggles
-  individual sessions.
-
-### Command Snippets
-
-- Open **Snippets** from the top bar to save frequent commands with a name and
-  an optional note.
-- A snippet either runs right away (Enter is pressed) or is only typed in for
-  editing; multi-line snippets are sent line by line.
-- Click a snippet to send it to the focused pane, or to every broadcast session
-  while broadcasting.
-- Snippets are stored in the local database.
-
-### Port Forwarding
-
-Open **Port forwarding** from the top bar to add rules for the current server:
-
-- **Local (-L)**: a port on this computer that reaches an address the server
-  can reach, e.g. a database only open to the server.
-- **Remote (-R)**: a port on the server whose connections are passed to an
-  address this computer can reach.
-- **SOCKS (-D)**: a SOCKS5 proxy on this computer that reaches the network
-  through the server.
-
-Forwards run in the background independent of tabs and all stop when iShell
-quits. The panel shows each forward's live state and, on failure, the reason.
-A forward can start automatically when a terminal to its server connects. Jump
-hosts apply to forwards too.
-
-### SFTP
-
-Open the file panel for the active terminal tab to browse the remote filesystem.
-
-Supported operations:
-
-- Switch between tree/detail and multi-column browsing.
-- Opening a directory expands its ancestors and scrolls the tree to the current directory.
-- Hold `Command` (macOS) or `Ctrl` (Windows/Linux) and click a `user@host:directory` terminal prompt to open that directory in the file panel. Home-directory paths (`~`) and absolute paths are supported.
-- Upload files or folders to the current directory, including folder drag and drop. If a same-named remote folder exists, iShell asks before replacing it in full; replacement does not merge and removes remote-only entries.
-- Download selected files; newly queued transfers appear at the top of the
-  transfer list.
-- Create folders, rename entries, and delete one or more entries.
-- Symlinks are shown with link icons and safer delete messaging.
-- Jump the active terminal to the selected remote directory from the SFTP
-  context menu.
-- Open small text files in the built-in editor and save changes back to the
-  remote host.
-- Open a live tail viewer for a selected file to follow appended log output in
-  a dedicated desktop window.
-- Drag text selection beyond the editor's left or right edge to keep selecting
-  while the editor scrolls horizontally.
-- Use the path bar to jump directly to a directory.
-
-Text editing is intentionally limited to small files so the UI remains
-responsive and safe for remote sessions.
-
-### Live Tail Viewer
-
-- Open **Live Tail** from the SFTP context menu for a file on the active host.
-- iShell opens the viewer in a separate desktop window so long-running logs do
-  not take over the main workbench.
-- Choose how many trailing lines to load before following new output.
-- Pause following, resume at the bottom, clear the current buffer, or restart
-  the tail session from the viewer toolbar.
-- The viewer streams through the same SSH backend as the active host and stops
-  its remote process when the window closes.
-
-### Live Status
-
-The status panel samples remote host information through SSH:
-
-- CPU usage
-- GPU usage and VRAM when the remote host exposes supported metrics
-- Memory and swap
-- Disk mounts
-- Load average
-- Process count
-- Top CPU and memory processes
-- Network upload/download throughput
-- Host/IP copy shortcut
-
-### AI Server Assistant
-
-1. Open **Settings → AI Assistant**, enter an OpenAI-compatible API base URL and key, read model metadata from the service’s `/models` endpoint, select a default model, and save. Models missing from discovery can be added under manual model IDs. Keys are encrypted in the local SQLite database with the existing local encryption key; they are not stored in browser storage or connection exports.
-2. Connect to a server and click the **sparkles SVG button** at the top right. Model, reasoning effort, and agent permissions share one row below the composer. Models and available efforts come from service metadata, including `supported_reasoning_efforts` and Codex `supported_reasoning_levels`; **Default** is used when no levels are declared. The model and effort menus also offer manual input; manually entered models work without `/models`, and explicit effort values are forwarded as entered. Metadata refreshes on startup, after saving settings, or from the sidebar refresh button. Model/effort selections are validated before requests.
-3. Open the sidebar’s **history icon** to view, continue, or delete conversations for the current server. **+** starts an independent conversation and preserves previous records. Running tasks remain accessible through history and must be stopped before deletion. Model, effort, and permission controls remain editable during execution; changes apply to the next send, while the current task keeps its starting settings.
-4. Describe a deployment or operations task. The agent can run Shell commands, read/write files, and execute generated Python, Shell, or Node.js code. Every step exposes its command/code, output, and a readable success/failure status, with the real exit code available in expanded details. The server needs Python 3; JavaScript also needs Node.js. Non-interactive elevation uses existing `sudo -n` privileges.
-
-Model, reasoning effort, and manual input choices are cached locally as soon as they change, separately for each model service; permissions are remembered per server. New chats, reopened empty chats, and app restarts reuse these choices. Existing history and unsent drafts keep their own settings.
-
-Choose permissions below the composer, or set the default for new chats in settings:
-
-| Mode | Behavior |
+| Your workflow | How iShell helps |
 | --- | --- |
-| Suggestions only | No server tools are executed |
-| Confirm before execution | Every tool requires approval |
-| Automatic, low risk (default) | Recognized low-risk queries run automatically; writes, arbitrary code, and unrecognized commands require approval |
-| Full access | Tools for the requested task run without individual approval |
+| Describe a deployment, log investigation, or troubleshooting task | The AI assistant calls server tools and shows steps and results under your chosen permission mode |
+| Use Codex or Claude Code in a server-side project | Keep AI sessions, diffs, tests, and logs in split panes, with terminal background reporting for theme compatibility |
+| Manage development, staging, and production hosts | Organize connections with folders, search, tags, and colors; work in up to four panes |
+| Run the same checks on several machines | Combine broadcast input with saved command snippets for selected sessions |
+| Upload files, change a configuration, and verify a service | Keep remote files beside the active terminal and return to the shell after editing |
+| Investigate a deployment, a slow service, or a GPU job | Follow logs in a separate window while inspecting resources and process rankings |
+| Reach services behind a jump host | Chain up to three jump hosts and use local, remote, or SOCKS5 forwarding |
 
-A step that needs approval opens its tool card to show the target server, the working directory, and the complete command/code, with Deny and Allow once; the risk assessment decides whether to ask but is not shown on the card. Tool cards stay collapsed and are titled with the model's short description of the step; consecutive tool calls are grouped. Classification uses conservative rules and is not a sandbox; SSH account privileges still apply.
+## Features
 
-Conversations and tasks stay bound to their originating terminal connection. Switching tabs does not redirect a running task. Closing the sidebar preserves the conversation; closing or reconnecting the terminal requests cancellation. Stop is available at any time; completed changes are retained. Tools default to a 120-second timeout, allow up to 1800 seconds, and return bounded output with truncation markers.
+### 1. Built-in AI server assistant: from goals to actions and results
 
-Context automatically compacts at **75% of the context window declared in the model metadata** (200k estimated tokens when the metadata declares none) into a summary that retains the original task, recent complete tool groups, key results, and remaining work. Visible chat history remains available; failed/canceled compaction preserves the original context. A provider context-limit error also triggers one compaction attempt. Type `/compact` in the chat to compact on demand; text after it (for example `/compact keep the nginx changes`) tells the summary what to retain. Typing `/` in the input lists the available commands (`/compact`, `/new`, `/history`, `/settings`), chosen with the arrow keys, Tab and Enter. Hover one of your messages to edit it and run the task again from there: the conversation and model context after it are replaced, and actions already run on the server are not undone; messages folded into a summary cannot be edited. Automatic mode treats wildcards, device files, credential-like paths, `docker inspect`/`systemctl show` (which print environment values) as requiring approval, and an auto-approved `read_file` refuses links that resolve to credential files. Conversations and tool results are encrypted locally and can be reopened after restarting; interrupted tasks never resume automatically. Task messages, necessary server details, and tool output are sent to the configured model API.
+- **Natural-language server tasks**: describe deployment, inspection, or troubleshooting work. The assistant can run Shell commands, read/write files, and generate and execute Python, Shell, or Node.js code.
+- **Your choice of model service**: use an OpenAI-compatible API, discover models and reasoning levels, or enter model IDs and `reasoning_effort` manually where needed.
+- **Four permission modes**: suggestions only, confirm before execution, automatic low risk, and full access. Approval cards show the target server, working directory, and full command or code.
+- **Visible steps and results**: streamed replies and grouped tool cards show descriptions, commands, code, output, success/failure states, and exit codes. You can request cancellation at any time.
+- **Context management for longer tasks**: automatic compaction follows the model's declared context window, with manual `/compact` and a command menu for `/new`, `/history`, and `/settings`.
+- **Per-server conversations**: encrypted local history and tool results, conversation switching and continuation, deletion, editing a sent message to restart from that point, and remembered model/effort/permission preferences.
+- **Remote AI coding workflow**: run installed Codex or Claude Code CLIs in terminals and use four panes for AI sessions, diffs, tests, and logs. Background-color reporting helps CLIs choose light or dark styling.
 
-Open **Settings → About and Updates → Version History** to expand release notes, with the installed version expanded by default. Available updates show their notes too. History is bundled for offline use and shares the release changelog source.
+The built-in assistant uses your configured model API and does not require an external AI CLI. Server tools require remote Python 3; JavaScript execution also requires Node.js. Permission rules govern execution and approval; operations still use the SSH account's privileges. Stopping a task or editing a conversation does not undo completed server operations.
 
-### Settings
+### AI assistant quick start
 
-Settings lists its categories on the left and the chosen category's settings
-on the right:
+1. Open **Settings → AI Assistant**, enter an OpenAI-compatible API URL and key, discover models, and choose a default. You can also add a model ID manually.
+2. Connect to a server and open the **AI sparkles button** at the top right. Select the model, reasoning effort, and permissions.
+3. Describe a goal, such as inspecting disk space and identifying large directories. Review each tool step; when approval is requested, inspect the command and allow it once or deny it.
+4. Review output and conclusions, continue through conversation history, and use `/compact` with an optional focus for longer conversations.
 
-- **Appearance**
-  - Language: 简体中文, 繁體中文, or English; switches immediately in every open
-    window. Error messages from the app are translated too; server output and AI
-    replies stay as they are.
-  - Theme: Cloud, Dusk, Claude Dark, Claude Light, Graphite, Midnight, Jade,
-    Obsidian, or Ivory
-  - Window transparency: 100% keeps each theme's own glass, lower values let
-    less of what is behind the window show through, 0% is fully opaque
-  - Auto-hide top bar toggle
-- **Terminal**
-  - Terminal font size
-  - Default line count for new live tail viewer windows
-- **AI Assistant**: API endpoint, encrypted key, model list, default agent permissions, and context compaction (75% of the declared window, 200k by default)
-- **About and updates**: current version, a manual update check, and automatic
-  checks (on launch and every 6 hours)
+| Permission mode | Behavior |
+| --- | --- |
+| Suggestions only | Advice without executing server tools |
+| Confirm before execution | Approval for every tool call |
+| Automatic, low risk (default) | Recognized low-risk queries run automatically; writes, code, and unknown commands require approval |
+| Full access | Task tools run without individual approval |
 
-When a newer release is available, iShell offers it in a small prompt; it
-downloads, verifies and installs the update, then restarts. On Linux, in-app
-updates apply to the AppImage; `.deb` and `.rpm` installs update through a new
-package from the release page.
+Task messages, necessary server information, and tool output are sent to your configured model service. API keys, conversations, and tool results are encrypted locally. Bring your own model service configuration. See the [AI assistant guide](docs/AI_GUIDE.md) for details.
 
-Every theme uses Tauri native window effects where available, with a
-transparent xterm background so the terminal and panels share one desktop
-surface. Cloud, Dusk and the two Claude themes float the terminal, dashboard
-and docked panels as rounded cards on a frosted chrome; each theme ships its
-own 16-color terminal palette.
+### Remote AI CLI coding
 
-## Requirements
+- **Run an AI CLI on the project host**: SSH into your remote project directory and launch an installed, configured Codex or Claude Code CLI to work with that host's code and runtime environment.
+- **Keep AI sessions and verification side by side**: use up to four panes for an AI conversation, `git diff`, tests, and service logs. You can also launch separate sessions in different project directories and arrange tabs and windows by task.
+- **Light and dark styling for AI CLIs**: answer terminal background queries with the current theme's actual surface color, allowing tools such as Codex and Claude Code to select their styling and improving readability with transparent windows and light themes.
+- **Check changes and results in the same workbench**: inspect small configurations and scripts in the file panel, run tests in another pane, and observe runtime results through log windows and host metrics.
+- **Observe remote AI workloads**: follow training or inference logs and inspect process rankings and available GPU/VRAM metrics. GPU metrics require compatible remote interfaces.
 
-- Node.js 22 or newer
-- Rust stable toolchain
-- Tauri system dependencies for your platform
-- OpenSSH on macOS and Linux
-- Linux runtime secret storage requires a Secret Service provider such as GNOME
-  Keyring or KWallet.
+Install, authenticate, and configure these external AI CLIs on the remote host; you operate each CLI session independently.
 
-On Linux, install the WebKitGTK and bundling dependencies required by Tauri:
+### 2. Multiple sessions, less repeated typing
+
+- **Interactive terminals**: xterm.js with real PTY sessions, reconnect, duplicate tabs, drag-to-reorder, detach to a new window, and handoff between windows.
+- **Up to four panes**: nest horizontal and vertical splits for the same server or different hosts. Resize dividers; file and monitoring panels follow the focused pane.
+- **Broadcast input**: mirror typing to selected sessions, with an individual toggle for each target. Useful for routine checks and side-by-side operations.
+- **Snippets and history**: save commands with notes, insert them for editing or send Enter automatically, and use them with broadcasting. Search history, get suggestions, and paste commands back into a terminal.
+- **Terminal search**: find output in the terminal's current scrollback with case-sensitive, whole-word, and regular-expression options.
+
+### 3. Remote files, from transfer to configuration changes
+
+- **Two browsing modes**: tree/detail and multi-column views, direct path navigation, multi-selection, context menus, mkdir, rename, and delete.
+- **Files and folders**: drag and drop uploads; download folders directly or as `.tar.gz` archives. Transfer queues show progress, bytes, and task states, with controls to stop tasks.
+- **Folder replacement safeguards**: confirm replacement of an existing remote folder; uploads use staging, commit, and rollback protection on failure.
+- **Remote text editing**: edit and save **UTF-8 text files up to 1 MiB** with built-in syntax highlighting, suitable for configurations and scripts.
+- **Terminal directory handoff and symlinks**: change the active shell to a selected directory from the file menu. Link indicators and delete prompts distinguish symlinks from their targets.
+- **Open directories from the terminal**: hold `Command` (macOS) or `Ctrl` (Windows/Linux) and click a `user@host:directory` prompt to locate it in the file panel. The directory tree expands and scrolls to the current location as you navigate.
+
+Uploading a folder with an existing name uses **full replacement**: directories are not merged, and remote-only contents are removed. Check the destination in the confirmation dialog.
+
+### 4. Troubleshooting with live logs and host metrics
+
+- **Live logs**: open a file in a separate tail window, configure initial line count, pause following, return to the bottom, clear output, or restart. Closing the viewer stops its remote task.
+- **Host status**: CPU, memory, swap, disk mounts, load average, process count, and network upload/download rates.
+- **Process rankings**: inspect the top five CPU and memory consumers.
+- **GPU and VRAM**: display available metrics from compatible remote `nvidia-smi` or Linux DRM interfaces, useful for checking remote GPU workloads.
+- **Collected over SSH**: no additional persistent monitoring agent to install. Available metrics depend on the remote OS, tools, and permissions.
+
+### 5. Jump hosts and three forwarding modes
+
+Choose another saved server as a jump host and chain up to **three hops**, each with its own user and password or private key.
+
+| Mode | Example use |
+| --- | --- |
+| Local `-L` | Access a database or admin service reachable only from the server |
+| Remote `-R` | Forward a listening port on the server to a service reachable from your computer |
+| Dynamic SOCKS5 `-D` | Create a local SOCKS5 proxy that reaches the network through the server |
+
+Rules are saved per server, show live state and failure reasons, and can start automatically when a terminal connects. They use the server's jump-host configuration, run independently of terminal tabs, and stop when the app quits.
+
+### 6. Organized connections you can move between installations
+
+- Group servers with folders, tags, notes, and colors. Search, multi-select, reorder by dragging, duplicate profiles, rename inline, and delete in bulk.
+- Use password or private-key authentication and test a connection before saving. Ordering and group placement persist across restarts.
+- Import and export hosts or folders in iShell JSON/ZIP format. Set an export passphrase to include encrypted saved passwords or private-key passphrases.
+- Connection profiles, command history, snippets, and forwarding rules stay local. No iShell account is required.
+
+### 7. Nine themes and in-app updates
+
+- **Three interface languages**: Simplified Chinese, Traditional Chinese, and English, following the system language by default and switchable live across open windows.
+- **Nine themes**: Cloud, Dusk, Claude Dark, Claude Light, Graphite, Midnight, Jade, Obsidian, and Ivory, each with its own 16-color terminal palette.
+- **Appearance controls**: native transparent windows and glass effects, floating-card layouts, adjustable transparency, terminal font size, and an auto-hiding top bar.
+- **In-app updates**: check on startup and every six hours, check manually, or disable automatic checks. Update packages are signature-verified before installation and restart.
+- **Offline release history**: browse version entries bundled with the app in About and updates.
+
+Window effects vary by platform.
+
+## AI coding workflow
+
+1. Prepare the project, development dependencies, and Codex or Claude Code on the remote server. Complete the CLI's authentication and model configuration.
+2. Connect through iShell, enter the project directory, and run `codex` or `claude` to launch the corresponding tool.
+3. Split the tab and enter the same project in the other panes to inspect `git diff`, run the project's tests, or follow logs.
+4. Give the AI session a task, then review changes, tests, and logs. Use the built-in text editor for small configuration changes when needed.
+
+| Pane | Example use |
+| --- | --- |
+| AI session | Run `codex` or `claude` in the project directory |
+| Review | Inspect code changes with `git diff` |
+| Verify | Run the project's tests or build command |
+| Observe | Watch service output or follow logs; logs can also open in a separate window |
+
+Model access follows your CLI configuration, and project files live on the remote host. AI capabilities and interaction behavior depend on the CLI version and server environment.
+
+## Download and install
+
+**[Get the latest release on GitHub](https://github.com/Raymanhan/ishell/releases/latest)** and choose the package for your operating system and architecture:
+
+| Platform | Architecture | Packages |
+| --- | --- | --- |
+| Windows | x64 | `.exe` / `.msi` |
+| macOS | Apple Silicon | `aarch64.dmg` |
+| macOS | Intel | `x64.dmg` |
+| Linux | x64 | `.AppImage` / `.deb` / `.rpm` |
+
+Actual filenames include a version number. On Linux, in-app updates apply to AppImage installations; download a new package to update `.deb` or `.rpm` installations.
+
+The interface supports Simplified Chinese, Traditional Chinese, and English; repository documentation is available in English and Chinese.
+
+### Before connecting
+
+- **Your computer**: macOS/Linux require an OpenSSH client. Windows uses the built-in pure-Rust `russh` backend.
+- **Remote server**: SSH access and appropriate permissions. File-panel operations such as directory listing and uploads require `python3`; folder downloads use `tar`, compressed downloads need gzip support, and log viewing uses `tail`.
+- **Monitoring**: primarily targets Linux/Unix hosts using `/proc`, `ps`, `top`, `df`, and related tools, with macOS/BSD fallbacks for some metrics. GPU/VRAM metrics require compatible remote driver interfaces.
+
+Installers do not require Node.js or Rust. A basic SSH terminal does not require all of the remote file and monitoring tools listed above.
+
+## Quick start
+
+1. Install and launch iShell, then open the connection manager from the top bar.
+2. Add a server with its host, port, username, and password or private-key authentication. Add a group, tags, or a jump host if needed.
+3. Test the connection, save, and double-click the server to open a terminal.
+4. Use the top bar to open files, monitoring, history, snippets, or port forwarding.
+5. Split from a tab's context menu, or choose the split-connect action on another server in the connection manager.
+6. For repeated input, enable broadcasting, check the selected target sessions, then type or send a snippet.
+
+A typical workflow: **connect → upload files → edit configuration → verify in the terminal → follow logs and check metrics**.
+
+### Keyboard shortcuts
+
+| Action | macOS | Windows / Linux |
+| --- | --- | --- |
+| Split right | `⌘D` | `Ctrl+Shift+D` |
+| Split down | `⇧⌘D` | `Ctrl+Shift+E` |
+| Search terminal output | `⌘F` | `Ctrl+Shift+F` |
+
+Explore the top bar and tab, server, and file context menus for other actions. The transparency slider preserves the theme's glass effect at 100%; 0% is fully opaque.
+
+## Local data and credentials
+
+- **Local storage**: server profiles, command history, snippets, and forwarding rules use `ishell.db`, a SQLite database in the app data directory. Appearance preferences and similar settings use WebView local storage.
+- **Saved credentials**: passwords and private-key passphrases are encrypted with **AES-256-GCM** in the database. The master key is stored in `secret.key` in the same app data directory, with `0600` permissions on Unix. The current implementation uses a local key file.
+- **AI data**: model-service settings and API keys, conversation history, and tool results use the same local encryption mechanism and are excluded from connection exports. Built-in AI requests send task messages, necessary server information, and tool output to your configured model service.
+- **Exports**: leave the export passphrase empty to export profiles only. With a passphrase, credentials are encrypted with AES-256-GCM using a PBKDF2-HMAC-SHA256-derived key. Profile metadata such as names and addresses remains readable. Private-key files themselves are not bundled.
+- **Host keys**: the first connection automatically trusts and records the server key; subsequent connections check the recorded key and reject changed keys.
+
+Treat the database and master key as equally sensitive when backing up or migrating the app data directory. History and snippets are ordinary local data and should not contain plaintext credentials. Move private-key files separately and update their paths on another computer.
+
+## Run from source
+
+Install Node.js 22.12+ (or a newer LTS release), Rust stable, and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your platform, then run:
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev
-```
-
-## Development
-
-```bash
-npm install
+git clone https://github.com/Raymanhan/ishell.git
+cd ishell
+npm ci
 npm run tauri -- dev
 ```
 
-Frontend-only preview:
+For a frontend preview, run `npm run dev`. Browser previews use demo data and simulated interactions; real SSH, file transfers, and forwarding require the desktop app.
 
-```bash
-npm run dev
-```
+Build an installer with `npm run tauri -- build`. See the [development and release guide](docs/DEVELOPMENT.md) for system dependencies, validation commands, architecture, and update signing.
 
-Build and verify (CI runs the same on every pull request):
+## Feedback and contributions
 
-```bash
-npm run build
-cd src-tauri
-cargo clippy --all-targets -- -D warnings
-cargo clippy --all-targets --features force-russh -- -D warnings
-cargo test
-cargo test --features force-russh
-```
+[Open an issue](https://github.com/Raymanhan/ishell/issues) with your OS, iShell version, reproduction steps, and sanitized error messages. Feature suggestions, pull requests, and sharing iShell with other server users are welcome.
 
-### Translations
-
-UI text is written in Simplified Chinese and wrapped in `t("…")`; the source
-text is the message id, and `src/i18n/locales/*.ts` map it to each language.
-Backend messages (Rust and the remote runner) are extracted as templates, so
-`translateMessage()` also translates filled-in errors such as
-`模型 API 返回 401：…`.
-
-```bash
-node scripts/i18n.mjs check
-```
-
-`check` lists missing or unused entries (CI fails on missing ones through
-`npm test`). Add translations with `node scripts/i18n.mjs merge en new.json`,
-where `new.json` maps source text to English. Traditional Chinese is generated
-with OpenCC (`pip install opencc-python-reimplemented`, then
-`node scripts/i18n.mjs zh-tw`).
-
-## Local Installer Build
-
-```bash
-npm ci
-npm run tauri -- build
-```
-
-Build outputs are written under `src-tauri/target/*/release/bundle/`.
-
-For macOS Intel and Apple Silicon local builds:
-
-```bash
-rustup target add x86_64-apple-darwin
-npm run tauri -- build --target x86_64-apple-darwin
-
-rustup target add aarch64-apple-darwin
-npm run tauri -- build --target aarch64-apple-darwin
-```
-
-## Release
-
-Release builds are generated automatically when a `v*` tag is pushed. They can
-also be run manually from the **Build installers** workflow in GitHub Actions.
-
-```bash
-git tag v1.5.12
-git push origin v1.5.12
-```
-
-The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
-packages and attaches the installer files to the GitHub release.
-
-### In-app updates
-
-The in-app updater downloads `latest.json` from the latest GitHub release and
-only installs packages signed with the project's updater key. The public key is
-in `src-tauri/tauri.conf.json` (`plugins.updater.pubkey`); the private key is
-kept as repository secrets:
-
-- `TAURI_SIGNING_PRIVATE_KEY`: contents of the private key file
-- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: its password
-
-To generate the key pair, run this in the project directory (it asks for a password):
-
-```bash
-npm run tauri signer generate -- -w ~/.tauri/ishell.key
-```
-
-With these set, the release workflow signs the update packages (`.app.tar.gz`
-for macOS, the NSIS installer for Windows, the AppImage for Linux) and publishes
-`latest.json` alongside the installers. Without them the release still builds,
-just without update packages. Keep the private key safe: releases signed with a
-different key are rejected by installed copies.
-
-## Project Structure
-
-```text
-src/
-  api/              Tauri IPC wrappers and runtime detection
-  components/       React UI components
-  constants/        Theme tokens and shared constants
-  features/         Hooks and helpers per feature: connections, panes,
-                    transfer queues, snippets, port forwards, updates
-  mocks/            Browser-preview demo data
-  styles/           CSS modules for base, layout, controls, views, and themes
-  utils/            Formatting, highlighting and drag helpers
-  App.tsx           Workbench layout and tab/pane orchestration
-
-src-tauri/src/
-  commands.rs       Tauri command boundary
-  models.rs         Serializable DTOs shared by commands
-  openssh.rs        OpenSSH arguments, jump host ProxyCommand, askpass helper
-  pool.rs           Transport invalidation / pooled-session boundary
-  russh_transport.rs Pure-Rust SSH transport used by the Windows backend,
-                    including jump hosts and port forwarding
-  ssh/              Remote operations: commands, monitoring, SFTP, uploads,
-                    downloads
-  store.rs          Local database for servers, snippets and port forwards
-  tail_monitor.rs   Live remote file tail process registry
-  terminal.rs       Interactive terminal session registry
-  tunnel.rs         Registry of running port forwards
-  time.rs           Small time helper
-  lib.rs            Tauri application assembly
-```
+The Chinese [project analysis and promotion notes](docs/PROJECT_ANALYSIS.zh-CN.md) provide feature evidence, audience recommendations, demo ideas, and reusable copy.
 
 ## Recent Changes
+
+<details>
+<summary>Expand release history</summary>
 
 - `v1.5.12` brings AI approvals back into the tool card: a step that needs approval opens its card with the target server, directory and full command, and Deny / Allow once buttons, instead of a dialog. Risk levels and reasons such as "高风险" are no longer shown; the risk assessment still decides which steps need approval. The `/` command menu no longer has a see-through background that let the chat text behind it show through in some themes.
 
@@ -537,6 +349,8 @@ src-tauri/src/
 - `v0.1.7` / `v0.1.6` add and pool the Windows `russh` terminal backend.
 - `v0.1.4` switches Unix-like remote sessions to the system OpenSSH transport.
 
+</details>
+
 ## License
 
-iShell is released under the MIT License. See [LICENSE](LICENSE).
+iShell is released under the [MIT License](LICENSE).
