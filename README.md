@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.5.6](https://github.com/Raymanhan/ishell/releases/tag/v1.5.6)**
+**[Download iShell v1.5.7](https://github.com/Raymanhan/ishell/releases/tag/v1.5.7)**
 
 Available packages:
 
@@ -325,8 +325,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.5.6
-git push origin v1.5.6
+git tag v1.5.7
+git push origin v1.5.7
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -386,6 +386,8 @@ src-tauri/src/
 ```
 
 ## Recent Changes
+
+- `v1.5.7` hardens AI automatic mode: commands with wildcards, device files, credential-like paths, `docker inspect`/`systemctl show` and endless `tail -f`/`docker stats` now require approval, paths are normalized before checks, and auto-approved reads refuse symlinks to credential files. Long reasoning streams are no longer cut off after five minutes; repeated tool-call IDs from compatible gateways and earlier-turn `reasoning_content` (rejected by DeepSeek) are handled. Compaction follows the model's declared context window (75%, up to 200k), and more context-overflow errors are recognized. Unreadable history records are skipped instead of disabling the AI panel, history saves no longer rewrite continuously while a reply streams, a temporary `/models` failure no longer clears saved models, tool polling backs off when idle, and abandoned remote temp files are cleaned up.
 
 - `v1.5.6` replaces ambiguous AI tool status text with readable success/failure labels and moves exit codes into expanded details. Model, reasoning effort, and manual input choices are cached per API service, with permissions remembered per server. Selections save before the first message and carry over to new chats, reopened empty chats, and app restarts.
 
