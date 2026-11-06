@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.5.10](https://github.com/Raymanhan/ishell/releases/tag/v1.5.10)**
+**[Download iShell v1.5.11](https://github.com/Raymanhan/ishell/releases/tag/v1.5.11)**
 
 Available packages:
 
@@ -226,11 +226,11 @@ Choose permissions below the composer, or set the default for new chats in setti
 | Automatic, low risk (default) | Recognized low-risk queries run automatically; writes, arbitrary code, and unrecognized commands require approval |
 | Full access | Tools for the requested task run without individual approval |
 
-Approval cards show the target server, complete command/code, paths, risk level, and reason. Decisions apply once. Classification uses conservative rules and is not a sandbox; SSH account privileges still apply.
+Approvals open a dialog showing what the step is for, its risk level and reason, the target server, the working directory, and the complete command/code; deny (or press Esc) or allow once. High-risk steps focus Deny, and clicking outside the dialog does not answer it. Tool cards stay collapsed and are titled with the model's short description of the step; consecutive tool calls are grouped. Classification uses conservative rules and is not a sandbox; SSH account privileges still apply.
 
 Conversations and tasks stay bound to their originating terminal connection. Switching tabs does not redirect a running task. Closing the sidebar preserves the conversation; closing or reconnecting the terminal requests cancellation. Stop is available at any time; completed changes are retained. Tools default to a 120-second timeout, allow up to 1800 seconds, and return bounded output with truncation markers.
 
-Context automatically compacts at **75% of the context window declared in the model metadata** (200k estimated tokens when the metadata declares none) into a summary that retains the original task, recent complete tool groups, key results, and remaining work. Visible chat history remains available; failed/canceled compaction preserves the original context. A provider context-limit error also triggers one compaction attempt. Type `/compact` in the chat to compact on demand; text after it (for example `/compact keep the nginx changes`) tells the summary what to retain. Automatic mode treats wildcards, device files, credential-like paths, `docker inspect`/`systemctl show` (which print environment values) as requiring approval, and an auto-approved `read_file` refuses links that resolve to credential files. Conversations and tool results are encrypted locally and can be reopened after restarting; interrupted tasks never resume automatically. Task messages, necessary server details, and tool output are sent to the configured model API.
+Context automatically compacts at **75% of the context window declared in the model metadata** (200k estimated tokens when the metadata declares none) into a summary that retains the original task, recent complete tool groups, key results, and remaining work. Visible chat history remains available; failed/canceled compaction preserves the original context. A provider context-limit error also triggers one compaction attempt. Type `/compact` in the chat to compact on demand; text after it (for example `/compact keep the nginx changes`) tells the summary what to retain. Typing `/` in the input lists the available commands (`/compact`, `/new`, `/history`, `/settings`), chosen with the arrow keys, Tab and Enter. Hover one of your messages to edit it and run the task again from there: the conversation and model context after it are replaced, and actions already run on the server are not undone; messages folded into a summary cannot be edited. Automatic mode treats wildcards, device files, credential-like paths, `docker inspect`/`systemctl show` (which print environment values) as requiring approval, and an auto-approved `read_file` refuses links that resolve to credential files. Conversations and tool results are encrypted locally and can be reopened after restarting; interrupted tasks never resume automatically. Task messages, necessary server details, and tool output are sent to the configured model API.
 
 Open **Settings → About and Updates → Version History** to expand release notes, with the installed version expanded by default. Available updates show their notes too. History is bundled for offline use and shares the release changelog source.
 
@@ -349,8 +349,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.5.10
-git push origin v1.5.10
+git tag v1.5.11
+git push origin v1.5.11
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -410,6 +410,8 @@ src-tauri/src/
 ```
 
 ## Recent Changes
+
+- `v1.5.11` refines the AI assistant. Pressing Enter to commit an input-method candidate no longer sends the message (including on macOS). The model, reasoning and permission pickers have fixed widths with the arrow next to the label, and the model name gives way first in a narrow panel. Your own messages can be edited to run the task again from that point, replacing the conversation and model context after it. Typing `/` opens a command menu (`/compact`, `/new`, `/history`, `/settings`) driven by the arrow keys, Tab, Enter and Esc. Tool cards are titled with the model's short description of the step (such as "检查磁盘占用"), or the command itself when none is given; they stay collapsed while running, consecutive calls are grouped into one list, and new steps slide in. Reply text is buffered and revealed at an even pace instead of jumping by network chunks, and the working status uses a sliding highlight. Risk levels no longer appear on the cards: approvals open a dialog with the step's purpose, risk reason, target server, directory and full command; high-risk steps focus Deny, and a click outside the dialog does not answer it.
 
 - `v1.5.10` fixes the terminal card sitting a few pixels above the neighbouring cards on macOS after opening a server, until the file panel was opened. The resize handles of the closed file and monitor panels no longer extend past the window edge, and layout containers that must not scroll are put back in place if the system scrolls them.
 
