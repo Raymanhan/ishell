@@ -545,6 +545,57 @@
   background: var(--surface-soft-bg);
   box-shadow: 0 3px 12px rgba(0, 0, 0, 0.06);
 }
+/* Slash-command menu, floating above the composer. */
+.ai-composer {
+  position: relative;
+}
+.ai-command-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 5;
+  display: grid;
+  gap: 1px;
+  padding: 5px;
+  border: 1px solid var(--hairline-2);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+  animation: ai-rise 140ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.ai-command-menu > [role="option"] {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  padding: 7px 9px;
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+}
+.ai-command-menu > [role="option"].active {
+  background: var(--control-hover-bg);
+}
+.ai-command-name {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.ai-command-name em {
+  margin-left: 6px;
+  color: var(--faint);
+  font-style: normal;
+}
+.ai-command-description {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--faint);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .ai-composer:focus-within {
   border-color: rgba(var(--accent-rgb), 0.5);
 }
@@ -724,7 +775,8 @@
   .ai-spin {
     animation-duration: 2s;
   }
-  .ai-enter {
+  .ai-enter,
+  .ai-command-menu {
     animation: none;
   }
   .ai-working:not(.awaiting) .ai-working-text {

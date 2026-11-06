@@ -2,6 +2,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -44,6 +45,11 @@ import { useImeGuard } from "../features/ai/ime";
 import { createPortal } from "react-dom";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useSmoothText } from "../features/ai/useSmoothText";
+import {
+  localSlashCommand,
+  matchSlashCommands,
+  type SlashCommand,
+} from "../features/ai/slashCommands";
 import type { ShellTab } from "../features/shell/types";
 import { toolStatus, toolTitle } from "../features/ai/toolStatus";
 
@@ -333,9 +339,7 @@ function ApprovalDialog({
               {translateMessage(entry.risk.reason)}
             </span>
           )}
-          <span>
-            {t("将在 {0} 上执行，请检查命令、代码和路径。", target)}
-          </span>
+          <span>{t("将在 {0} 上执行，请检查命令、代码和路径。", target)}</span>
         </>
       }
       targetLabel={where}
@@ -462,6 +466,13 @@ export function AiPanel({
     [tab.id],
   );
   const composerIme = useImeGuard();
+  const commandMenuId = useId();
+  const [commandIndex, setCommandIndex] = useState(0);
+  const [composerFocused, setComposerFocused] = useState(false);
+  // The draft the user closed the menu on with Escape.
+  const [commandsDismissed, setCommandsDismissed] = useState<string | null>(
+    null,
+  );
   const [editingId, setEditingId] = useState<string | null>(null);
   const editRef = useRef(ai.editAndResend);
   editRef.current = ai.editAndResend;
@@ -521,6 +532,7 @@ export function AiPanel({
     () => fitHeight(textarea.current, 180),
     [conversation.draft, tab.id],
   );
+  useEffect(() => setCommandIndex(0), [conversation.draft]);
   const models = mergeModelSources(
     ai.models,
     conversation.manualModel ? [conversation.model] : [],
@@ -573,6 +585,47 @@ export function AiPanel({
       patch({ effort: value, manualEffort: value !== "default" });
     }
     setEditing(null);
+  }
+  const commandMatches =
+    composerFocused && conversation.draft !== commandsDismissed
+      ? matchSlashCommands(conversation.draft)
+      : null;
+  const commandMenu = commandMatches?.length ? commandMatches : null;
+  const activeCommand = commandMenu
+    ? commandMenu[Math.min(commandIndex, commandMenu.length - 1)]
+    : null;
+  function runLocalCommand(name: "new" | "history" | "settings") {
+    patch({ draft: "" });
+    if (name === "new") {
+      ai.newChat(tab);
+      setHistoryOpen(false);
+    } else if (name === "history") {
+      setHistoryOpen(true);
+      setDeleteId(null);
+    } else onSettings();
+  }
+  function submit() {
+    const local = localSlashCommand(conversation.draft);
+    if (local) runLocalCommand(local);
+    else if (!busy) {
+      follow.current = true;
+      void ai.send(tab);
+    }
+  }
+  /**
+   * Enter / click on a menu item: run a command that is already typed in
+   * full or takes no argument; otherwise complete it so an argument can
+   * follow. Tab only completes.
+   */
+  function pickCommand(command: SlashCommand, run: boolean) {
+    const typed = conversation.draft.slice(1).toLowerCase() === command.name;
+    if (run && command.name !== "compact") runLocalCommand(command.name);
+    else if (run && typed) submit();
+    else
+      patch({
+        draft: `/${command.name}${command.name === "compact" ? " " : ""}`,
+      });
+    textarea.current?.focus();
   }
   const permission = permissionOptions.find(
     (option) => option.value === conversation.permission,
@@ -962,13 +1015,51 @@ export function AiPanel({
         className="ai-composer"
         onSubmit={(event) => {
           event.preventDefault();
-          follow.current = true;
-          void ai.send(tab);
+          submit();
         }}
       >
+        {commandMenu && (
+          <div
+            className="ai-command-menu"
+            id={commandMenuId}
+            role="listbox"
+            aria-label={t("命令")}
+          >
+            {commandMenu.map((command) => (
+              <div
+                key={command.name}
+                id={`${commandMenuId}-${command.name}`}
+                role="option"
+                aria-selected={command === activeCommand}
+                className={command === activeCommand ? "active" : undefined}
+                // Keep focus in the textarea.
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseEnter={() =>
+                  setCommandIndex(commandMenu.indexOf(command))
+                }
+                onClick={() => pickCommand(command, true)}
+              >
+                <span className="ai-command-name">
+                  /{command.name}
+                  {command.argument && <em>{command.argument}</em>}
+                </span>
+                <span className="ai-command-description">
+                  {command.description}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
         <textarea
           ref={textarea}
           aria-label={t("给 AI 发送消息")}
+          aria-autocomplete="list"
+          aria-controls={commandMenu ? commandMenuId : undefined}
+          aria-activedescendant={
+            activeCommand ? `${commandMenuId}-${activeCommand.name}` : undefined
+          }
+          onFocus={() => setComposerFocused(true)}
+          onBlur={() => setComposerFocused(false)}
           value={conversation.draft}
           maxLength={50000}
           onChange={(e) => patch({ draft: e.target.value })}
@@ -980,16 +1071,39 @@ export function AiPanel({
           onCompositionStart={composerIme.onCompositionStart}
           onCompositionEnd={composerIme.onCompositionEnd}
           onKeyDown={(event) => {
-            if (
-              event.key === "Enter" &&
-              !event.shiftKey &&
-              !composerIme.isComposing(event)
-            ) {
-              event.preventDefault();
-              if (!busy) {
-                follow.current = true;
-                void ai.send(tab);
+            if (composerIme.isComposing(event)) return;
+            if (commandMenu && activeCommand) {
+              const step =
+                event.key === "ArrowDown"
+                  ? 1
+                  : event.key === "ArrowUp"
+                    ? -1
+                    : 0;
+              if (step) {
+                event.preventDefault();
+                const index = commandMenu.indexOf(activeCommand);
+                setCommandIndex(
+                  (index + step + commandMenu.length) % commandMenu.length,
+                );
+                return;
               }
+              if (
+                event.key === "Tab" ||
+                (event.key === "Enter" && !event.shiftKey)
+              ) {
+                event.preventDefault();
+                pickCommand(activeCommand, event.key === "Enter");
+                return;
+              }
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setCommandsDismissed(conversation.draft);
+                return;
+              }
+            }
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              submit();
             }
           }}
         />
@@ -1101,13 +1215,14 @@ export function AiPanel({
               title={t("发送（Enter）")}
               aria-label={t("发送 AI 消息")}
               disabled={
-                !connected ||
-                !ai.historyLoaded ||
-                serverBusy ||
-                ai.deletingIds.includes(conversation.id) ||
-                !selection.model ||
-                (ai.modelsLoading && !selection.manualModel) ||
-                !conversation.draft.trim()
+                !localSlashCommand(conversation.draft) &&
+                (!connected ||
+                  !ai.historyLoaded ||
+                  serverBusy ||
+                  ai.deletingIds.includes(conversation.id) ||
+                  !selection.model ||
+                  (ai.modelsLoading && !selection.manualModel) ||
+                  !conversation.draft.trim())
               }
             >
               <ArrowUp size={17} />
@@ -1121,7 +1236,7 @@ export function AiPanel({
             ? t("设置修改于下次发送生效")
             : serverBusy
               ? t("此服务器另有任务执行中，可从历史记录查看")
-              : t("{0} · Shift + Enter 换行 · /compact 压缩上下文", tab.title)}
+              : t("{0} · Shift + Enter 换行 · 输入 / 查看命令", tab.title)}
         </span>
         <span
           className="ai-context-usage"
