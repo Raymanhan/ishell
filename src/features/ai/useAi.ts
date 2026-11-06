@@ -4,6 +4,11 @@ import { command, isTauri } from "../../api/tauri";
 import { currentDirForTab } from "../sftp/paths";
 import type { ShellTab } from "../shell/types";
 import {
+  readAiPreferences,
+  rememberAiPreferences,
+  sameAiPreferences,
+} from "./preferences";
+import {
   applyAiEvent,
   defaultAiConfig,
   createConversation,
@@ -27,6 +32,7 @@ interface ChatResult {
 export function useAi(tabs: ShellTab[]) {
   const [config, setConfig] = useState<AiConfig>(defaultAiConfig);
   const [configError, setConfigError] = useState("");
+  const [preferencesError, setPreferencesError] = useState("");
   const [models, setModels] = useState<AiModel[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState("");
@@ -106,6 +112,18 @@ export function useAi(tabs: ShellTab[]) {
     const previous = current.current[id];
     if (!previous || pendingWrites.current.get(id) === null) return;
     const value = { ...change(previous), updatedAt: Date.now() };
+    if (!sameAiPreferences(previous, value)) {
+      try {
+        rememberAiPreferences(
+          window.localStorage,
+          configRef.current.baseUrl,
+          value,
+        );
+        setPreferencesError("");
+      } catch {
+        setPreferencesError("AI 选项未能保存到本机，重启后可能需要重新选择。");
+      }
+    }
     current.current = { ...current.current, [id]: value };
     setConversations(current.current);
     if (value.entries.length) persist(id, value);
@@ -131,6 +149,11 @@ export function useAi(tabs: ShellTab[]) {
             permission: previous.permission,
           }
         : {}),
+      ...readAiPreferences(
+        window.localStorage,
+        configRef.current.baseUrl,
+        tab.serverId,
+      ),
     };
     current.current = { ...current.current, [value.id]: value };
     setConversations(current.current);
@@ -502,6 +525,7 @@ export function useAi(tabs: ShellTab[]) {
   return {
     config,
     configError,
+    preferencesError,
     models: availableModels,
     modelsLoading,
     modelsError,
@@ -528,6 +552,21 @@ export function useAi(tabs: ShellTab[]) {
     },
     deleteHistory,
     newChat,
+    restorePreferences: (tabId: string) => {
+      const id = active.current[tabId];
+      const value = current.current[id];
+      if (!value || value.entries.length || value.draft || value.requestId)
+        return;
+      const next = {
+        ...value,
+        ...readAiPreferences(
+          window.localStorage,
+          configRef.current.baseUrl,
+          value.serverId,
+        ),
+      };
+      if (!sameAiPreferences(value, next)) update(id, () => next);
+    },
     update: (
       tabId: string,
       change: (value: AiConversation) => AiConversation,

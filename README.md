@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.5.5](https://github.com/Raymanhan/ishell/releases/tag/v1.5.5)**
+**[Download iShell v1.5.6](https://github.com/Raymanhan/ishell/releases/tag/v1.5.6)**
 
 Available packages:
 
@@ -210,7 +210,9 @@ The status panel samples remote host information through SSH:
 1. Open **Settings → AI Assistant**, enter an OpenAI-compatible API base URL and key, read model metadata from the service’s `/models` endpoint, select a default model, and save. Models missing from discovery can be added under manual model IDs. Keys are encrypted in the local SQLite database with the existing local encryption key; they are not stored in browser storage or connection exports.
 2. Connect to a server and click the **sparkles SVG button** at the top right. Model, reasoning effort, and agent permissions share one row below the composer. Models and available efforts come from service metadata, including `supported_reasoning_efforts` and Codex `supported_reasoning_levels`; **Default** is used when no levels are declared. The model and effort menus also offer manual input; manually entered models work without `/models`, and explicit effort values are forwarded as entered. Metadata refreshes on startup, after saving settings, or from the sidebar refresh button. Model/effort selections are validated before requests.
 3. Open the sidebar’s **history icon** to view, continue, or delete conversations for the current server. **+** starts an independent conversation and preserves previous records. Running tasks remain accessible through history and must be stopped before deletion. Model, effort, and permission controls remain editable during execution; changes apply to the next send, while the current task keeps its starting settings.
-4. Describe a deployment or operations task. The agent can run Shell commands, read/write files, and execute generated Python, Shell, or Node.js code. Every step exposes its command/code, output, and exit status. The server needs Python 3; JavaScript also needs Node.js. Non-interactive elevation uses existing `sudo -n` privileges.
+4. Describe a deployment or operations task. The agent can run Shell commands, read/write files, and execute generated Python, Shell, or Node.js code. Every step exposes its command/code, output, and a readable success/failure status, with the real exit code available in expanded details. The server needs Python 3; JavaScript also needs Node.js. Non-interactive elevation uses existing `sudo -n` privileges.
+
+Model, reasoning effort, and manual input choices are cached locally as soon as they change, separately for each model service; permissions are remembered per server. New chats, reopened empty chats, and app restarts reuse these choices. Existing history and unsent drafts keep their own settings.
 
 Choose permissions below the composer, or set the default for new chats in settings:
 
@@ -323,8 +325,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.5.5
-git push origin v1.5.5
+git tag v1.5.6
+git push origin v1.5.6
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -384,6 +386,8 @@ src-tauri/src/
 ```
 
 ## Recent Changes
+
+- `v1.5.6` replaces ambiguous AI tool status text with readable success/failure labels and moves exit codes into expanded details. Model, reasoning effort, and manual input choices are cached per API service, with permissions remembered per server. Selections save before the first message and carry over to new chats, reopened empty chats, and app restarts.
 
 - `v1.5.5` adds per-server AI conversation history with reopen, continue, and delete actions; **+** preserves existing chats and starts an independent conversation. Chats and tool results are encrypted locally and survive restarts. Model, effort, and permissions remain editable during execution and apply to the next send; background output stays with its original task. About and Updates now includes expandable version history, highlights the installed version, and shows available update notes; bundled history is readable offline.
 

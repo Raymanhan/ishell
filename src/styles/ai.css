@@ -284,6 +284,9 @@
 .ai-tool.failed summary > svg:first-child {
   color: var(--danger);
 }
+.ai-tool.neutral summary > svg:first-child {
+  color: var(--faint);
+}
 .ai-tool summary > svg:last-child {
   transition: transform 100ms;
 }

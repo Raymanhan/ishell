@@ -29,6 +29,7 @@ import {
   type AiEntry,
 } from "../features/ai/types";
 import type { ShellTab } from "../features/shell/types";
+import { toolStatus } from "../features/ai/toolStatus";
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -70,9 +71,8 @@ function ToolCard({
   onApprove: (allow: boolean) => void;
 }) {
   const result = entry.result;
-  const failed =
-    Boolean(result?.error) ||
-    (result?.exitCode != null && result.exitCode !== 0);
+  const status = toolStatus(entry);
+  const failed = status.kind === "error";
   const title =
     (
       {
@@ -93,7 +93,7 @@ function ToolCard({
   );
   return (
     <details
-      className={`ai-tool ${failed ? "failed" : ""} ${entry.approvalPending ? "awaiting" : ""}`}
+      className={`ai-tool ${failed ? "failed" : ""} ${status.kind === "neutral" ? "neutral" : ""} ${entry.approvalPending ? "awaiting" : ""}`}
       open={entry.running || entry.approvalPending || undefined}
     >
       <summary>
@@ -103,24 +103,13 @@ function ToolCard({
           <LoaderCircle size={14} className="ai-spin" />
         ) : failed ? (
           <X size={14} />
+        ) : status.kind === "neutral" ? (
+          <Square size={12} />
         ) : (
           <Check size={14} />
         )}
         <strong>{title}</strong>
-        <span>
-          {entry.approvalPending
-            ? "等待确认"
-            : entry.approved === false
-              ? "已拒绝"
-              : entry.running
-                ? "执行中"
-                : failed
-                  ? "失败"
-                  : result?.exitCode === 0
-                    ? "完成"
-                    : "未完成"}
-          {result?.exitCode != null ? ` · ${result.exitCode}` : ""}
-        </span>
+        <span>{status.label}</span>
         <ChevronDown size={13} />
       </summary>
       {entry.risk && (
@@ -172,6 +161,7 @@ function ToolCard({
         <pre className="ai-tool-output ai-stderr">{result.stderr}</pre>
       )}
       {result?.error && <div className="ai-error">{result.error}</div>}
+      {result?.exitCode != null && <small>退出码：{result.exitCode}</small>}
       {result?.truncated && <small>输出较长，仅保留部分内容。</small>}
     </details>
   );
@@ -269,6 +259,7 @@ export function AiPanel({
   const patch = (change: Partial<typeof conversation>) =>
     ai.update(tab.id, (value) => ({ ...value, ...change }));
   useEffect(() => {
+    ai.restorePreferences(tab.id);
     follow.current = true;
     setScrolled(false);
     setEditing(null);
@@ -550,6 +541,11 @@ export function AiPanel({
         )}
         {ai.configError && (
           <div className="ai-error">AI 设置读取失败：{ai.configError}</div>
+        )}
+        {ai.preferencesError && (
+          <div className="ai-notice" role="status">
+            {ai.preferencesError}
+          </div>
         )}
         {ai.modelsError && (
           <div className="ai-error" role="alert">
