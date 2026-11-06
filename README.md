@@ -56,7 +56,7 @@ The built-in assistant uses your configured model API and does not require an ex
 | --- | --- |
 | Suggestions only | Advice without executing server tools |
 | Confirm before execution | Approval for every tool call |
-| Automatic, low risk (default) | Recognized low-risk queries run automatically; writes, code, and unknown commands require approval |
+| Automatic, low risk (default) | Read-only operations (viewing files, logs, status, listings) run automatically; writing files, changing the server, installing software, running scripts or code, reading credential files, and commands that cannot be confirmed read-only require approval |
 | Full access | Task tools run without individual approval |
 
 Task messages, necessary server information, and tool output are sent to your configured model service. API keys, conversations, and tool results are encrypted locally. Bring your own model service configuration. See the [AI assistant guide](docs/AI_GUIDE.md) for details.
