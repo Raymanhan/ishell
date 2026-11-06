@@ -1,4 +1,12 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+} from "react";
 import {
   ArrowUp,
   Check,
@@ -33,6 +41,7 @@ import {
   type AiEntry,
 } from "../features/ai/types";
 import { useImeGuard } from "../features/ai/ime";
+import { useSmoothText } from "../features/ai/useSmoothText";
 import type { ShellTab } from "../features/shell/types";
 import { toolStatus, toolTitle } from "../features/ai/toolStatus";
 
@@ -87,6 +96,10 @@ function ToolCard({
 }) {
   const result = entry.result;
   const status = toolStatus(entry);
+  // Slide in only cards that appear while the task runs, not restored ones.
+  const [live] = useState(() =>
+    Boolean(entry.running || entry.approvalPending),
+  );
   const failed = status.kind === "error";
   const args = entry.arguments;
   const { title, literal } = toolTitle(entry);
@@ -100,8 +113,10 @@ function ToolCard({
   );
   return (
     <details
-      className={`ai-tool ${failed ? "failed" : ""} ${status.kind === "neutral" ? "neutral" : ""} ${entry.approvalPending ? "awaiting" : ""}`}
-      open={entry.running || entry.approvalPending || undefined}
+      className={`ai-tool ${failed ? "failed" : ""} ${status.kind === "neutral" ? "neutral" : ""} ${entry.approvalPending ? "awaiting" : ""} ${live ? "ai-enter" : ""}`}
+      // Collapsed while it runs; the user opens it when they want the
+      // details. Only an approval opens it, since it needs a decision.
+      open={entry.approvalPending || undefined}
     >
       <summary>
         {entry.approvalPending ? (
@@ -309,6 +324,18 @@ interface MessageEdit {
   submit: (entryId: string, text: string) => Promise<boolean>;
 }
 
+/** Runs of consecutive tool calls render as one list. */
+function groupTools(entries: AiEntry[]): (AiEntry | AiEntry[])[] {
+  const blocks: (AiEntry | AiEntry[])[] = [];
+  for (const entry of entries) {
+    const last = blocks[blocks.length - 1];
+    if (entry.kind !== "tool") blocks.push(entry);
+    else if (Array.isArray(last)) last.push(entry);
+    else blocks.push([entry]);
+  }
+  return blocks;
+}
+
 const Message = memo(function Message({
   entry,
   target,
@@ -316,6 +343,7 @@ const Message = memo(function Message({
   editing,
   editBlock,
   onEdit,
+  streaming,
 }: {
   entry: AiEntry;
   target: string;
@@ -323,6 +351,8 @@ const Message = memo(function Message({
   editing: boolean;
   editBlock: EditBlock;
   onEdit: MessageEdit;
+  /** The reply text is still arriving. */
+  streaming: boolean;
 }) {
   // Re-render on language changes (memoized or a window root).
   useLocale();
@@ -352,31 +382,43 @@ const Message = memo(function Message({
         onEdit={onEdit}
       />
     );
+  return <AssistantMessage entry={entry} streaming={streaming} />;
+});
+
+const markdownComponents = {
+  a: (props: ComponentProps<"a">) => (
+    <a {...props} target="_blank" rel="noreferrer" />
+  ),
+};
+
+function AssistantMessage({
+  entry,
+  streaming,
+}: {
+  entry: AiEntry;
+  streaming: boolean;
+}) {
+  const text = useSmoothText(entry.text || "", streaming);
+  const [live] = useState(streaming);
   return (
-    <article className={`ai-message ${entry.kind}`}>
+    <article className={`ai-message ${entry.kind}${live ? " ai-enter" : ""}`}>
       {entry.thinking && (
         <details className="ai-thinking">
           <summary>{t("思考过程")}</summary>
           <div>{entry.thinking}</div>
         </details>
       )}
-      {entry.text && (
+      {text && (
         <div className="ai-markdown">
-          <Markdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              a: (props) => <a {...props} target="_blank" rel="noreferrer" />,
-              pre: ({ children, ...props }) => <pre {...props}>{children}</pre>,
-            }}
-          >
-            {entry.text}
+          <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+            {text}
           </Markdown>
-          <CopyButton text={entry.text} />
+          {text === entry.text && <CopyButton text={entry.text} />}
         </div>
       )}
     </article>
   );
-});
+}
 
 export function AiPanel({
   tab,
@@ -394,6 +436,7 @@ export function AiPanel({
   const serverBusy = ai.serverBusy(tab.serverId);
   const connected = tab.state === "connected";
   const scroller = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const [scrolled, setScrolled] = useState(false);
@@ -455,6 +498,18 @@ export function AiPanel({
     if (follow.current && scroller.current)
       scroller.current.scrollTop = scroller.current.scrollHeight;
   }, [conversation.entries, busy, tab.id, conversation.id]);
+  // Replies are eased in after their entry updates, so also follow the
+  // content as it grows.
+  useEffect(() => {
+    const element = content.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      if (follow.current && scroller.current)
+        scroller.current.scrollTop = scroller.current.scrollHeight;
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   useEffect(
     () => fitHeight(textarea.current, 180),
     [conversation.draft, tab.id],
@@ -516,6 +571,7 @@ export function AiPanel({
     (option) => option.value === conversation.permission,
   )!;
   const awaiting = conversation.entries.some((entry) => entry.approvalPending);
+  const lastEntryId = conversation.entries[conversation.entries.length - 1]?.id;
   return (
     <section className="ai-panel" aria-label={t("AI 助手")}>
       <header className="ai-head">
@@ -717,101 +773,111 @@ export function AiPanel({
         aria-live="polite"
         aria-relevant="additions"
       >
-        {!conversation.entries.length && (
-          <div className="ai-empty">
-            <span>
-              <Sparkles size={27} />
-            </span>
-            <h3>{t("这台服务器，交给 AI")}</h3>
-            <p>{t("描述目标，AI 会检查环境、执行命令并验证结果。")}</p>
-            <div>
-              {[
-                t("检查服务器健康状态，找出异常服务"),
-                t("检查 Docker 环境和正在运行的容器"),
-                t("帮我部署一个网站，先确认所需信息"),
-              ].map((text) => (
-                <button
-                  type="button"
-                  key={text}
-                  onClick={() => {
-                    patch({ draft: text });
-                    textarea.current?.focus();
-                  }}
-                >
-                  {text}
-                  <ArrowUp size={13} />
-                </button>
-              ))}
+        <div ref={content}>
+          {!conversation.entries.length && (
+            <div className="ai-empty">
+              <span>
+                <Sparkles size={27} />
+              </span>
+              <h3>{t("这台服务器，交给 AI")}</h3>
+              <p>{t("描述目标，AI 会检查环境、执行命令并验证结果。")}</p>
+              <div>
+                {[
+                  t("检查服务器健康状态，找出异常服务"),
+                  t("检查 Docker 环境和正在运行的容器"),
+                  t("帮我部署一个网站，先确认所需信息"),
+                ].map((text) => (
+                  <button
+                    type="button"
+                    key={text}
+                    onClick={() => {
+                      patch({ draft: text });
+                      textarea.current?.focus();
+                    }}
+                  >
+                    {text}
+                    <ArrowUp size={13} />
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
-        {ai.configError && (
-          <div className="ai-error">
-            {t("AI 设置读取失败：")}
-            {ai.configError}
-          </div>
-        )}
-        {ai.preferencesError && (
-          <div className="ai-notice" role="status">
-            {ai.preferencesError}
-          </div>
-        )}
-        {ai.modelsError && (
-          <div className="ai-error" role="alert">
-            {t("模型元数据读取失败：")}
-            {ai.modelsError}
-            <button
-              type="button"
-              className="ai-icon"
-              aria-label={t("刷新模型元数据")}
-              disabled={ai.modelsLoading}
-              onClick={() => void ai.refreshModels()}
-            >
-              <RefreshCw size={13} />
+          )}
+          {ai.configError && (
+            <div className="ai-error">
+              {t("AI 设置读取失败：")}
+              {ai.configError}
+            </div>
+          )}
+          {ai.preferencesError && (
+            <div className="ai-notice" role="status">
+              {ai.preferencesError}
+            </div>
+          )}
+          {ai.modelsError && (
+            <div className="ai-error" role="alert">
+              {t("模型元数据读取失败：")}
+              {ai.modelsError}
+              <button
+                type="button"
+                className="ai-icon"
+                aria-label={t("刷新模型元数据")}
+                disabled={ai.modelsLoading}
+                onClick={() => void ai.refreshModels()}
+              >
+                <RefreshCw size={13} />
+              </button>
+            </div>
+          )}
+          {!models.length && !ai.modelsLoading && (
+            <button type="button" className="ai-setup" onClick={onSettings}>
+              <Settings size={15} />
+              {t("先配置模型地址、密钥和模型")}
             </button>
-          </div>
-        )}
-        {!models.length && !ai.modelsLoading && (
-          <button type="button" className="ai-setup" onClick={onSettings}>
-            <Settings size={15} />
-            {t("先配置模型地址、密钥和模型")}
-          </button>
-        )}
-        {conversation.entries.map((entry) => (
-          <Message
-            key={entry.id}
-            entry={entry}
-            target={`${tab.title} (${tab.host})`}
-            onApprove={approve}
-            editing={editingId === entry.id}
-            editBlock={
-              entry.kind !== "user"
-                ? ""
-                : editable.has(entry.id)
-                  ? editBlock
-                  : parseCompactCommand(entry.text || "") !== null
-                    ? t("/compact 命令不能编辑")
-                    : t("这条消息已压缩进上下文摘要，无法从这里重新编辑")
-            }
-            onEdit={onEdit}
-          />
-        ))}
-        {busy && (
-          <div className="ai-working">
-            {awaiting ? (
-              <ShieldCheck size={13} />
+          )}
+          {groupTools(conversation.entries).map((block) => {
+            const message = (entry: AiEntry) => (
+              <Message
+                key={entry.id}
+                entry={entry}
+                target={`${tab.title} (${tab.host})`}
+                onApprove={approve}
+                editing={editingId === entry.id}
+                editBlock={
+                  entry.kind !== "user"
+                    ? ""
+                    : editable.has(entry.id)
+                      ? editBlock
+                      : parseCompactCommand(entry.text || "") !== null
+                        ? t("/compact 命令不能编辑")
+                        : t("这条消息已压缩进上下文摘要，无法从这里重新编辑")
+                }
+                onEdit={onEdit}
+                streaming={busy && entry.id === lastEntryId}
+              />
+            );
+            return Array.isArray(block) ? (
+              <div className="ai-tool-group" key={block[0].id}>
+                {block.map(message)}
+              </div>
             ) : (
-              <LoaderCircle size={13} className="ai-spin" />
-            )}
-            {conversation.stopping
-              ? t("正在停止远端任务…")
-              : awaiting
-                ? t("请确认上述操作后继续")
-                : conversation.compacting
-                  ? t("正在压缩上下文…")
-                  : t("正在处理…")}
-          </div>
-        )}
+              message(block)
+            );
+          })}
+          {busy && (
+            <div className={`ai-working${awaiting ? " awaiting" : ""}`}>
+              {awaiting && <ShieldCheck size={13} />}
+              <span className="ai-working-text">
+                {conversation.stopping
+                  ? t("正在停止远端任务…")
+                  : awaiting
+                    ? t("请确认上述操作后继续")
+                    : conversation.compacting
+                      ? t("正在压缩上下文…")
+                      : t("正在处理…")}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
       {scrolled && (
         <button
