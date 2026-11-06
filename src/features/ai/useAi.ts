@@ -32,6 +32,7 @@ export function useAi(tabs: ShellTab[]) {
   const [modelsError, setModelsError] = useState("");
   const [configLoaded, setConfigLoaded] = useState(!isTauri);
   const [historyLoaded, setHistoryLoaded] = useState(!isTauri);
+  const historyGeneration = useRef(0);
   const [historyError, setHistoryError] = useState("");
   const [activeIds, setActiveIds] = useState<Record<string, string>>({});
   const active = useRef(activeIds);
@@ -137,8 +138,10 @@ export function useAi(tabs: ShellTab[]) {
   }
 
   async function loadHistory() {
+    const generation = ++historyGeneration.current;
     try {
       const saved = await command<AiConversation[]>("ai_get_history");
+      if (generation !== historyGeneration.current) return;
       current.current = Object.fromEntries(
         saved.map((value) => [value.id, restoreConversation(value)]),
       );
@@ -146,7 +149,8 @@ export function useAi(tabs: ShellTab[]) {
       setHistoryLoaded(true);
       setHistoryError("");
     } catch (error) {
-      setHistoryError(`历史记录读取失败：${error}`);
+      if (generation === historyGeneration.current)
+        setHistoryError(`历史记录读取失败：${error}`);
     }
   }
 
@@ -164,6 +168,9 @@ export function useAi(tabs: ShellTab[]) {
 
   useEffect(() => {
     if (isTauri) void loadHistory();
+    return () => {
+      historyGeneration.current += 1;
+    };
   }, []);
 
   useEffect(() => {

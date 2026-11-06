@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.5.4](https://github.com/Raymanhan/ishell/releases/tag/v1.5.4)**
+**[Download iShell v1.5.5](https://github.com/Raymanhan/ishell/releases/tag/v1.5.5)**
 
 Available packages:
 
@@ -227,6 +227,8 @@ Conversations and tasks stay bound to their originating terminal connection. Swi
 
 Context automatically compacts at **200k estimated tokens** into a summary that retains the original task, recent complete tool groups, key results, and remaining work. Visible chat history remains available; failed/canceled compaction preserves the original context. A provider context-limit error also triggers one compaction attempt. Conversations and tool results are encrypted locally and can be reopened after restarting; interrupted tasks never resume automatically. Task messages, necessary server details, and tool output are sent to the configured model API.
 
+Open **Settings → About and Updates → Version History** to expand release notes, with the installed version expanded by default. Available updates show their notes too. History is bundled for offline use and shares the release changelog source.
+
 ### Settings
 
 Settings lists its categories on the left and the chosen category's settings
@@ -321,8 +323,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.5.4
-git push origin v1.5.4
+git tag v1.5.5
+git push origin v1.5.5
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -383,7 +385,7 @@ src-tauri/src/
 
 ## Recent Changes
 
-- `v1.5.4` adds per-server AI conversation history with reopen, continue, and delete actions; **+** preserves existing chats and starts an independent conversation. Chats and tool results are encrypted locally and survive restarts. Model, effort, and permissions remain editable during execution and apply to the next send; background output stays with its original task.
+- `v1.5.5` adds per-server AI conversation history with reopen, continue, and delete actions; **+** preserves existing chats and starts an independent conversation. Chats and tool results are encrypted locally and survive restarts. Model, effort, and permissions remain editable during execution and apply to the next send; background output stays with its original task. About and Updates now includes expandable version history, highlights the installed version, and shows available update notes; bundled history is readable offline.
 
 - `v1.5.3` reads AI models and reasoning levels from the configured service metadata, refreshes stale selections, and supports manual model IDs / reasoning efforts when discovery is unavailable or incomplete. Model, effort, and permissions now share one row; context usage moves to the footer.
 

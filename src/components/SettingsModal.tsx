@@ -1,6 +1,7 @@
 import { useState, type KeyboardEvent } from "react";
 import { Download, Droplets, Info, Layers, Palette, RefreshCw, Sparkles, SquareTerminal, X } from "lucide-react";
 import { AiSettings } from "./AiSettings";
+import { ReleaseHistory } from "./ReleaseHistory";
 import type { AiConfig } from "../features/ai/types";
 import {
   clampTailViewerLines,
@@ -337,6 +338,7 @@ export function SettingsModal({
                     onChange={(event) => onAutoCheckUpdatesChange(event.target.checked)}
                   />
                 </label>
+                <ReleaseHistory currentVersion={updater.currentVersion} update={updater.update} />
               </div>
             )}
           </div>
