@@ -32,6 +32,8 @@ import {
 import type { ShellTab } from "../features/shell/types";
 import { toolStatus } from "../features/ai/toolStatus";
 
+import { t, translateMessage, formatDateTime } from "../i18n";
+import { useLocale } from "../i18n/useLocale";
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -45,8 +47,8 @@ function CopyButton({ text }: { text: string }) {
     <button
       type="button"
       className="ai-icon"
-      title={copied ? "已复制" : "复制"}
-      aria-label={copied ? "已复制" : "复制"}
+      title={copied ? t("已复制") : t("复制")}
+      aria-label={copied ? t("已复制") : t("复制")}
       onClick={() => {
         void navigator.clipboard
           .writeText(text)
@@ -77,10 +79,10 @@ function ToolCard({
   const title =
     (
       {
-        shell: "执行命令",
-        run_code: "运行代码",
-        read_file: "读取文件",
-        write_file: "写入文件",
+        shell: t("执行命令"),
+        run_code: t("运行代码"),
+        read_file: t("读取文件"),
+        write_file: t("写入文件"),
       } as Record<string, string>
     )[entry.name || ""] || entry.name;
   const args = entry.arguments;
@@ -115,13 +117,13 @@ function ToolCard({
       </summary>
       {entry.risk && (
         <div className={`ai-risk ${entry.risk.level}`}>
-          <strong>{entry.risk.label}</strong>
-          <span>{entry.risk.reason}</span>
+          <strong>{translateMessage(entry.risk.label)}</strong>
+          <span>{translateMessage(entry.risk.reason)}</span>
         </div>
       )}
       {(entry.name === "shell" || entry.name === "run_code") && (
         <div className="ai-tool-path">
-          目录：{String(args?.cwd || "~（远端主目录）")}
+          {t("目录：")}{String(args?.cwd || t("~（远端主目录）"))}
         </div>
       )}
       {entry.name === "write_file" && (
@@ -133,21 +135,20 @@ function ToolCard({
       </div>
       {entry.approvalPending && (
         <div className="ai-approval">
-          <p>目标：{target}。请检查命令、代码和路径。</p>
+          <p>{t("目标：")}{target}{t("。请检查命令、代码和路径。")}</p>
           <div>
             <button
               type="button"
               disabled={entry.approvalBusy}
               onClick={() => onApprove(false)}
             >
-              拒绝
-            </button>
+              {t("拒绝")}</button>
             <button
               type="button"
               disabled={entry.approvalBusy}
               onClick={() => onApprove(true)}
             >
-              {entry.approvalBusy ? "提交中…" : "仅此次允许"}
+              {entry.approvalBusy ? t("提交中…") : t("仅此次允许")}
             </button>
           </div>
         </div>
@@ -157,13 +158,17 @@ function ToolCard({
           {entry.approvalError}
         </div>
       )}
-      {result?.stdout && <pre className="ai-tool-output">{result.stdout}</pre>}
+      {result?.stdout && (
+        <pre className="ai-tool-output">
+          {entry.name === "write_file" ? translateMessage(result.stdout) : result.stdout}
+        </pre>
+      )}
       {result?.stderr && (
         <pre className="ai-tool-output ai-stderr">{result.stderr}</pre>
       )}
-      {result?.error && <div className="ai-error">{result.error}</div>}
-      {result?.exitCode != null && <small>退出码：{result.exitCode}</small>}
-      {result?.truncated && <small>输出较长，仅保留部分内容。</small>}
+      {result?.error && <div className="ai-error">{translateMessage(result.error)}</div>}
+      {result?.exitCode != null && <small>{t("退出码：")}{result.exitCode}</small>}
+      {result?.truncated && <small>{t("输出较长，仅保留部分内容。")}</small>}
     </details>
   );
 }
@@ -176,6 +181,8 @@ const Message = memo(function Message({
   target: string;
   onApprove: (entryId: string, allow: boolean) => void;
 }) {
+  // Re-render on language changes (memoized or a window root).
+  useLocale();
   if (entry.kind === "tool")
     return (
       <ToolCard
@@ -190,14 +197,14 @@ const Message = memo(function Message({
         className={entry.kind === "error" ? "ai-error" : "ai-notice"}
         role={entry.kind === "error" ? "alert" : undefined}
       >
-        {entry.text}
+        {translateMessage(entry.text || "")}
       </div>
     );
   return (
     <article className={`ai-message ${entry.kind}`}>
       {entry.thinking && (
         <details className="ai-thinking">
-          <summary>思考过程</summary>
+          <summary>{t("思考过程")}</summary>
           <div>{entry.thinking}</div>
         </details>
       )}
@@ -310,7 +317,7 @@ export function AiPanel({
         new TextEncoder().encode(value).length > 200 ||
         /[\u0000-\u001f\u007f]/.test(value)
       ) {
-        setManualError("请输入 1–200 字节的模型 ID");
+        setManualError(t("请输入 1–200 字节的模型 ID"));
         return;
       }
       patch({
@@ -321,7 +328,7 @@ export function AiPanel({
       });
     } else {
       if (!/^[a-zA-Z0-9_-]{1,64}$/.test(value)) {
-        setManualError("请输入 1–64 位字母、数字、下划线或短横线");
+        setManualError(t("请输入 1–64 位字母、数字、下划线或短横线"));
         return;
       }
       patch({ effort: value, manualEffort: value !== "default" });
@@ -333,18 +340,18 @@ export function AiPanel({
   )!;
   const awaiting = conversation.entries.some((entry) => entry.approvalPending);
   return (
-    <section className="ai-panel" aria-label="AI 助手">
+    <section className="ai-panel" aria-label={t("AI 助手")}>
       <header className="ai-head">
         <div>
           <Sparkles size={16} />
-          <strong>AI 助手</strong>
+          <strong>{t("AI 助手")}</strong>
         </div>
         <div>
           <button
             className="ai-icon"
             type="button"
-            title="刷新模型元数据"
-            aria-label="刷新模型元数据"
+            title={t("刷新模型元数据")}
+            aria-label={t("刷新模型元数据")}
             disabled={ai.modelsLoading}
             onClick={() => void ai.refreshModels()}
           >
@@ -356,8 +363,8 @@ export function AiPanel({
           <button
             className="ai-icon"
             type="button"
-            title="历史记录"
-            aria-label="AI 历史记录"
+            title={t("历史记录")}
+            aria-label={t("AI 历史记录")}
             aria-expanded={historyOpen}
             onClick={() => {
               setHistoryOpen(!historyOpen);
@@ -369,8 +376,8 @@ export function AiPanel({
           <button
             className="ai-icon"
             type="button"
-            title="新建对话"
-            aria-label="新建 AI 对话"
+            title={t("新建对话")}
+            aria-label={t("新建 AI 对话")}
             disabled={!ai.historyLoaded || !conversation.entries.length}
             onClick={() => {
               ai.newChat(tab);
@@ -382,8 +389,8 @@ export function AiPanel({
           <button
             className="ai-icon"
             type="button"
-            title="AI 设置"
-            aria-label="AI 设置"
+            title={t("AI 设置")}
+            aria-label={t("AI 设置")}
             onClick={onSettings}
           >
             <Settings size={15} />
@@ -391,8 +398,8 @@ export function AiPanel({
           <button
             className="ai-icon"
             type="button"
-            title="关闭 AI 面板"
-            aria-label="关闭 AI 面板"
+            title={t("关闭 AI 面板")}
+            aria-label={t("关闭 AI 面板")}
             onClick={onClose}
           >
             <X size={16} />
@@ -406,13 +413,13 @@ export function AiPanel({
         <span>{tab.host}</span>
       </div>
       {historyOpen && (
-        <div className="ai-history" role="dialog" aria-label="AI 历史记录列表">
+        <div className="ai-history" role="dialog" aria-label={t("AI 历史记录列表")}>
           <header>
-            <strong>历史记录 · {tab.title}</strong>
+            <strong>{t("历史记录 · ")}{tab.title}</strong>
             <button
               type="button"
               className="ai-icon"
-              aria-label="关闭历史记录"
+              aria-label={t("关闭历史记录")}
               onClick={() => setHistoryOpen(false)}
             >
               <X size={14} />
@@ -421,7 +428,7 @@ export function AiPanel({
           <div className="ai-history-list">
             {!history.length && (
               <p className="ai-notice">
-                {ai.historyLoaded ? "暂无历史记录" : "正在读取历史记录…"}
+                {ai.historyLoaded ? t("暂无历史记录") : t("正在读取历史记录…")}
               </p>
             )}
             {history.map((item) => (
@@ -444,17 +451,17 @@ export function AiPanel({
                 >
                   <strong>{conversationTitle(item)}</strong>
                   <span>
-                    {new Date(item.updatedAt).toLocaleString()} ·{" "}
+                    {formatDateTime(item.updatedAt, { dateStyle: "short", timeStyle: "short" })} ·{" "}
                     {item.requestId
-                      ? "执行中"
-                      : `${item.entries.filter((entry) => entry.kind === "user").length} 条消息`}
+                      ? t("执行中")
+                      : t("{0} 条消息", item.entries.filter((entry) => entry.kind === "user").length)}
                   </span>
                 </button>
                 <button
                   type="button"
                   className="ai-icon"
-                  title={item.requestId ? "请先停止任务再删除" : "删除历史记录"}
-                  aria-label={`删除历史记录：${conversationTitle(item)}`}
+                  title={item.requestId ? t("请先停止任务再删除") : t("删除历史记录")}
+                  aria-label={t("删除历史记录：{0}", conversationTitle(item))}
                   disabled={
                     Boolean(item.requestId) || ai.deletingIds.includes(item.id)
                   }
@@ -464,14 +471,13 @@ export function AiPanel({
                 </button>
                 {deleteId === item.id && (
                   <div className="ai-history-delete">
-                    <span>删除这条对话及其记录？</span>
+                    <span>{t("删除这条对话及其记录？")}</span>
                     <button
                       type="button"
                       disabled={ai.deletingIds.includes(item.id)}
                       onClick={() => setDeleteId(null)}
                     >
-                      取消
-                    </button>
+                      {t("取消")}</button>
                     <button
                       type="button"
                       disabled={ai.deletingIds.includes(item.id)}
@@ -481,14 +487,13 @@ export function AiPanel({
                           .then(() => setDeleteId(null));
                       }}
                     >
-                      删除
-                    </button>
+                      {t("删除")}</button>
                   </div>
                 )}
               </div>
             ))}
           </div>
-          <small>仅显示当前服务器的记录，保存在本机。</small>
+          <small>{t("仅显示当前服务器的记录，保存在本机。")}</small>
         </div>
       )}
       {ai.historyError && (
@@ -497,7 +502,7 @@ export function AiPanel({
           <button
             type="button"
             className="ai-icon"
-            aria-label="重试历史记录"
+            aria-label={t("重试历史记录")}
             onClick={() => void ai.retryHistory()}
           >
             <RefreshCw size={13} />
@@ -521,13 +526,13 @@ export function AiPanel({
             <span>
               <Sparkles size={27} />
             </span>
-            <h3>这台服务器，交给 AI</h3>
-            <p>描述目标，AI 会检查环境、执行命令并验证结果。</p>
+            <h3>{t("这台服务器，交给 AI")}</h3>
+            <p>{t("描述目标，AI 会检查环境、执行命令并验证结果。")}</p>
             <div>
               {[
-                "检查服务器健康状态，找出异常服务",
-                "检查 Docker 环境和正在运行的容器",
-                "帮我部署一个网站，先确认所需信息",
+                t("检查服务器健康状态，找出异常服务"),
+                t("检查 Docker 环境和正在运行的容器"),
+                t("帮我部署一个网站，先确认所需信息"),
               ].map((text) => (
                 <button
                   type="button"
@@ -545,7 +550,7 @@ export function AiPanel({
           </div>
         )}
         {ai.configError && (
-          <div className="ai-error">AI 设置读取失败：{ai.configError}</div>
+          <div className="ai-error">{t("AI 设置读取失败：")}{ai.configError}</div>
         )}
         {ai.preferencesError && (
           <div className="ai-notice" role="status">
@@ -554,11 +559,11 @@ export function AiPanel({
         )}
         {ai.modelsError && (
           <div className="ai-error" role="alert">
-            模型元数据读取失败：{ai.modelsError}
+            {t("模型元数据读取失败：")}{ai.modelsError}
             <button
               type="button"
               className="ai-icon"
-              aria-label="刷新模型元数据"
+              aria-label={t("刷新模型元数据")}
               disabled={ai.modelsLoading}
               onClick={() => void ai.refreshModels()}
             >
@@ -569,8 +574,7 @@ export function AiPanel({
         {!models.length && !ai.modelsLoading && (
           <button type="button" className="ai-setup" onClick={onSettings}>
             <Settings size={15} />
-            先配置模型地址、密钥和模型
-          </button>
+            {t("先配置模型地址、密钥和模型")}</button>
         )}
         {conversation.entries.map((entry) => (
           <Message
@@ -588,12 +592,12 @@ export function AiPanel({
               <LoaderCircle size={13} className="ai-spin" />
             )}
             {conversation.stopping
-              ? "正在停止远端任务…"
+              ? t("正在停止远端任务…")
               : awaiting
-                ? "请确认上述操作后继续"
+                ? t("请确认上述操作后继续")
                 : conversation.compacting
-                  ? "正在自动压缩上下文…"
-                  : "正在处理…"}
+                  ? t("正在自动压缩上下文…")
+                  : t("正在处理…")}
           </div>
         )}
       </div>
@@ -601,7 +605,7 @@ export function AiPanel({
         <button
           type="button"
           className="ai-scroll-bottom"
-          aria-label="滚动到最新消息"
+          aria-label={t("滚动到最新消息")}
           onClick={() => {
             follow.current = true;
             scroller.current?.scrollTo({
@@ -617,23 +621,23 @@ export function AiPanel({
         <form
           className="ai-manual-editor"
           role="dialog"
-          aria-label={editing === "model" ? "手动输入模型" : "手动输入思考程度"}
+          aria-label={editing === "model" ? t("手动输入模型") : t("手动输入思考程度")}
           onSubmit={(event) => {
             event.preventDefault();
             commitManual();
           }}
         >
           <label>
-            {editing === "model" ? "模型 ID" : "reasoning_effort 参数"}
+            {editing === "model" ? t("模型 ID") : t("reasoning_effort 参数")}
             <input
               autoFocus
-              aria-label="手动值"
+              aria-label={t("手动值")}
               value={manualDraft}
               maxLength={editing === "model" ? 200 : 64}
               placeholder={
                 editing === "model"
-                  ? "输入服务支持的模型 ID"
-                  : "输入服务支持的思考程度值"
+                  ? t("输入服务支持的模型 ID")
+                  : t("输入服务支持的思考程度值")
               }
               spellCheck={false}
               onChange={(event) => setManualDraft(event.target.value)}
@@ -642,7 +646,7 @@ export function AiPanel({
               }}
             />
           </label>
-          <small>优先使用 /models 元数据；手动值会按原样发送给模型服务。</small>
+          <small>{t("优先使用 /models 元数据；手动值会按原样发送给模型服务。")}</small>
           {manualError && (
             <span className="ai-error" role="alert">
               {manualError}
@@ -650,9 +654,8 @@ export function AiPanel({
           )}
           <div>
             <button type="button" onClick={() => setEditing(null)}>
-              取消
-            </button>
-            <button type="submit">应用</button>
+              {t("取消")}</button>
+            <button type="submit">{t("应用")}</button>
           </div>
         </form>
       )}
@@ -666,12 +669,12 @@ export function AiPanel({
       >
         <textarea
           ref={textarea}
-          aria-label="给 AI 发送消息"
+          aria-label={t("给 AI 发送消息")}
           value={conversation.draft}
           maxLength={50000}
           onChange={(e) => patch({ draft: e.target.value })}
           placeholder={
-            connected ? "描述部署、排查或运维任务…" : "请先连接服务器"
+            connected ? t("描述部署、排查或运维任务…") : t("请先连接服务器")
           }
           disabled={!connected}
           rows={2}
@@ -691,8 +694,9 @@ export function AiPanel({
         />
         <div className="ai-composer-controls">
           <select
-            aria-label="AI 模型"
-            title={selection.model || "选择模型"}
+            className="ai-model-select"
+            aria-label={t("AI 模型")}
+            title={selection.model || t("选择模型")}
             value={selection.model}
             onChange={(e) =>
               e.target.value === "__ishell_manual__"
@@ -711,21 +715,22 @@ export function AiPanel({
             }
           >
             <option value="" disabled>
-              {ai.modelsLoading ? "读取模型…" : "选择模型"}
+              {ai.modelsLoading ? t("读取模型…") : t("选择模型")}
             </option>
             {models.map((model) => (
               <option key={model.id} value={model.id}>
                 {model.name}
               </option>
             ))}
-            <option value="__ishell_manual__">手动输入模型…</option>
+            <option value="__ishell_manual__">{t("手动输入模型…")}</option>
           </select>
           <select
-            aria-label="思考程度"
+            className="ai-effort-select"
+            aria-label={t("思考程度")}
             title={
               selection.efforts.length > 1
-                ? "服务元数据声明的思考程度"
-                : "服务未声明思考档位，使用默认值"
+                ? t("服务元数据声明的思考程度")
+                : t("服务未声明思考档位，使用默认值")
             }
             value={selection.effort}
             onChange={(e) =>
@@ -745,13 +750,13 @@ export function AiPanel({
                 {label}
               </option>
             ))}
-            <option value="__ishell_manual__">手动输入…</option>
+            <option value="__ishell_manual__">{t("手动输入…")}</option>
           </select>
           <label className="ai-permission-control">
             <ShieldCheck size={12} />
             <select
-              aria-label="Agent 权限"
-              title={`${permission.description}。风险判断是辅助提示，不是隔离沙箱。`}
+              aria-label={t("Agent 权限")}
+              title={t("{0}。风险判断是辅助提示，不是隔离沙箱。", permission.description)}
               value={conversation.permission}
               onChange={(event) =>
                 patch({
@@ -771,8 +776,8 @@ export function AiPanel({
             <button
               type="button"
               className="ai-send stop"
-              title="停止任务"
-              aria-label="停止 AI 任务"
+              title={t("停止任务")}
+              aria-label={t("停止 AI 任务")}
               disabled={conversation.stopping}
               onClick={() => void ai.stop(tab.id)}
             >
@@ -782,8 +787,8 @@ export function AiPanel({
             <button
               type="submit"
               className="ai-send"
-              title="发送（Enter）"
-              aria-label="发送 AI 消息"
+              title={t("发送（Enter）")}
+              aria-label={t("发送 AI 消息")}
               disabled={
                 !connected ||
                 !ai.historyLoaded ||
@@ -802,18 +807,16 @@ export function AiPanel({
       <footer className="ai-foot">
         <span>
           {busy
-            ? "设置修改于下次发送生效"
+            ? t("设置修改于下次发送生效")
             : serverBusy
-              ? "此服务器另有任务执行中，可从历史记录查看"
-              : `${tab.title} · Shift + Enter 换行`}
+              ? t("此服务器另有任务执行中，可从历史记录查看")
+              : t("{0} · Shift + Enter 换行", tab.title)}
         </span>
         <span
           className="ai-context-usage"
-          title={`估算的模型上下文用量；达到 ${Math.round(contextLimit / 1000)}k tokens 时自动压缩${
-            selectedWindow
-              ? `（模型声明上下文窗口 ${Math.round(selectedWindow / 1000)}k）`
-              : ""
-          }`}
+          title={t("估算的模型上下文用量；达到 {0}k tokens 时自动压缩{1}", Math.round(contextLimit / 1000), selectedWindow
+              ? t("（模型声明上下文窗口 {0}k）", Math.round(selectedWindow / 1000))
+              : "")}
         >
           ≈
           {conversation.contextTokens >= 1000

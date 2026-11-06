@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { isTauri } from "../../api/tauri";
 import { readSavedTheme } from "../../constants/theme";
 import type { ShellTab } from "./types";
+import { t } from "../../i18n";
 
 export interface TabDropPoint {
   screenX: number;
@@ -153,7 +154,7 @@ export async function peerWindowAtPoint(point: TabDropPoint) {
     ) {
       return {
         label: windowRef.label,
-        title: windowRef.label === "main" ? "iShell" : windowRef.label.replace(/^shell-/, "窗口 "),
+        title: windowRef.label === "main" ? "iShell" : windowRef.label.replace(/^shell-/, t("窗口 ")),
       };
     }
   }

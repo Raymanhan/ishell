@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isTauri } from "../../api/tauri";
 
+import { t } from "../../i18n";
 export const AUTO_CHECK_UPDATES_KEY = "ishell.autoCheckUpdates";
 /** Browser demo only: set to a version (e.g. "9.9.9") to simulate an available update. */
 const DEMO_UPDATE_KEY = "ishell.demoUpdate";
@@ -87,7 +88,7 @@ const demoBackend: UpdaterBackend = {
     return {
       version,
       currentVersion: __APP_VERSION__,
-      notes: "· 演示用的更新说明\n· 浏览器预览中不会真正下载或安装",
+      notes: t("· 演示用的更新说明\n· 浏览器预览中不会真正下载或安装"),
       date: new Date().toISOString(),
       async downloadAndInstall(onEvent) {
         const total = 6 * 1024 * 1024;
@@ -114,7 +115,7 @@ function sleep(ms: number) {
 
 function describeError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
-  return message || "未知错误";
+  return message || t("未知错误");
 }
 
 export function readAutoCheckUpdates() {
@@ -181,7 +182,7 @@ export function useUpdater(autoCheck: boolean) {
       setState((current) =>
         silent
           ? { ...current, status: current.update ? "available" : "idle" }
-          : { ...current, status: "error", error: `检查更新失败：${describeError(error)}` },
+          : { ...current, status: "error", error: t("检查更新失败：{0}", describeError(error)) },
       );
     } finally {
       busyRef.current = false;
@@ -223,7 +224,7 @@ export function useUpdater(autoCheck: boolean) {
         ...current,
         status: "error",
         progress: null,
-        error: `更新失败：${describeError(error)}`,
+        error: t("更新失败：{0}", describeError(error)),
       }));
     } finally {
       busyRef.current = false;

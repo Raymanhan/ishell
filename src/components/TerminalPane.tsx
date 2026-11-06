@@ -17,6 +17,8 @@ import type {
   TerminalSnapshotPayload,
 } from "../types";
 
+import { t, translateMessage } from "../i18n";
+import { useLocale } from "../i18n/useLocale";
 const passwordPromptPattern = /(?:password|passphrase|密码|口令)[^:\n\r]*[:：]\s*$/i;
 const platformSource = `${navigator.userAgent} ${navigator.platform}`.toLowerCase();
 const isWindowsPlatform = platformSource.includes("win");
@@ -96,6 +98,8 @@ function TerminalPaneBase({
   /** Where the pane registers a function that types into it, for broadcasts from other panes. */
   inputRegistry?: Map<string, (data: string) => void>;
 }) {
+  // Re-render on language changes (memoized or a window root).
+  useLocale();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const themeRef = useRef(theme);
@@ -499,7 +503,7 @@ function TerminalPaneBase({
       if (event.key.toLowerCase() === "c") {
         const selection = terminal.getSelection();
         if (selection) {
-          navigator.clipboard.writeText(selection).catch((error) => setNotice(`复制失败：${String(error)}`));
+          navigator.clipboard.writeText(selection).catch((error) => setNotice(t("复制失败：{0}", String(error))));
         }
         event.preventDefault();
         return false;
@@ -513,7 +517,7 @@ function TerminalPaneBase({
             closeHistorySuggest();
             rawSendTerminalInput(text);
           })
-          .catch((error) => setNotice(`粘贴失败：${String(error)}`));
+          .catch((error) => setNotice(t("粘贴失败：{0}", String(error))));
         event.preventDefault();
         return false;
       }
@@ -580,7 +584,7 @@ function TerminalPaneBase({
       commandRequest.requirePromptStart &&
       (sensitiveInputRef.current || commandDraftRef.current.length > 0 || !isAtShellPromptCommandStart())
     ) {
-      setNotice(commandRequest.blockedNotice ?? "终端当前不在普通命令行状态，已取消操作");
+      setNotice(commandRequest.blockedNotice ?? t("终端当前不在普通命令行状态，已取消操作"));
       return;
     }
     terminalRef.current?.focus();
@@ -644,9 +648,10 @@ function TerminalPaneBase({
       if (event.payload.sessionId === sessionRef.current) {
         closedSessionRef.current = event.payload.sessionId;
         if (terminalRef.current) terminalRef.current.options.disableStdin = true;
-        terminalRef.current?.writeln(`\r\n[iShell] ${event.payload.reason}`);
-        setNotice(event.payload.reason);
-        onClosedRef.current?.(event.payload.reason);
+        const reason = translateMessage(event.payload.reason);
+        terminalRef.current?.writeln(`\r\n[iShell] ${reason}`);
+        setNotice(reason);
+        onClosedRef.current?.(reason);
       }
     }).then((unlisten) => {
       if (cancelled) unlisten();
@@ -767,10 +772,10 @@ function TerminalPaneBase({
             className="terminal-history-suggest"
             style={{ left: historySuggest.x, top: historySuggest.y, maxHeight: historySuggest.maxHeight }}
             role="listbox"
-            aria-label="历史命令候选"
+            aria-label={t("历史命令候选")}
           >
             <div className="terminal-history-suggest-head">
-              <span>{historySuggest.query || "历史命令"}</span>
+              <span>{historySuggest.query || t("历史命令")}</span>
               <kbd>Enter</kbd>
             </div>
             <div
@@ -796,19 +801,19 @@ function TerminalPaneBase({
                   </button>
                 ))
               ) : (
-                <div className="terminal-history-suggest-empty">没有匹配命令</div>
+                <div className="terminal-history-suggest-empty">{t("没有匹配命令")}</div>
               )}
             </div>
           </div>
         )}
         {(pane || broadcasting) && (
           <div className="pane-label">
-            {broadcasting && <span className="pane-label-broadcast" title="正在广播输入">广播</span>}
+            {broadcasting && <span className="pane-label-broadcast" title={t("正在广播输入")}>{t("广播")}</span>}
             {pane && (
               <>
                 <span className={`tab-dot ${tab.state}`} style={{ color: tab.color }} />
                 <span className="pane-label-title" title={`${tab.title} · ${tab.subtitle}`}>{tab.title}</span>
-                <button type="button" title="关闭窗格" aria-label={`关闭窗格 ${tab.title}`} onClick={onClosePane}>
+                <button type="button" title={t("关闭窗格")} aria-label={t("关闭窗格 {0}", tab.title)} onClick={onClosePane}>
                   <X size={12} />
                 </button>
               </>
@@ -819,8 +824,7 @@ function TerminalPaneBase({
       {tab.state === "closed" && (
         <button type="button" className="terminal-reconnect" onClick={onReconnect}>
           <RefreshCw size={13} />
-          重新连接
-        </button>
+          {t("重新连接")}</button>
       )}
     </section>
   );

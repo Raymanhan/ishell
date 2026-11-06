@@ -1,6 +1,7 @@
 import type { ShellTab } from "../shell/types";
 import type { FileColumn, SftpEntry, UploadItem } from "../../types";
 
+import { t } from "../../i18n";
 export const FOLDER_UPLOAD_CONFLICT_MARKER = "__ISHELL_UPLOAD_FOLDER_CONFLICT__";
 
 export function basename(path: string) {
@@ -53,16 +54,16 @@ export function sftpDeleteDescription(entries: SftpEntry[]) {
     const hasRealDirectory = entries.some((entry) => entry.isDir && !entry.isSymlink);
     const hasSymlink = entries.some((entry) => entry.isSymlink);
     return hasRealDirectory
-      ? `将删除 ${entries.length} 项，文件夹及其中所有内容也会被删除。`
+      ? t("将删除 {0} 项，文件夹及其中所有内容也会被删除。", entries.length)
       : hasSymlink
-        ? `将删除 ${entries.length} 项。软链接只会删除链接本身。`
-        : `将删除 ${entries.length} 项。`;
+        ? t("将删除 {0} 项。软链接只会删除链接本身。", entries.length)
+        : t("将删除 {0} 项。", entries.length);
   }
   const entry = entries[0];
-  if (!entry) return "该项目会被删除。";
-  if (entry.isSymlink) return "该软链接会被删除，链接目标会保留。";
-  if (entry.isDir) return "该文件夹及其中所有内容都会被删除。";
-  return "该文件会被删除。";
+  if (!entry) return t("该项目会被删除。");
+  if (entry.isSymlink) return t("该软链接会被删除，链接目标会保留。");
+  if (entry.isDir) return t("该文件夹及其中所有内容都会被删除。");
+  return t("该文件会被删除。");
 }
 
 export function quoteShellArg(value: string) {

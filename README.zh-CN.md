@@ -23,6 +23,7 @@ iShell 是一个基于 Tauri + React + Rust 的轻量级 SSH 桌面工作台，�
 
 ## 功能亮点
 
+- **多语言界面**：支持简体中文、繁體中文和 English，默认跟随系统语言，可在“设置 → 外观”中随时切换。
 - **SSH 连接管理**：以文件夹树组织连接，支持搜索、标签、备注和主机颜色。
 - **连接顺序持久化**：连接排序和所在分组会保存到本地数据库，重启后保持不变。
 - **安全保存密钥信息**：密码通过操作系统钥匙串/Secret Store 保存，不会明文写入导出的连接文件。
@@ -181,6 +182,7 @@ iShell 是一个基于 Tauri + React + Rust 的轻量级 SSH 桌面工作台，�
 设置窗口左侧是分类菜单，右侧是该分类的设置项：
 
 - **外观**
+  - 界面语言：简体中文、繁體中文或 English，切换后所有已打开的窗口立即生效；应用自身的错误提示也会翻译，服务器输出和 AI 回复保持原样
   - 主题：云雾白、暮霭紫、Claude 深色、Claude 浅色、石墨灰、午夜蓝、墨玉绿、曜石黑、象牙白
   - 窗口透明度：100% 为主题原本的玻璃效果，调低会减少窗口背后内容的透出，0% 为完全不透明
   - 顶部栏自动隐藏开关
@@ -232,6 +234,16 @@ cargo clippy --all-targets --features force-russh -- -D warnings
 cargo test
 cargo test --features force-russh
 ```
+
+### 翻译
+
+界面文案以简体中文书写并包裹在 `t("…")` 中，原文即消息 ID，`src/i18n/locales/*.ts` 为各语言的译文。后端（Rust 与远端执行脚本）返回的消息会被提取为模板，因此 `translateMessage()` 也能翻译填入了具体内容的错误，例如 `模型 API 返回 401：…`。
+
+```bash
+node scripts/i18n.mjs check
+```
+
+`check` 会列出缺失或多余的译文（`npm test` 会在缺失时失败）。新增英文译文：`node scripts/i18n.mjs merge en new.json`，`new.json` 为“原文 → 译文”的映射。繁体中文由 OpenCC 生成（`pip install opencc-python-reimplemented` 后运行 `node scripts/i18n.mjs zh-tw`）。
 
 ## 本地构建安装包
 

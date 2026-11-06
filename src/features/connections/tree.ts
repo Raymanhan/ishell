@@ -4,6 +4,7 @@ import { swatches } from "../../constants/theme";
 import type { AuthType, ServerInput, ServerRecord } from "../../types";
 import { groupServers } from "../../utils/servers";
 
+import { t } from "../../i18n";
 export const defaultForm: ServerForm = {
   id: null,
   name: "",
@@ -198,20 +199,20 @@ export function connectionDeleteDescription(state: ConnectionDeleteConfirmState)
   const folderCount = state.target.folders.length;
   const serverCount = state.servers.length;
   if (folderCount > 0) {
-    return `将删除 ${folderCount} 个文件夹及其中 ${serverCount} 台服务器。`;
+    return t("将删除 {0} 个文件夹及其中 {1} 台服务器。", folderCount, serverCount);
   }
   if (serverCount > 1) {
-    return `将删除所选 ${serverCount} 台服务器。`;
+    return t("将删除所选 {0} 台服务器。", serverCount);
   }
-  return "该服务器会被删除。";
+  return t("该服务器会被删除。");
 }
 
 export function connectionDeleteTargetText(state: ConnectionDeleteConfirmState) {
-  const folders = state.target.folders.map((folder) => `文件夹：${folder}`);
+  const folders = state.target.folders.map((folder) => t("文件夹：{0}", folder));
   const servers = state.target.folders.length > 0
     ? []
     : state.servers.map((server) => server.name);
-  return [...folders, ...servers].join("、") || "所选连接";
+  return [...folders, ...servers].join("、") || t("所选连接");
 }
 
 export function groupServersForTree(

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { command, isTauri } from "../../api/tauri";
+import { command, isTauri, rawMessage } from "../../api/tauri";
 import { simulateDemoDownload } from "../../mocks/demoSftp";
 import type {
   DownloadItem,
@@ -8,6 +8,7 @@ import type {
   SftpEntry,
 } from "../../types";
 
+import { t } from "../../i18n";
 /** Where queued downloads come from: a terminal tab and its server. */
 export interface DownloadSource {
   tabId: string;
@@ -67,7 +68,7 @@ export function useDownloadQueue({
       status: "pending",
     }));
     setDownloads((current) => [...items, ...current]);
-    showNotice(`已加入下载队列：${items.length} 个文件`);
+    showNotice(t("已加入下载队列：{0} 个文件", items.length));
 
     chainRef.current = chainRef.current.then(async () => {
       for (const item of items) {
@@ -90,7 +91,7 @@ export function useDownloadQueue({
       folderMode: mode,
     };
     setDownloads((current) => [item, ...current]);
-    showNotice(`已加入下载队列：${entry.name}`);
+    showNotice(t("已加入下载队列：{0}", entry.name));
 
     chainRef.current = chainRef.current.then(async () => {
       await run(item);
@@ -148,10 +149,11 @@ export function useDownloadQueue({
             : download,
         ),
       );
-      showNotice(`已保存 ${item.name}`);
+      showNotice(t("已保存 {0}", item.name));
     } catch (error) {
       const message = String(error);
-      if (message.includes("下载已停止")) {
+      const raw = rawMessage(error);
+      if (raw.includes("下载已停止")) {
         setDownloads((current) =>
           current.map((download) =>
             download.id === item.id ? { ...download, status: "canceled", error: undefined } : download,
@@ -197,7 +199,7 @@ export function useDownloadQueue({
   async function open(item: DownloadItem, location: "item" | "parent") {
     if (item.status !== "done" || !item.savedPath) return;
     if (!isTauri) {
-      showNotice("浏览器预览不支持打开本地文件，请在桌面应用中使用");
+      showNotice(t("浏览器预览不支持打开本地文件，请在桌面应用中使用"));
       return;
     }
     try {
@@ -208,7 +210,7 @@ export function useDownloadQueue({
         await openPath(item.savedPath);
       }
     } catch (error) {
-      showNotice(`打开失败：${String(error)}`);
+      showNotice(t("打开失败：{0}", String(error)));
     }
   }
 

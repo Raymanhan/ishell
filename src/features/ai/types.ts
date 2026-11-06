@@ -1,3 +1,5 @@
+import { msg, t } from "../../i18n";
+
 export interface AiConfig {
   baseUrl: string;
   models: string[];
@@ -50,7 +52,7 @@ export function mergeModelSources(
     if (id && !merged.some((model) => model.id === id))
       merged.push({
         id,
-        name: `${id}（手动）`,
+        name: t("{0}（手动）", id),
         reasoningEfforts: [],
         defaultReasoningEffort: null,
         manual: true,
@@ -62,24 +64,27 @@ export const permissionOptions: {
   value: AiPermission;
   label: string;
   description: string;
-}[] = [
-  {
-    value: "suggest",
-    label: "仅建议",
-    description: "只生成操作建议，不执行服务器工具",
+}[] = (
+  [
+    ["suggest", msg("仅建议"), msg("只生成操作建议，不执行服务器工具")],
+    ["ask", msg("执行前确认"), msg("每次工具调用都需要确认")],
+    [
+      "auto",
+      msg("自动 · 低风险"),
+      msg("低风险查询自动执行；修改文件、代码与未知命令需确认"),
+    ],
+    ["full", msg("完全访问"), msg("自动执行任务中的所有工具操作，不再逐项确认")],
+  ] as const
+).map(([value, label, description]) => ({
+  value,
+  // Getters translate on every read, so the list follows language changes.
+  get label() {
+    return t(label);
   },
-  { value: "ask", label: "执行前确认", description: "每次工具调用都需要确认" },
-  {
-    value: "auto",
-    label: "自动 · 低风险",
-    description: "低风险查询自动执行；修改文件、代码与未知命令需确认",
+  get description() {
+    return t(description);
   },
-  {
-    value: "full",
-    label: "完全访问",
-    description: "自动执行任务中的所有工具操作，不再逐项确认",
-  },
-];
+}));
 export interface AiRisk {
   level: "low" | "medium" | "high";
   label: string;
@@ -106,14 +111,14 @@ export function modelSelection(
       ? effort
       : model?.defaultReasoningEffort || "default";
   const efforts = [
-    { value: "default", label: "默认", description: "使用服务默认的思考程度" },
+    { value: "default", label: t("默认"), description: t("使用服务默认的思考程度") },
     ...supported,
   ];
   if (manualEffort && effort && !efforts.some((item) => item.value === effort))
     efforts.push({
       value: effort,
-      label: `${effort}（手动）`,
-      description: "手动指定的 API 参数",
+      label: t("{0}（手动）", effort),
+      description: t("手动指定的 API 参数"),
     });
   return {
     model: model?.id || "",
@@ -302,7 +307,7 @@ export function conversationTitle(conversation: AiConversation): string {
       .find((entry) => entry.kind === "user")
       ?.text?.trim()
       .replace(/\s+/g, " ")
-      .slice(0, 80) || "新对话"
+      .slice(0, 80) || t("新对话")
   );
 }
 
@@ -342,7 +347,7 @@ export function restoreConversation(saved: AiConversation): AiConversation {
             {
               id: crypto.randomUUID(),
               kind: "notice" as const,
-              text: "上次任务在应用关闭前未结束。请先检查服务器现状；继续对话不会自动重放此前操作。",
+              text: t("上次任务在应用关闭前未结束。请先检查服务器现状；继续对话不会自动重放此前操作。"),
             },
           ]
         : []),

@@ -23,6 +23,7 @@ import {
   type AiModel,
 } from "./types";
 
+import { t } from "../../i18n";
 interface ChatResult {
   messages: Record<string, unknown>[];
   stopped: boolean;
@@ -92,7 +93,7 @@ export function useAi(tabs: ShellTab[]) {
         setHistoryError("");
       } catch (error) {
         failed = true;
-        setHistoryError(`历史记录保存或删除失败：${error}`);
+        setHistoryError(t("历史记录保存或删除失败：{0}", error));
       } finally {
         writing.current = null;
         // A failure is retried on the next change or by the retry button,
@@ -139,7 +140,7 @@ export function useAi(tabs: ShellTab[]) {
         );
         setPreferencesError("");
       } catch {
-        setPreferencesError("AI 选项未能保存到本机，重启后可能需要重新选择。");
+        setPreferencesError(t("AI 选项未能保存到本机，重启后可能需要重新选择。"));
       }
     }
     current.current = { ...current.current, [id]: value };
@@ -195,12 +196,12 @@ export function useAi(tabs: ShellTab[]) {
       setHistoryLoaded(true);
       setHistoryError(
         skipped
-          ? `${skipped} 条历史记录无法解密或已损坏，已跳过（数据仍保留在本机）。`
+          ? t("{0} 条历史记录无法解密或已损坏，已跳过（数据仍保留在本机）。", skipped)
           : "",
       );
     } catch (error) {
       if (generation === historyGeneration.current)
-        setHistoryError(`历史记录读取失败：${error}`);
+        setHistoryError(t("历史记录读取失败：{0}", error));
     }
   }
 
@@ -323,7 +324,7 @@ export function useAi(tabs: ShellTab[]) {
           {
             id: crypto.randomUUID(),
             kind: "error",
-            text: `停止请求失败：${error}`,
+            text: t("停止请求失败：{0}", error),
           },
         ],
       }));
@@ -366,7 +367,7 @@ export function useAi(tabs: ShellTab[]) {
           {
             id: crypto.randomUUID(),
             kind: "notice",
-            text: "请在桌面客户端连接服务器后使用 AI，浏览器预览不会执行命令。",
+            text: t("请在桌面客户端连接服务器后使用 AI，浏览器预览不会执行命令。"),
           },
         ],
       }));
@@ -410,7 +411,7 @@ export function useAi(tabs: ShellTab[]) {
             {
               id: compactionId,
               kind: "notice",
-              text: "上下文正在自动压缩，保留任务目标、关键结果与近期消息…",
+              text: t("上下文正在自动压缩，保留任务目标、关键结果与近期消息…"),
             },
           ],
         }));
@@ -423,7 +424,7 @@ export function useAi(tabs: ShellTab[]) {
             entry.id === compactionId
               ? {
                   ...entry,
-                  text: `已自动压缩上下文：约 ${Math.round((event.beforeTokens || 0) / 1000)}k → ${Math.round((event.afterTokens || 0) / 1000)}k tokens。聊天记录仍可查看。`,
+                  text: t("已自动压缩上下文：约 {0}k → {1}k tokens。聊天记录仍可查看。", Math.round((event.beforeTokens || 0) / 1000), Math.round((event.afterTokens || 0) / 1000)),
                 }
               : entry,
           ),
@@ -462,7 +463,7 @@ export function useAi(tabs: ShellTab[]) {
                 {
                   id: crypto.randomUUID(),
                   kind: "notice" as const,
-                  text: "已停止。已完成的操作会保留，可继续对话。",
+                  text: t("已停止。已完成的操作会保留，可继续对话。"),
                 },
               ]
             : []),
@@ -495,7 +496,7 @@ export function useAi(tabs: ShellTab[]) {
         entries: value.entries.map((entry) => ({
           ...entry,
           ...(value.compacting && entry.id === compactionId
-            ? { text: "本次压缩未完成，原上下文已保留。" }
+            ? { text: t("本次压缩未完成，原上下文已保留。") }
             : {}),
           running: false,
           approvalPending: false,

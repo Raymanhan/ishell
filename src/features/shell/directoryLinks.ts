@@ -1,5 +1,6 @@
 import type { IBufferCellPosition, ILinkProvider, Terminal } from "@xterm/xterm";
 
+import { t } from "../../i18n";
 const promptPatterns = [
   /^(\s*(?:\([^()\r\n]*\)\s*)*)([\w.-]+)@([^\s:]+):((?:~|\/).*?)[#$%](?=\s|$)/,
   /^(\s*(?:\([^()\r\n]*\)\s*)*)\[([\w.-]+)@([^\s\]]+)\s+((?:~|\/).*?)\]\s*[#$%](?=\s|$)/,
@@ -63,7 +64,7 @@ export function directoryLinkProvider(
       const start = cells[directory.start]?.start;
       const end = cells[directory.end - 1]?.end;
       if (!start || !end || bufferLineNumber > end.y) return callback(undefined);
-      const hint = `${mac ? "Command" : "Ctrl"} + 点击，在文件栏打开 ${directory.path}`;
+      const hint = t("{0} + 点击，在文件栏打开 {1}", mac ? "Command" : "Ctrl", directory.path);
       callback([{
         range: { start, end },
         text: text.slice(directory.start, directory.end),

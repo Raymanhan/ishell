@@ -1,6 +1,7 @@
 import { Download, RefreshCw, X } from "lucide-react";
 import type { UpdaterState } from "../features/updater/useUpdater";
 
+import { t } from "../i18n";
 function formatMegabytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
@@ -28,17 +29,17 @@ export function UpdateNotice({
       : null;
 
   return (
-    <section className="update-notice" role="status" aria-live="polite" aria-label="应用更新">
+    <section className="update-notice" role="status" aria-live="polite" aria-label={t("应用更新")}>
       <div className="update-notice-head">
         <span className="update-notice-icon" aria-hidden="true">
           <Download size={15} />
         </span>
         <div className="update-notice-title">
-          <strong>发现新版本 v{update.version}</strong>
-          <span>当前版本 v{update.currentVersion}</span>
+          <strong>{t("发现新版本 v")}{update.version}</strong>
+          <span>{t("当前版本 v")}{update.currentVersion}</span>
         </div>
         {!installing && (
-          <button type="button" className="update-notice-close" onClick={onDismiss} aria-label="稍后提醒">
+          <button type="button" className="update-notice-close" onClick={onDismiss} aria-label={t("稍后提醒")}>
             <X size={14} />
           </button>
         )}
@@ -52,33 +53,30 @@ export function UpdateNotice({
             <div className="uq-fill" style={{ width: `${percent ?? 0}%` }} />
           </div>
           <span>
-            正在下载
-            {progress && progress.downloaded > 0 ? ` ${formatMegabytes(progress.downloaded)}` : "…"}
+            {t("正在下载")}{progress && progress.downloaded > 0 ? ` ${formatMegabytes(progress.downloaded)}` : "…"}
             {progress?.total ? ` / ${formatMegabytes(progress.total)}` : ""}
           </span>
         </div>
       )}
-      {status === "installing" && <p className="update-notice-hint">正在安装，完成后会自动重启…</p>}
+      {status === "installing" && <p className="update-notice-hint">{t("正在安装，完成后会自动重启…")}</p>}
       {failedInstall && error && (
         <p className="update-notice-error">
           {error}
           <br />
-          也可以前往 GitHub Releases 手动下载安装包。
-        </p>
+          {t("也可以前往 GitHub Releases 手动下载安装包。")}</p>
       )}
 
       {!installing && (
         <>
           {openSessions > 0 && (
-            <p className="update-notice-hint">更新后会自动重启，当前 {openSessions} 个会话将断开。</p>
+            <p className="update-notice-hint">{t("更新后会自动重启，当前 ")}{openSessions} {t(" 个会话将断开。")}</p>
           )}
           <div className="update-notice-actions">
             <button type="button" className="btn-ghost" onClick={onDismiss}>
-              稍后
-            </button>
+              {t("稍后")}</button>
             <button type="button" className="btn-primary" onClick={onInstall}>
               {failedInstall ? <RefreshCw size={14} /> : <Download size={14} />}
-              {failedInstall ? "重试" : "立即更新"}
+              {failedInstall ? t("重试") : t("立即更新")}
             </button>
           </div>
         </>

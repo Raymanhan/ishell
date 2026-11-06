@@ -616,18 +616,18 @@
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  flex: 0 1 105px;
+  flex: 0 1 118px;
   min-width: 0;
   color: var(--dim);
 }
 .ai-permission-control > svg {
   flex: 0 0 auto;
 }
-.ai-composer-controls > select[aria-label="AI 模型"] {
+.ai-composer-controls > select.ai-model-select {
   flex: 1 1 70px;
   max-width: none;
 }
-.ai-composer-controls > select[aria-label="思考程度"] {
+.ai-composer-controls > select.ai-effort-select {
   flex: 0 1 64px;
   max-width: 22%;
 }

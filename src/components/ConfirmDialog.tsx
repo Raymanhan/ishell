@@ -1,5 +1,6 @@
 import { useId, type ReactNode } from "react";
 
+import { t } from "../i18n";
 /**
  * Modal confirmation for a destructive action. Escape and a click on the
  * backdrop cancel, except while the action is running.
@@ -14,7 +15,7 @@ export function ConfirmDialog({
   busy = false,
   confirmLabel,
   busyLabel,
-  cancelLabel = "取消",
+  cancelLabel = t("取消"),
   focusCancel = false,
   className,
   onConfirm,

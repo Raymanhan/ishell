@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { command, isTauri } from "../../api/tauri";
+import { command, isTauri, rawMessage } from "../../api/tauri";
 import type { ConnectionMoveRequest } from "../../components/ConnectionManager";
 import type { ServerForm } from "../../components/ServerEditor";
 import { swatches } from "../../constants/theme";
@@ -20,6 +20,7 @@ import {
   type ConnectionDeleteConfirmState,
 } from "./tree";
 
+import { t } from "../../i18n";
 const CONNECTION_FOLDERS_KEY = "ishell.connectionFolders";
 
 interface ConnectionImportPayload {
@@ -129,7 +130,7 @@ export function useConnections({
     setConnectionTestFeedback(null);
     setForm({
       id: null,
-      name: `${server.name} 副本`,
+      name: t("{0} 副本", server.name),
       host: server.host,
       port: server.port,
       username: server.username,
@@ -149,8 +150,8 @@ export function useConnections({
   function createConnectionFolder(raw: string) {
     const name = raw.trim();
     if (!name) return;
-    if (name === "全部") {
-      showNotice("文件夹不能命名为“全部”");
+    if (name === "全部" || name === t("全部")) {
+      showNotice(t("文件夹不能命名为“全部”"));
       return;
     }
     setConnectionFolders((current) => {
@@ -173,7 +174,7 @@ export function useConnections({
         await command("save_server", { input: serverInputFromRecord(renamed), password: null });
         await refreshServers();
       }
-      showNotice("已重命名");
+      showNotice(t("已重命名"));
     } catch (error) {
       showNotice(String(error));
       await refreshServers();
@@ -183,12 +184,12 @@ export function useConnections({
   async function renameConnectionFolder(group: string, rawName: string) {
     const nextGroup = rawName.trim();
     if (!nextGroup || nextGroup === group) return;
-    if (nextGroup === "全部") {
-      showNotice("文件夹不能命名为“全部”");
+    if (nextGroup === "全部" || nextGroup === t("全部")) {
+      showNotice(t("文件夹不能命名为“全部”"));
       return;
     }
     if (connectionFolderNames.some((folder) => folder !== group && folder.toLowerCase() === nextGroup.toLowerCase())) {
-      showNotice("已存在同名文件夹");
+      showNotice(t("已存在同名文件夹"));
       return;
     }
 
@@ -212,7 +213,7 @@ export function useConnections({
         }
         await refreshServers();
       }
-      showNotice("已重命名目录");
+      showNotice(t("已重命名目录"));
     } catch (error) {
       showNotice(String(error));
       await refreshServers();
@@ -221,7 +222,7 @@ export function useConnections({
 
   async function exportConnections(target: { serverIds: string[]; folders: string[] }) {
     if (!isTauri) {
-      showNotice("演示模式不支持导出连接");
+      showNotice(t("演示模式不支持导出连接"));
       return;
     }
     const selectedFolders = target.folders;
@@ -233,16 +234,16 @@ export function useConnections({
       exportingAll || selectedServerIds.has(server.id) || selectedFolderSet.has(server.group || "Default"),
     );
     if (exportServers.length === 0 && exportFolders.length === 0) {
-      showNotice("没有可导出的连接");
+      showNotice(t("没有可导出的连接"));
       return;
     }
-    const passphrase = window.prompt("设置导出密钥，用于加密已保存的密码。留空将只导出连接配置。")?.trim() || null;
+    const passphrase = window.prompt(t("设置导出密钥，用于加密已保存的密码。留空将只导出连接配置。"))?.trim() || null;
 
     const asZip = exportFolders.length > 0 || exportServers.length > 1;
     const picked = await save({
-      title: "导出连接",
+      title: t("导出连接"),
       defaultPath: `ishell-connections-${new Date().toISOString().slice(0, 10)}.${asZip ? "zip" : "json"}`,
-      filters: [{ name: asZip ? "ZIP 压缩包" : "JSON 文件", extensions: [asZip ? "zip" : "json"] }],
+      filters: [{ name: asZip ? t("ZIP 压缩包") : t("JSON 文件"), extensions: [asZip ? "zip" : "json"] }],
     });
     if (!picked) return;
 
@@ -256,7 +257,7 @@ export function useConnections({
         asZip,
         passphrase,
       });
-      showNotice(`已导出 ${exportServers.length} 台主机`);
+      showNotice(t("已导出 {0} 台主机", exportServers.length));
     } catch (error) {
       showNotice(String(error));
     }
@@ -264,14 +265,14 @@ export function useConnections({
 
   async function importConnections() {
     if (!isTauri) {
-      showNotice("演示模式不支持导入连接");
+      showNotice(t("演示模式不支持导入连接"));
       return;
     }
     const picked = await open({
       multiple: false,
       directory: false,
-      title: "导入连接",
-      filters: [{ name: "连接导入文件", extensions: ["json", "zip"] }],
+      title: t("导入连接"),
+      filters: [{ name: t("连接导入文件"), extensions: ["json", "zip"] }],
     });
     const path = typeof picked === "string" ? picked : Array.isArray(picked) ? picked[0] : null;
     if (!path) return;
@@ -281,9 +282,9 @@ export function useConnections({
       try {
         imported = await command<ConnectionImportPayload>("import_connections", { path, passphrase: null });
       } catch (error) {
-        const message = String(error);
-        if (!message.includes("加密密码") && !message.includes("导入密钥")) throw error;
-        const passphrase = window.prompt("导入文件包含加密密码，请输入导入密钥")?.trim();
+        const raw = rawMessage(error);
+        if (!raw.includes("加密密码") && !raw.includes("导入密钥")) throw error;
+        const passphrase = window.prompt(t("导入文件包含加密密码，请输入导入密钥"))?.trim();
         if (!passphrase) return;
         imported = await command<ConnectionImportPayload>("import_connections", { path, passphrase });
       }
@@ -295,7 +296,7 @@ export function useConnections({
         imported.folders.reduce((next, folder) => ensureFolder(next, folder), current),
       );
       await refreshServers();
-      showNotice(`已导入 ${imported.servers.length} 台主机`);
+      showNotice(t("已导入 {0} 台主机", imported.servers.length));
     } catch (error) {
       showNotice(String(error));
     }
@@ -333,7 +334,7 @@ export function useConnections({
       setConnectionFolders((current) => current.filter((folder) => !folderSet.has(folder)));
       setSelectedServerId((current) => (current && deleteIds.has(current) ? null : current));
       setDeleteConfirm(null);
-      showNotice(target.folders.length > 0 ? "已删除文件夹" : "已删除");
+      showNotice(target.folders.length > 0 ? t("已删除文件夹") : t("已删除"));
     } catch (error) {
       const message = String(error);
       showNotice(message);
@@ -373,7 +374,7 @@ export function useConnections({
       }
       setConnectionFolders((current) => ensureFolder(current, input.group || "Default"));
       setEditing(false);
-      showNotice("已保存");
+      showNotice(t("已保存"));
     } catch (error) {
       showNotice(String(error));
     } finally {
@@ -385,8 +386,8 @@ export function useConnections({
     if (testingConnection) return;
     const input = serverInputFromForm(form);
     setTestingConnection(true);
-    setConnectionTestFeedback({ kind: "info", message: "正在测试连接…" });
-    showNotice(`正在测试 ${input.host || "连接"}…`);
+    setConnectionTestFeedback({ kind: "info", message: t("正在测试连接…") });
+    showNotice(t("正在测试 {0}…", input.host || t("连接")));
     try {
       if (!isTauri) {
         await new Promise((resolve) => setTimeout(resolve, 420));
@@ -396,8 +397,8 @@ export function useConnections({
           password: form.password || null,
         });
       }
-      setConnectionTestFeedback({ kind: "success", message: "测试连接成功" });
-      showNotice("测试连接成功");
+      setConnectionTestFeedback({ kind: "success", message: t("测试连接成功") });
+      showNotice(t("测试连接成功"));
     } catch (error) {
       const message = String(error);
       setConnectionTestFeedback({ kind: "error", message });
@@ -411,14 +412,14 @@ export function useConnections({
   async function deleteEditedServer() {
     const server = servers.find((item) => item.id === form.id);
     if (!server) return;
-    if (!window.confirm(`确定删除「${server.name}」吗？`)) return;
+    if (!window.confirm(t("确定删除「{0}」吗？", server.name))) return;
     try {
       if (isTauri) await command("delete_server", { id: server.id });
       setServers((current) => current.filter((item) => item.id !== server.id));
       onServersDeleted(new Set([server.id]));
       setSelectedServerId((current) => (current === server.id ? null : current));
       setEditing(false);
-      showNotice("已删除");
+      showNotice(t("已删除"));
     } catch (error) {
       showNotice(String(error));
     }

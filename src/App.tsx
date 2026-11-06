@@ -103,6 +103,8 @@ import type {
 import { startPointerDrag } from "./utils/pointerDrag";
 import { waitAtLeast, waitForNextPaint } from "./utils/timing";
 
+import { t } from "./i18n";
+import { useLocale } from "./i18n/useLocale";
 const TerminalPane = lazy(() =>
   import("./components/TerminalPane").then((module) => ({ default: module.TerminalPane })),
 );
@@ -132,6 +134,8 @@ interface DeleteConfirmState {
 type UploadPickerKind = "files" | "folder";
 
 export default function App() {
+  // Re-render on language changes (memoized or a window root).
+  useLocale();
   const tabGhost = useMemo(() => readTabGhostFromUrl(), []);
   if (tabGhost) return <TabGhostWindow ghost={tabGhost} />;
 
@@ -502,11 +506,11 @@ export default function App() {
   function sendSnippet(snippet: Snippet) {
     if (!activeTab) return;
     setPasteRequest({ tabId: activeTab.id, id: Date.now() + Math.random(), command: snippetInput(snippet) });
-    showNotice(snippet.run ? `已执行片段：${snippet.name}` : `已发送片段：${snippet.name}`);
+    showNotice(snippet.run ? t("已执行片段：{0}", snippet.name) : t("已发送片段：{0}", snippet.name));
   }
 
   async function deletePortForward(forward: PortForward) {
-    if (!window.confirm(`删除端口转发 ${forward.bindHost}:${forward.bindPort}？运行中的转发会被停止。`)) return;
+    if (!window.confirm(t("删除端口转发 {0}:{1}？运行中的转发会被停止。", forward.bindHost, forward.bindPort))) return;
     try {
       await portForwards.remove(forward.id);
     } catch (error) {
@@ -515,7 +519,7 @@ export default function App() {
   }
 
   async function deleteSnippet(snippet: Snippet) {
-    if (!window.confirm(`删除片段「${snippet.name}」？`)) return;
+    if (!window.confirm(t("删除片段「{0}」？", snippet.name))) return;
     try {
       await snippets.remove(snippet.id);
     } catch (error) {
@@ -562,13 +566,13 @@ export default function App() {
   function pasteHistoryCommand(commandText: string) {
     if (!activeTab) return;
     setPasteRequest({ tabId: activeTab.id, id: Date.now() + Math.random(), command: commandText });
-    showNotice("已粘贴历史命令");
+    showNotice(t("已粘贴历史命令"));
   }
 
   function jumpTerminalToDir(targetDir: string) {
     if (!activeTab) return;
     if (!activeTab.sessionId) {
-      showNotice("终端尚未连接，无法跳转目录");
+      showNotice(t("终端尚未连接，无法跳转目录"));
       return;
     }
     setCommandRequest({
@@ -576,7 +580,7 @@ export default function App() {
       id: Date.now() + Math.random(),
       command: `cd -- ${quoteShellArg(targetDir)}\r`,
       requirePromptStart: true,
-      blockedNotice: "终端当前不在普通命令行状态，未执行目录跳转",
+      blockedNotice: t("终端当前不在普通命令行状态，未执行目录跳转"),
     });
   }
 
@@ -677,7 +681,7 @@ export default function App() {
       serverId: server.id,
       title: server.name,
       subtitle: `${server.username}@${server.host}:${server.port}${
-        jumpName ? ` · 经 ${jumpName}` : ""
+        jumpName ? t(" · 经 {0}", jumpName) : ""
       }`,
       host: server.host,
       color: server.color,
@@ -711,13 +715,13 @@ export default function App() {
       setTabs((current) => [...current, nextTab]);
     }
     setActiveTabId(tabId);
-    showNotice(`正在连接 ${server.name}…`);
+    showNotice(t("正在连接 {0}…", server.name));
 
     try {
       if (!isTauri) {
         await new Promise((resolve) => setTimeout(resolve, 320));
         patchTab(tabId, { sessionId: `demo-${tabId}`, state: "connected", status: demoStatus });
-        showNotice(`${server.name} 已连接`);
+        showNotice(t("{0} 已连接", server.name));
         return;
       }
       const sessionId = await command<string>("open_terminal", { id: server.id });
@@ -736,7 +740,7 @@ export default function App() {
   function splitShell(paneId: string, direction: SplitDirection, server?: ServerRecord) {
     const layouts = paneLayoutsRef.current;
     if (paneIdsOf(layouts, groupIdOf(layouts, paneId)).length >= MAX_PANES) {
-      showNotice(`一个标签最多分成 ${MAX_PANES} 个窗格`);
+      showNotice(t("一个标签最多分成 {0} 个窗格", MAX_PANES));
       return;
     }
     const source = tabsRef.current.find((tab) => tab.id === paneId);
@@ -812,7 +816,7 @@ export default function App() {
 
     terminalReadyTabs.current.delete(tabId);
     patchTab(tabId, { sessionId: null, state: "connecting" });
-    showNotice(`正在重新连接 ${tab.title}…`);
+    showNotice(t("正在重新连接 {0}…", tab.title));
 
     try {
       if (isTauri && tab.sessionId) {
@@ -824,7 +828,7 @@ export default function App() {
       if (!isTauri) {
         await new Promise((resolve) => setTimeout(resolve, 320));
         patchTab(tabId, { sessionId: `demo-${tabId}-${Date.now()}`, state: "connected" });
-        showNotice(`${tab.title} 已连接`);
+        showNotice(t("{0} 已连接", tab.title));
         return;
       }
       const sessionId = await command<string>("open_terminal", { id: tab.serverId });
@@ -843,16 +847,16 @@ export default function App() {
 
   async function detachShell(tabId: string, dropPoint?: TabDropPoint) {
     if (paneIdsOf(paneLayoutsRef.current, tabId).length > 1) {
-      showNotice("分屏的标签不能移到其他窗口，请先关闭多余的窗格");
+      showNotice(t("分屏的标签不能移到其他窗口，请先关闭多余的窗格"));
       return;
     }
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab || !tab.sessionId) {
-      showNotice("连接建立后才能拖出为新窗口");
+      showNotice(t("连接建立后才能拖出为新窗口"));
       return;
     }
     if (!isTauri) {
-      showNotice("桌面应用中才支持拖出窗口");
+      showNotice(t("桌面应用中才支持拖出窗口"));
       return;
     }
 
@@ -898,11 +902,11 @@ export default function App() {
   async function moveShellToWindow(tabId: string, targetWindowLabel: string, closeWhenEmpty = true) {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab || !tab.sessionId) {
-      showNotice("连接建立后才能移动到其他窗口");
+      showNotice(t("连接建立后才能移动到其他窗口"));
       return;
     }
     if (!isTauri) {
-      showNotice("桌面应用中才支持窗口间移动");
+      showNotice(t("桌面应用中才支持窗口间移动"));
       return;
     }
     try {
@@ -946,7 +950,7 @@ export default function App() {
     if (terminalReadyTabs.current.has(tabId)) return;
     terminalReadyTabs.current.add(tabId);
     patchTab(tabId, { state: "connected" });
-    showNotice(`${title} 已连接`);
+    showNotice(t("{0} 已连接", title));
     portForwards.autoStart(serverId);
     connections.refreshServers();
     refreshSftpAfterTerminalReady(tabId, serverId);
@@ -1266,7 +1270,7 @@ export default function App() {
   async function openTerminalDirectory(tabId: string, path: string) {
     const source = tabsRef.current.find((tab) => tab.id === tabId);
     if (!source || source.state !== "connected") {
-      showNotice("终端尚未连接，无法打开目录");
+      showNotice(t("终端尚未连接，无法打开目录"));
       return;
     }
     const request = ++directoryJumpRef.current;
@@ -1291,7 +1295,7 @@ export default function App() {
       setFilesOpen(true);
       await loadFilesFor(tabId, source.serverId, resolved, chain.length - 1);
     } catch (error) {
-      if (request === directoryJumpRef.current) showNotice(`无法打开终端目录：${String(error)}`);
+      if (request === directoryJumpRef.current) showNotice(t("无法打开终端目录：{0}", String(error)));
     } finally {
       endSftpBusy();
     }
@@ -1355,21 +1359,21 @@ export default function App() {
   }
 
   async function pickUploadPaths(kind: UploadPickerKind, targetDir?: string) {
-    const sourceLabel = kind === "folder" ? "文件夹" : "文件";
+    const sourceLabel = kind === "folder" ? t("文件夹") : t("文件");
     if (!isTauri) {
-      showNotice(`演示模式不支持上传${sourceLabel}：${targetDir ?? currentDir()}`);
+      showNotice(t("演示模式不支持上传{0}：{1}", sourceLabel, targetDir ?? currentDir()));
       return;
     }
 
     if (uploadPickerOpenRef.current) {
-      showNotice("上传选择器已打开，请先完成或关闭当前选择窗口");
+      showNotice(t("上传选择器已打开，请先完成或关闭当前选择窗口"));
       return;
     }
 
     const openingTabId = activeTabIdRef.current;
     const openingTab = tabsRef.current.find((tab) => tab.id === openingTabId);
     if (!openingTab) {
-      showNotice("当前上传连接已失效，请重新打开文件面板后再试");
+      showNotice(t("当前上传连接已失效，请重新打开文件面板后再试"));
       return;
     }
     const pickerContext: UploadTargetContext = {
@@ -1383,7 +1387,7 @@ export default function App() {
       const picked = await open({
         multiple: kind === "files",
         directory: kind === "folder",
-        title: kind === "folder" ? "选择要上传的文件夹" : "选择要上传的文件",
+        title: kind === "folder" ? t("选择要上传的文件夹") : t("选择要上传的文件"),
       });
       const paths = Array.isArray(picked) ? picked : typeof picked === "string" ? [picked] : [];
       if (!paths.length) return;
@@ -1391,16 +1395,16 @@ export default function App() {
       const latestActiveTabId = activeTabIdRef.current;
       const latestTab = tabsRef.current.find((tab) => tab.id === latestActiveTabId);
       if (!latestTab || latestTab.id !== pickerContext.tabId) {
-        showNotice(`选择${sourceLabel}期间活动连接已切换或关闭，请重新选择上传${sourceLabel}`);
+        showNotice(t("选择{0}期间活动连接已切换或关闭，请重新选择上传{1}", sourceLabel, sourceLabel));
         return;
       }
       if (latestTab.serverId !== pickerContext.serverId) {
-        showNotice("原上传连接已失效，请重新打开文件面板后再试");
+        showNotice(t("原上传连接已失效，请重新打开文件面板后再试"));
         return;
       }
       const remoteDir = resolveKnownUploadDirectory(latestTab, pickerContext.remoteDir);
       if (!remoteDir) {
-        showNotice("原上传目录已失效，请刷新文件列表后重新选择上传位置");
+        showNotice(t("原上传目录已失效，请刷新文件列表后重新选择上传位置"));
         return;
       }
 
@@ -1423,7 +1427,7 @@ export default function App() {
     const latestActiveTabId = activeTabIdRef.current;
     const latestTab = tabsRef.current.find((tab) => tab.id === latestActiveTabId);
     if (!latestTab) {
-      showNotice("当前上传连接已失效，请重新打开文件面板后再试");
+      showNotice(t("当前上传连接已失效，请重新打开文件面板后再试"));
       return;
     }
     uploadQueue.enqueue(localPaths, {
@@ -1446,7 +1450,7 @@ export default function App() {
   async function openFileEditor(entry: SftpEntry) {
     if (!activeTab || entry.isDir) return;
     if ((entry.size ?? 0) > MAX_EDITABLE_TEXT_BYTES) {
-      showNotice("仅支持编辑 1 MB 以内的文本文件");
+      showNotice(t("仅支持编辑 1 MB 以内的文本文件"));
       return;
     }
     const tabId = activeTab.id;
@@ -1464,7 +1468,7 @@ export default function App() {
     try {
       const content = isTauri
         ? await command<string>("sftp_read_text_file", { id: serverId, path: entry.path })
-        : `# 演示模式\n正在编辑 ${entry.path}\n`;
+        : t("# 演示模式\n正在编辑 {0}\n", entry.path);
       setFileEditor((current) =>
         current?.entry.path === entry.path && current.tabId === tabId
           ? { ...current, content, originalContent: content, loading: false, error: undefined }
@@ -1486,14 +1490,14 @@ export default function App() {
   async function openTailViewer(entry: SftpEntry) {
     if (!activeTab || entry.isDir) return;
     if (!isTauri) {
-      showNotice("滚动查看仅支持桌面应用");
+      showNotice(t("滚动查看仅支持桌面应用"));
       return;
     }
     try {
       const { getAllWebviewWindows, WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
       const windows = await getAllWebviewWindows();
       if (windows.filter((windowRef) => windowRef.label.startsWith("tail-")).length >= 12) {
-        showNotice("最多同时打开 12 个滚动查看窗口");
+        showNotice(t("最多同时打开 12 个滚动查看窗口"));
         return;
       }
       const viewerId = crypto.randomUUID();
@@ -1535,7 +1539,7 @@ export default function App() {
     if (!fileEditor || fileEditor.loading || fileEditor.saving) return;
     const size = new TextEncoder().encode(fileEditor.content).length;
     if (size > MAX_EDITABLE_TEXT_BYTES) {
-      setFileEditor((current) => current ? { ...current, error: "内容超过 1 MB，无法保存" } : current);
+      setFileEditor((current) => current ? { ...current, error: t("内容超过 1 MB，无法保存") } : current);
       return;
     }
     setFileEditor((current) => current ? { ...current, saving: true, error: undefined } : current);
@@ -1549,7 +1553,7 @@ export default function App() {
         });
       }
       setFileEditor(null);
-      showNotice(`已保存 ${fileEditor.entry.name}`);
+      showNotice(t("已保存 {0}", fileEditor.entry.name));
       const parent = parentPath(fileEditor.entry.path);
       refreshVisibleFiles(fileEditor.tabId, fileEditor.serverId, parent);
     } catch (error) {
@@ -1563,7 +1567,7 @@ export default function App() {
 
   function closeFileEditor() {
     if (!fileEditor || fileEditor.saving) return;
-    if (fileEditor.content !== fileEditor.originalContent && !window.confirm("文件尚未保存，确定关闭编辑器吗？")) {
+    if (fileEditor.content !== fileEditor.originalContent && !window.confirm(t("文件尚未保存，确定关闭编辑器吗？"))) {
       return;
     }
     setFileEditor(null);
@@ -1574,7 +1578,7 @@ export default function App() {
     const name = rawName.trim();
     if (!name) return;
     if (/[\\/]/.test(name)) {
-      showNotice("文件夹名称不能包含路径分隔符");
+      showNotice(t("文件夹名称不能包含路径分隔符"));
       return;
     }
     const tabId = activeTab.id;
@@ -1598,7 +1602,7 @@ export default function App() {
     try {
       if (isTauri) await command("sftp_mkdir", { id: serverId, path });
       if (targetColumnIndex >= 0) patchCreatedEntry(tabId, targetColumnIndex, entry);
-      showNotice(`已创建 ${name}`);
+      showNotice(t("已创建 {0}", name));
       if (isTauri && targetColumnIndex >= 0) {
         loadFilesFor(tabId, serverId, dir, targetColumnIndex);
       }
@@ -1638,8 +1642,8 @@ export default function App() {
     const to = `${parent}/${next}`;
     try {
       if (isTauri) await command("sftp_rename", { id: activeTab.serverId, from: entry.path, to });
-      else showNotice(`演示模式：重命名为 ${to}`);
-      showNotice(`已重命名为 ${next}`);
+      else showNotice(t("演示模式：重命名为 {0}", to));
+      showNotice(t("已重命名为 {0}", next));
       patchRenamedEntry(tabId, columnIndex, entry, to, next);
     } catch (error) {
       showNotice(String(error));
@@ -1669,7 +1673,7 @@ export default function App() {
           await command("sftp_remove", { id: serverId, path: entry.path, isDir: entry.isDir });
         }
       } else {
-        showNotice(`演示模式：删除 ${entries.length} 项`);
+        showNotice(t("演示模式：删除 {0} 项", entries.length));
       }
       patchDeletedEntries(tabId, columnIndex, entries);
       setDeleteConfirm(null);
@@ -1797,7 +1801,7 @@ export default function App() {
                           : { top: `${divider.rect.top}%`, left: `${divider.rect.left}%`, width: `${divider.rect.width}%` }}
                         role="separator"
                         aria-orientation={divider.direction === "row" ? "vertical" : "horizontal"}
-                        title="拖动调整窗格大小"
+                        title={t("拖动调整窗格大小")}
                         onPointerDown={(event) => startPaneResize(event, activeGroupId, divider)}
                       />
                     ))}
@@ -1818,14 +1822,14 @@ export default function App() {
                     <div
                       className={`dock-divider ${filesOpen ? "open" : ""}`}
                       onPointerDown={startDockDrag}
-                      title="拖动调整比例"
+                      title={t("拖动调整比例")}
                     />
                     <div
                       className={`files-region ${filesOpen ? "open" : ""}`}
                       ref={filesRegionRef}
                       style={{ "--files-panel-height": `${filesRatio * 100}%` } as CSSProperties}
                     >
-                      <Suspense fallback={<div className="column-state">正在打开文件面板…</div>}>
+                      <Suspense fallback={<div className="column-state">{t("正在打开文件面板…")}</div>}>
                         <SftpBrowser
                           tab={activeTab}
                           busy={sftpBusy}
@@ -1876,7 +1880,7 @@ export default function App() {
               <div
                 className={`status-divider ${sidePanel ? "open" : ""}`}
                 onPointerDown={startStatusDrag}
-                title="拖动调整面板宽度"
+                title={t("拖动调整面板宽度")}
               />
               <aside
                 ref={statusPanelRef}
@@ -1889,10 +1893,10 @@ export default function App() {
                     className={`status-panel-content ${statusOpen ? "status-view" : "history-view"}`}
                   >
                     {sidePanel === "status" && (
-                      <StatusDashboard tab={activeTab} onHostCopied={(host) => showNotice(`已复制 ${host}`)} />
+                      <StatusDashboard tab={activeTab} onHostCopied={(host) => showNotice(t("已复制 {0}", host))} />
                     )}
                     {sidePanel === "ai" && (
-                      <Suspense fallback={<div className="ai-notice">正在加载 AI 助手…</div>}>
+                      <Suspense fallback={<div className="ai-notice">{t("正在加载 AI 助手…")}</div>}>
                         <AiPanel tab={activeTab} ai={ai}
                           onSettings={() => { setSettingsPage("ai"); setSettingsOpen(true); }}
                           onClose={() => setSidePanel(null)} />
@@ -1911,7 +1915,7 @@ export default function App() {
                         onDelete={(forward) => void deletePortForward(forward)}
                         onStart={(id) => void portForwards.start(id)}
                         onStop={(id) => void portForwards.stop(id)}
-                        onCopied={(text) => showNotice(`已复制 ${text}`)}
+                        onCopied={(text) => showNotice(t("已复制 {0}", text))}
                       />
                     )}
                     {sidePanel === "snippets" && (
@@ -1975,12 +1979,12 @@ export default function App() {
 
       {folderReplaceItem && (
         <ConfirmDialog
-          title="完整替换远端文件夹？"
-          description="远端已存在同名文件夹。继续会用本地文件夹完整替换它，不会合并内容，远端独有的文件和子目录都会被删除。"
-          targetLabel="远端目标"
+          title={t("完整替换远端文件夹？")}
+          description={t("远端已存在同名文件夹。继续会用本地文件夹完整替换它，不会合并内容，远端独有的文件和子目录都会被删除。")}
+          targetLabel={t("远端目标")}
           target={<code>{uploadRemotePath(folderReplaceItem)}</code>}
-          confirmLabel="完整替换"
-          cancelLabel="取消上传"
+          confirmLabel={t("完整替换")}
+          cancelLabel={t("取消上传")}
           focusCancel
           onConfirm={() => uploadQueue.resolveFolderReplacement(true, folderReplaceItem.id)}
           onCancel={() => uploadQueue.resolveFolderReplacement(false, folderReplaceItem.id)}
@@ -1989,14 +1993,14 @@ export default function App() {
 
       {connections.deleteConfirm && (
         <ConfirmDialog
-          title="确认删除"
+          title={t("确认删除")}
           description={connectionDeleteDescription(connections.deleteConfirm)}
           target={connectionDeleteTargetText(connections.deleteConfirm)}
           targetTitle={connectionDeleteTargetText(connections.deleteConfirm)}
           error={connections.deleteConfirm.error}
           busy={connections.deleteConfirm.busy}
-          confirmLabel="删除"
-          busyLabel="删除中…"
+          confirmLabel={t("删除")}
+          busyLabel={t("删除中…")}
           onConfirm={connections.confirmDeleteConnections}
           onCancel={connections.cancelDeleteConnections}
         />
@@ -2004,7 +2008,7 @@ export default function App() {
 
       {deleteConfirm && (
         <ConfirmDialog
-          title="确认删除"
+          title={t("确认删除")}
           description={sftpDeleteDescription(deleteConfirm.entries)}
           target={deleteConfirm.entries.length > 1
             ? deleteConfirm.entries.map((entry) => entry.name).join("、")
@@ -2012,8 +2016,8 @@ export default function App() {
           targetTitle={deleteConfirm.entries.map((entry) => entry.path).join("\n")}
           error={deleteConfirm.error}
           busy={deleteConfirm.busy}
-          confirmLabel="删除"
-          busyLabel="删除中…"
+          confirmLabel={t("删除")}
+          busyLabel={t("删除中…")}
           onConfirm={confirmDeleteEntry}
           onCancel={() => setDeleteConfirm(null)}
         />

@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { DownloadItem } from "../types";
 import { formatBytes } from "../utils/format";
 
+import { t } from "../i18n";
 export function DownloadQueue({
   downloads,
   onDismiss,
@@ -31,16 +32,15 @@ export function DownloadQueue({
           type="button"
           className="uq-title"
           onClick={() => setCollapsed((value) => !value)}
-          title={collapsed ? "展开" : "收起"}
+          title={collapsed ? t("展开") : t("收起")}
         >
           <ChevronDown size={14} className={collapsed ? "uq-caret closed" : "uq-caret"} />
           <DownloadCloud size={14} />
-          <span>{active > 0 ? `下载中 · ${active}` : "下载完成"}</span>
+          <span>{active > 0 ? t("下载中 · {0}", active) : t("下载完成")}</span>
         </button>
         {doneCount > 0 && (
-          <button type="button" className="uq-clear" onClick={onClearDone} title="清除已完成">
-            清除
-          </button>
+          <button type="button" className="uq-clear" onClick={onClearDone} title={t("清除已完成")}>
+            {t("清除")}</button>
         )}
       </header>
 
@@ -75,19 +75,19 @@ export function DownloadQueue({
                     </span>
                     <span className="uq-meta">
                       {item.status === "error"
-                        ? "失败"
+                        ? t("失败")
                         : item.status === "canceled"
-                          ? "已取消"
+                          ? t("已取消")
                           : item.status === "done"
                           ? formatBytes(item.total)
                           : item.status === "downloading"
                               ? indeterminate ? formatBytes(item.transferred) : `${percent}%`
-                              : "等待"}
+                              : t("等待")}
                     </span>
                   </div>
                   {item.status === "error" || item.status === "canceled" ? (
                     <div className="uq-error" title={item.error}>
-                      {item.status === "canceled" ? "已取消下载" : item.error}
+                      {item.status === "canceled" ? t("已取消下载") : item.error}
                     </div>
                   ) : item.status === "done" ? (
                     <div className="uq-path" title={item.savedPath}>
@@ -106,8 +106,8 @@ export function DownloadQueue({
                         type="button"
                         className="uq-x"
                         onClick={() => onOpen(item, item.folderMode === "raw" ? "item" : "parent")}
-                        title={item.folderMode === "raw" ? "打开文件夹" : "打开所在文件夹"}
-                        aria-label={item.folderMode === "raw" ? "打开文件夹" : "打开所在文件夹"}
+                        title={item.folderMode === "raw" ? t("打开文件夹") : t("打开所在文件夹")}
+                        aria-label={item.folderMode === "raw" ? t("打开文件夹") : t("打开所在文件夹")}
                       >
                         <FolderOpen size={14} aria-hidden="true" />
                       </button>
@@ -116,8 +116,8 @@ export function DownloadQueue({
                           type="button"
                           className="uq-x"
                           onClick={() => onOpen(item, "item")}
-                          title="打开文件"
-                          aria-label="打开文件"
+                          title={t("打开文件")}
+                          aria-label={t("打开文件")}
                         >
                           <ExternalLink size={14} aria-hidden="true" />
                         </button>
@@ -125,12 +125,12 @@ export function DownloadQueue({
                     </>
                   )}
                   {(item.status === "pending" || item.status === "downloading") && (
-                    <button type="button" className="uq-x" onClick={() => onStop(item.id)} title="停止下载">
+                    <button type="button" className="uq-x" onClick={() => onStop(item.id)} title={t("停止下载")}>
                       <OctagonX size={12} />
                     </button>
                   )}
                   {(item.status === "done" || item.status === "error" || item.status === "canceled") && (
-                    <button type="button" className="uq-x" onClick={() => onDismiss(item.id)} title="移除">
+                    <button type="button" className="uq-x" onClick={() => onDismiss(item.id)} title={t("移除")}>
                       <X size={12} />
                     </button>
                   )}

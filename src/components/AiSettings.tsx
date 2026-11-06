@@ -10,6 +10,7 @@ import {
   mergeModelSources,
 } from "../features/ai/types";
 
+import { t } from "../i18n";
 export function AiSettings({
   config,
   onSaved,
@@ -67,7 +68,7 @@ export function AiSettings({
     setNotice("");
     try {
       if (!isTauri)
-        throw new Error("请在桌面客户端保存 AI 设置；预览模式不保存密钥。");
+        throw new Error(t("请在桌面客户端保存 AI 设置；预览模式不保存密钥。"));
       const value = await command<AiConfig>("ai_save_config", {
         input: input(),
       });
@@ -78,9 +79,9 @@ export function AiSettings({
       setModels(value.modelMetadata || []);
       setManualModels((value.manualModels || []).join("\n"));
       setDefaultModel(value.defaultModel);
-      setNotice("设置已保存，密钥已在本机加密。");
+      setNotice(t("设置已保存，密钥已在本机加密。"));
       if (value.metadataError)
-        setError(`模型元数据读取失败：${value.metadataError}`);
+        setError(t("模型元数据读取失败：{0}", value.metadataError));
     } catch (error) {
       setError(String(error));
     } finally {
@@ -93,7 +94,7 @@ export function AiSettings({
     setError("");
     setNotice("");
     try {
-      if (!isTauri) throw new Error("请在桌面客户端测试连接。");
+      if (!isTauri) throw new Error(t("请在桌面客户端测试连接。"));
       const fetched = await command<AiModel[]>("ai_list_models", {
         input: input(),
       });
@@ -102,7 +103,7 @@ export function AiSettings({
       if (!fetched.some((model) => model.id === defaultModel))
         setDefaultModel(fetched[0]?.id || "");
       setNotice(
-        `已获取 ${fetched.length} 个模型及服务声明的思考档位。点击保存后生效。`,
+        t("已获取 {0} 个模型及服务声明的思考档位。点击保存后生效。", fetched.length),
       );
     } catch (error) {
       if (request === generation.current) setError(String(error));
@@ -113,16 +114,13 @@ export function AiSettings({
   return (
     <div className="ai-settings">
       <div className="settings-section-copy">
-        <h3>模型服务</h3>
+        <h3>{t("模型服务")}</h3>
         <p>
-          连接支持工具调用的 OpenAI 兼容 Chat Completions
-          服务。任务消息、必要的服务器信息和工具输出将发送到此地址。
-        </p>
+          {t("连接支持工具调用的 OpenAI 兼容 Chat Completions 服务。任务消息、必要的服务器信息和工具输出将发送到此地址。")}</p>
       </div>
       <fieldset disabled={Boolean(busy)}>
         <label>
-          API 地址
-          <input
+          {t("API 地址")}<input
             value={baseUrl}
             onChange={(e) => {
               setBaseUrl(e.target.value);
@@ -133,11 +131,9 @@ export function AiSettings({
           />
         </label>
         <small>
-          填写包含 /v1 的服务根地址，也支持粘贴完整 /chat/completions 地址。
-        </small>
+          {t("填写包含 /v1 的服务根地址，也支持粘贴完整 /chat/completions 地址。")}</small>
         <label>
-          API 密钥
-          <input
+          {t("API 密钥")}<input
             type="password"
             autoComplete="new-password"
             value={apiKey}
@@ -148,8 +144,8 @@ export function AiSettings({
             }}
             placeholder={
               config.hasApiKey
-                ? "已保存，留空保留原密钥"
-                : "sk-…（本地服务可留空）"
+                ? t("已保存，留空保留原密钥")
+                : t("sk-…（本地服务可留空）")
             }
           />
         </label>
@@ -164,26 +160,22 @@ export function AiSettings({
                 if (e.target.checked) setApiKey("");
               }}
             />
-            清除已保存的密钥
-          </label>
+            {t("清除已保存的密钥")}</label>
         )}
         <div className="ai-settings-label">
-          <span>模型元数据</span>
+          <span>{t("模型元数据")}</span>
           <button type="button" onClick={() => void fetchModels()}>
             {busy === "models" ? (
               <LoaderCircle size={13} className="ai-spin" />
             ) : (
               <RefreshCw size={13} />
             )}
-            读取 / 刷新元数据
-          </button>
+            {t("读取 / 刷新元数据")}</button>
         </div>
         <small>
-          从当前服务的 /models 接口读取模型与思考档位；未列出的模型可手动补充。
-        </small>
+          {t("从当前服务的 /models 接口读取模型与思考档位；未列出的模型可手动补充。")}</small>
         <label>
-          默认模型
-          <select
+          {t("默认模型")}<select
             value={
               modelList.includes(defaultModel)
                 ? defaultModel
@@ -192,8 +184,7 @@ export function AiSettings({
             onChange={(e) => setDefaultModel(e.target.value)}
           >
             <option value="" disabled>
-              请先读取元数据
-            </option>
+              {t("请先读取元数据")}</option>
             {choices.map((model) => (
               <option key={model.id} value={model.id}>
                 {model.name}
@@ -202,30 +193,28 @@ export function AiSettings({
           </select>
         </label>
         <details className="ai-manual-models">
-          <summary>手动补充模型 ID（可选）</summary>
+          <summary>{t("手动补充模型 ID（可选）")}</summary>
           <textarea
-            aria-label="手动模型 ID"
+            aria-label={t("手动模型 ID")}
             value={manualModels}
             onChange={(event) => setManualModels(event.target.value)}
             rows={3}
-            placeholder="每行一个模型 ID，支持 /models 不可用的服务"
+            placeholder={t("每行一个模型 ID，支持 /models 不可用的服务")}
             spellCheck={false}
           />
         </details>
         <small>
           {models.find((model) => model.id === defaultModel)?.reasoningEfforts
             .length
-            ? `此模型支持：${models
+            ? t("此模型支持：{0}", models
                 .find((model) => model.id === defaultModel)!
                 .reasoningEfforts.map((effort) => effort.label)
-                .join("、")}`
-            : "服务未声明此模型的思考档位，默认使用服务默认值，也可在对话中手动输入。"}
-          远端工具需要 Python 3，JavaScript 执行另需 Node.js。
-        </small>
+                .join("、"))
+            : t("服务未声明此模型的思考档位，默认使用服务默认值，也可在对话中手动输入。")}
+          {t("远端工具需要 Python 3，JavaScript 执行另需 Node.js。")}</small>
         <label>
-          新对话默认权限
-          <select
-            aria-label="默认 Agent 权限"
+          {t("新对话默认权限")}<select
+            aria-label={t("默认 Agent 权限")}
             value={defaultPermission}
             onChange={(event) =>
               setDefaultPermission(event.target.value as AiPermission)
@@ -244,14 +233,11 @@ export function AiSettings({
               (option) => option.value === defaultPermission,
             )?.description
           }
-          。对话中可单独调整。风险判断采用保守规则，不是隔离沙箱。
-        </small>
+          {t("。对话中可单独调整。风险判断采用保守规则，不是隔离沙箱。")}</small>
         <div className="settings-section-copy">
-          <h3>自动压缩上下文 · 200k tokens</h3>
+          <h3>{t("自动压缩上下文")}</h3>
           <p>
-            估算用量达到 200k
-            时，自动生成历史摘要，保留原始任务和近期完整工具调用。压缩仅影响发送给模型的上下文，聊天记录仍可查看；对话保留在当前窗口会话中。
-          </p>
+            {t("估算用量达到 200k tokens，或达到模型声明上下文窗口的 75% 时，自动生成历史摘要，保留原始任务和近期完整工具调用。压缩仅影响发送给模型的上下文，聊天记录仍可查看。")}</p>
         </div>
         <button
           type="button"
@@ -259,8 +245,7 @@ export function AiSettings({
           onClick={() => void save()}
         >
           {busy === "save" && <LoaderCircle size={14} className="ai-spin" />}
-          保存 AI 设置
-        </button>
+          {t("保存 AI 设置")}</button>
       </fieldset>
       {error && (
         <p className="ai-error" role="alert">

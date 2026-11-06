@@ -9,6 +9,7 @@ import type { SftpEntry } from "../types";
 import { formatBytes } from "../utils/format";
 import { renderHighlightedCode, textOffsetAtPoint } from "../utils/highlight";
 
+import { t } from "../i18n";
 export interface FileEditorState {
   entry: SftpEntry;
   tabId: string;
@@ -171,7 +172,7 @@ export function FileEditorModal({
             <h2 id="file-editor-title">{editor.entry.name}</h2>
             <p title={editor.entry.path}>{editor.entry.path}</p>
           </div>
-          <button type="button" className="icon-button" onClick={onClose} title="关闭">
+          <button type="button" className="icon-button" onClick={onClose} title={t("关闭")}>
             <X size={16} />
           </button>
         </header>
@@ -202,11 +203,10 @@ export function FileEditorModal({
           />
         </div>
         <footer className="file-editor-actions">
-          <span>{editor.loading ? "读取中…" : `${formatBytes(new TextEncoder().encode(editor.content).length)} / 1 MB`}</span>
+          <span>{editor.loading ? t("读取中…") : `${formatBytes(new TextEncoder().encode(editor.content).length)} / 1 MB`}</span>
           <div>
             <button type="button" className="btn-ghost" disabled={editor.saving} onClick={onClose}>
-              取消
-            </button>
+              {t("取消")}</button>
             <button
               type="button"
               className="solid-button"
@@ -214,7 +214,7 @@ export function FileEditorModal({
               onClick={onSave}
             >
               <Save size={15} />
-              {editor.saving ? "保存中…" : "保存"}
+              {editor.saving ? t("保存中…") : t("保存")}
             </button>
           </div>
         </footer>

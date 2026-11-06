@@ -3,6 +3,7 @@ import type { ISearchOptions, SearchAddon } from "@xterm/addon-search";
 import { ArrowDown, ArrowUp, CaseSensitive, Regex, WholeWord, X } from "lucide-react";
 import { getTerminalSearchDecorations, type AppTheme } from "../constants/theme";
 
+import { t } from "../i18n";
 const isMac = /mac/i.test(navigator.platform) || /mac os/i.test(navigator.userAgent);
 
 /** The shortcut that opens terminal search: Cmd+F on macOS, Ctrl+Shift+F elsewhere (Ctrl+F belongs to the shell). */
@@ -91,14 +92,14 @@ export function TerminalSearchBar({
   }, [caseSensitive, regex, wholeWord, theme]);
 
   const status = invalid
-    ? "正则无效"
+    ? t("正则无效")
     : !query || !results
       ? ""
       : results.count === 0
-        ? "无结果"
+        ? t("无结果")
         : results.index >= 0
           ? `${results.index + 1}/${results.count}`
-          : `${results.count} 项`;
+          : t("{0} 项", results.count);
 
   return (
     <div
@@ -114,8 +115,8 @@ export function TerminalSearchBar({
       <input
         ref={inputRef}
         value={query}
-        placeholder="搜索终端输出"
-        aria-label="搜索终端输出"
+        placeholder={t("搜索终端输出")}
+        aria-label={t("搜索终端输出")}
         spellCheck={false}
         className={invalid ? "invalid" : undefined}
         onChange={(event) => {
@@ -134,7 +135,7 @@ export function TerminalSearchBar({
         type="button"
         className={`terminal-search-toggle ${caseSensitive ? "on" : ""}`}
         aria-pressed={caseSensitive}
-        title="区分大小写"
+        title={t("区分大小写")}
         onClick={() => setCaseSensitive((value) => !value)}
       >
         <CaseSensitive size={14} />
@@ -143,7 +144,7 @@ export function TerminalSearchBar({
         type="button"
         className={`terminal-search-toggle ${wholeWord ? "on" : ""}`}
         aria-pressed={wholeWord}
-        title="全字匹配"
+        title={t("全字匹配")}
         onClick={() => setWholeWord((value) => !value)}
       >
         <WholeWord size={14} />
@@ -152,18 +153,18 @@ export function TerminalSearchBar({
         type="button"
         className={`terminal-search-toggle ${regex ? "on" : ""}`}
         aria-pressed={regex}
-        title="正则表达式"
+        title={t("正则表达式")}
         onClick={() => setRegex((value) => !value)}
       >
         <Regex size={14} />
       </button>
-      <button type="button" title="上一个（Shift+Enter）" disabled={!query} onClick={() => run("previous")}>
+      <button type="button" title={t("上一个（Shift+Enter）")} disabled={!query} onClick={() => run("previous")}>
         <ArrowUp size={14} />
       </button>
-      <button type="button" title="下一个（Enter）" disabled={!query} onClick={() => run("next")}>
+      <button type="button" title={t("下一个（Enter）")} disabled={!query} onClick={() => run("next")}>
         <ArrowDown size={14} />
       </button>
-      <button type="button" title="关闭（Esc）" onClick={onClose}>
+      <button type="button" title={t("关闭（Esc）")} onClick={onClose}>
         <X size={14} />
       </button>
     </div>

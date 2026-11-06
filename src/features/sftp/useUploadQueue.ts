@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { command, isTauri } from "../../api/tauri";
+import { command, isTauri, rawMessage } from "../../api/tauri";
 import type { UploadItem, UploadProgressPayload } from "../../types";
 import { basename, isFolderUploadConflict } from "./paths";
 
+import { t } from "../../i18n";
 export interface UploadTargetContext {
   tabId: string;
   serverId: string;
@@ -131,7 +132,8 @@ export function useUploadQueue({
     } catch (error) {
       inFlightIdsRef.current.delete(item.id);
       const message = String(error);
-      if (message.includes("上传已停止")) {
+      const raw = rawMessage(error);
+      if (raw.includes("上传已停止")) {
         setUploads((current) =>
           current.map((upload) =>
             upload.id === item.id ? { ...upload, status: "canceled", error: undefined } : upload,
@@ -139,7 +141,7 @@ export function useUploadQueue({
         );
         return;
       }
-      if (!replaceExistingFolder && isFolderUploadConflict(message)) {
+      if (!replaceExistingFolder && isFolderUploadConflict(raw)) {
         if (canceledIdsRef.current.has(item.id)) {
           setUploads((current) =>
             current.map((upload) =>
@@ -168,7 +170,7 @@ export function useUploadQueue({
                   ...upload,
                   status: "canceled",
                   transferred: 0,
-                  error: "已取消完整替换，远端文件夹未更改",
+                  error: t("已取消完整替换，远端文件夹未更改"),
                 }
               : upload,
           ),

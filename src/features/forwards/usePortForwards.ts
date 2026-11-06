@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { command, isTauri } from "../../api/tauri";
 import type { PortForward, PortForwardInput, PortForwardStatus } from "../../types";
 
+import { t, translateMessage } from "../../i18n";
 /** Browser demo only: rules live in localStorage and "run" without a server. */
 const DEMO_FORWARDS_KEY = "ishell.demoPortForwards";
 
@@ -48,7 +49,7 @@ export function usePortForwards(showNotice: (message: string) => void) {
         applyStatus(event.payload);
         if (event.payload.state === "error" && event.payload.message) {
           const forward = forwardsRef.current.find((item) => item.id === event.payload.id);
-          showNotice(`端口转发 ${forward ? forward.bindPort : ""} 失败：${event.payload.message}`);
+          showNotice(t("端口转发 {0} 失败：{1}", forward ? forward.bindPort : "", translateMessage(event.payload.message)));
         }
       });
       if (active) unlisten = un;

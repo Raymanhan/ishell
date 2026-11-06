@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { UploadItem } from "../types";
 import { formatBytes } from "../utils/format";
 
+import { t } from "../i18n";
 export function UploadQueue({
   uploads,
   onDismiss,
@@ -29,16 +30,15 @@ export function UploadQueue({
           type="button"
           className="uq-title"
           onClick={() => setCollapsed((value) => !value)}
-          title={collapsed ? "展开" : "收起"}
+          title={collapsed ? t("展开") : t("收起")}
         >
           <ChevronDown size={14} className={collapsed ? "uq-caret closed" : "uq-caret"} />
           <UploadCloud size={14} />
-          <span>{active > 0 ? `上传中 · ${active}` : "上传完成"}</span>
+          <span>{active > 0 ? t("上传中 · {0}", active) : t("上传完成")}</span>
         </button>
         {doneCount > 0 && (
-          <button type="button" className="uq-clear" onClick={onClearDone} title="清除已完成">
-            清除
-          </button>
+          <button type="button" className="uq-clear" onClick={onClearDone} title={t("清除已完成")}>
+            {t("清除")}</button>
         )}
       </header>
 
@@ -71,19 +71,19 @@ export function UploadQueue({
                     </span>
                     <span className="uq-meta">
                       {item.status === "error"
-                        ? "失败"
+                        ? t("失败")
                         : item.status === "canceled"
-                          ? (item.error ? "已取消" : "已停止")
+                          ? (item.error ? t("已取消") : t("已停止"))
                           : item.status === "done"
                             ? formatBytes(item.total)
                             : finalizing
-                              ? "正在提交"
+                              ? t("正在提交")
                               : `${percent}%`}
                     </span>
                   </div>
                   {item.status === "error" || item.status === "canceled" ? (
                     <div className="uq-error" title={item.error}>
-                      {item.status === "canceled" ? item.error ?? "已停止上传" : item.error}
+                      {item.status === "canceled" ? item.error ?? t("已停止上传") : item.error}
                     </div>
                   ) : (
                     <div className="uq-track">
@@ -92,12 +92,12 @@ export function UploadQueue({
                   )}
                 </div>
                 {(item.status === "pending" || (item.status === "uploading" && !finalizing)) && (
-                  <button type="button" className="uq-x" onClick={() => onStop(item.id)} title="停止上传">
+                  <button type="button" className="uq-x" onClick={() => onStop(item.id)} title={t("停止上传")}>
                     <OctagonX size={12} />
                   </button>
                 )}
                 {(item.status === "done" || item.status === "error" || item.status === "canceled") && (
-                  <button type="button" className="uq-x" onClick={() => onDismiss(item.id)} title="移除">
+                  <button type="button" className="uq-x" onClick={() => onDismiss(item.id)} title={t("移除")}>
                     <X size={12} />
                   </button>
                 )}

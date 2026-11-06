@@ -1,5 +1,6 @@
 import type { ISearchOptions } from "@xterm/addon-search";
 import type { ITheme } from "@xterm/xterm";
+import { t } from "../i18n";
 
 export const swatches = ["#5b9dff", "#43c98b", "#f2b45a", "#f56b6b", "#b18cff", "#46c7c7"];
 
@@ -66,7 +67,9 @@ export const appThemeOrder = [
 export const appThemeDefinitions = {
   glass: {
     id: "glass",
-    label: "石墨灰",
+    get label() {
+      return t("石墨灰");
+    },
     icon: "layers",
     previewClassName: "glass",
     terminalSurface: "#2c2e33",
@@ -101,7 +104,9 @@ export const appThemeDefinitions = {
   },
   "liquid-glass": {
     id: "liquid-glass",
-    label: "午夜蓝",
+    get label() {
+      return t("午夜蓝");
+    },
     icon: "droplets",
     previewClassName: "liquid-glass",
     terminalSurface: "#1f2840",
@@ -136,7 +141,9 @@ export const appThemeDefinitions = {
   },
   "liquid-glass-lagoon": {
     id: "liquid-glass-lagoon",
-    label: "墨玉绿",
+    get label() {
+      return t("墨玉绿");
+    },
     icon: "droplets",
     previewClassName: "liquid-glass liquid-glass-lagoon",
     terminalSurface: "#183530",
@@ -171,7 +178,9 @@ export const appThemeDefinitions = {
   },
   "liquid-glass-onyx": {
     id: "liquid-glass-onyx",
-    label: "曜石黑",
+    get label() {
+      return t("曜石黑");
+    },
     icon: "droplets",
     previewClassName: "liquid-glass liquid-glass-onyx",
     terminalSurface: "#1e1e1f",
@@ -206,7 +215,9 @@ export const appThemeDefinitions = {
   },
   "liquid-glass-pearl": {
     id: "liquid-glass-pearl",
-    label: "象牙白",
+    get label() {
+      return t("象牙白");
+    },
     icon: "droplets",
     previewClassName: "liquid-glass liquid-glass-pearl",
     terminalSurface: "#f4f0e8",
@@ -242,7 +253,9 @@ export const appThemeDefinitions = {
   },
   "liquid-glass-cloud": {
     id: "liquid-glass-cloud",
-    label: "云雾白",
+    get label() {
+      return t("云雾白");
+    },
     icon: "droplets",
     previewClassName: "liquid-glass liquid-glass-cloud",
     // Soft pastels in the spirit of Otty: gentle enough to feel airy on a
@@ -279,7 +292,9 @@ export const appThemeDefinitions = {
   },
   "liquid-glass-dusk": {
     id: "liquid-glass-dusk",
-    label: "暮霭紫",
+    get label() {
+      return t("暮霭紫");
+    },
     icon: "droplets",
     previewClassName: "liquid-glass liquid-glass-dusk",
     terminalSurface: "#1e1e2e",
@@ -314,7 +329,9 @@ export const appThemeDefinitions = {
   },
   "liquid-glass-clay": {
     id: "liquid-glass-clay",
-    label: "Claude 深色",
+    get label() {
+      return t("Claude 深色");
+    },
     icon: "droplets",
     previewClassName: "liquid-glass liquid-glass-clay",
     // Claude Code desktop, dark: ivory text on charcoal, the clay-orange cursor
@@ -351,7 +368,9 @@ export const appThemeDefinitions = {
   },
   "liquid-glass-clay-light": {
     id: "liquid-glass-clay-light",
-    label: "Claude 浅色",
+    get label() {
+      return t("Claude 浅色");
+    },
     icon: "droplets",
     previewClassName: "liquid-glass liquid-glass-clay-light",
     // Claude Code desktop, light: near-black on white, the clay-orange cursor

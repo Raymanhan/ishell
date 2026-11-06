@@ -1,6 +1,7 @@
 import { Check, Radio, X } from "lucide-react";
 import type { ShellTab } from "../features/shell/types";
 
+import { t } from "../i18n";
 /**
  * Shown while broadcast input is on: picks which sessions receive what is
  * typed into any of them.
@@ -39,24 +40,22 @@ export function BroadcastBar({
   });
 
   return (
-    <div className="broadcast-bar" role="region" aria-label="广播输入">
+    <div className="broadcast-bar" role="region" aria-label={t("广播输入")}>
       <div className="broadcast-bar-head">
         <Radio size={14} />
-        <strong>广播输入</strong>
+        <strong>{t("广播输入")}</strong>
         <span>
-          {count < 2 ? "至少选择 2 个会话" : `在任一所选会话中输入，会同步发送到全部 ${count} 个会话`}
+          {count < 2 ? t("至少选择 2 个会话") : t("在任一所选会话中输入，会同步发送到全部 {0} 个会话", count)}
         </span>
         <button type="button" className="broadcast-bar-link" onClick={() => onChange(new Set(activeGroupPaneIds))}>
-          当前标签
-        </button>
+          {t("当前标签")}</button>
         <button type="button" className="broadcast-bar-link" onClick={() => onChange(new Set(sessions.map((session) => session.id)))}>
-          全部会话
-        </button>
-        <button type="button" className="broadcast-bar-close" onClick={onStop} title="停止广播" aria-label="停止广播">
+          {t("全部会话")}</button>
+        <button type="button" className="broadcast-bar-close" onClick={onStop} title={t("停止广播")} aria-label={t("停止广播")}>
           <X size={14} />
         </button>
       </div>
-      <div className="broadcast-bar-sessions" role="group" aria-label="广播目标">
+      <div className="broadcast-bar-sessions" role="group" aria-label={t("广播目标")}>
         {sessions.map((session, index) => {
           const selected = targets.has(session.id);
           return (

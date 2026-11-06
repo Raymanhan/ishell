@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import type { ServerRecord } from "../types";
 
+import { t } from "../i18n";
 export interface ConnectionMoveRequest {
   draggedKey: string;
   targetKey: string;
@@ -516,7 +517,7 @@ export function ConnectionManager({
     <aside
       className={`connection-manager ${open ? "open" : ""}`}
       aria-hidden={!open}
-      aria-label="连接管理"
+      aria-label={t("连接管理")}
     >
       {open && (
         <div className="connection-panel-content">
@@ -531,7 +532,7 @@ export function ConnectionManager({
                   setQuery("");
                 }
               }}
-              placeholder="搜索主机"
+              placeholder={t("搜索主机")}
               spellCheck={false}
             />
           </label>
@@ -543,7 +544,7 @@ export function ConnectionManager({
               <input
                 ref={createFolderInputRef}
                 value={creatingFolderName}
-                placeholder="新建文件夹"
+                placeholder={t("新建文件夹")}
                 onChange={(event) => setCreatingFolderName(event.target.value)}
                 onBlur={commitCreateFolder}
                 onKeyDown={(event) => {
@@ -556,7 +557,7 @@ export function ConnectionManager({
           {filteredEntries.length === 0 ? (
             <div className="connection-empty">
               <Signal size={24} />
-              <p>{entries.length === 0 ? "暂无主机" : "没有匹配的主机"}</p>
+              <p>{entries.length === 0 ? t("暂无主机") : t("没有匹配的主机")}</p>
             </div>
           ) : (
             filteredEntries.map(([group, list]) => (
@@ -643,7 +644,7 @@ export function ConnectionManager({
                           <div
                             className="connection-node-main"
                             onContextMenu={(event) => handleContextMenu(event, server)}
-                            title={`${server.username}@${server.host}:${server.port} · 双击连接`}
+                            title={t("{0}@{1}:{2} · 双击连接", server.username, server.host, server.port)}
                           >
                             <span className="tree-branch" aria-hidden />
                             <span className="dot" style={{ backgroundColor: server.color }} />
@@ -684,7 +685,7 @@ export function ConnectionManager({
                               selectTreeItem(event, serverKey(server.id), server);
                             }}
                             onContextMenu={(event) => handleContextMenu(event, server)}
-                            title={`${server.username}@${server.host}:${server.port} · 双击连接`}
+                            title={t("{0}@{1}:{2} · 双击连接", server.username, server.host, server.port)}
                           >
                             <span className="tree-branch" aria-hidden />
                             <span className="dot" style={{ backgroundColor: server.color }} />
@@ -711,79 +712,79 @@ export function ConnectionManager({
           className="server-context-menu"
           style={{ left: menu.x, top: menu.y }}
           role="menu"
-          aria-label={menu.type === "server" ? `${menu.server.name} 操作` : "连接管理操作"}
+          aria-label={menu.type === "server" ? t("{0} 操作", menu.server.name) : t("连接管理操作")}
           onMouseDown={(event) => event.stopPropagation()}
         >
           {menu.type === "server" ? (
             <>
               <button type="button" onClick={connectFromMenu} role="menuitem">
                 <PlugZap size={14} />
-                <span>连接</span>
+                <span>{t("连接")}</span>
               </button>
               {onConnectSplit && (
                 <button type="button" onClick={connectSplitFromMenu} role="menuitem">
                   <Columns2 size={14} />
-                  <span>分屏连接</span>
+                  <span>{t("分屏连接")}</span>
                 </button>
               )}
               <button type="button" onClick={editFromMenu} role="menuitem">
                 <Pencil size={14} />
-                <span>编辑</span>
+                <span>{t("编辑")}</span>
               </button>
               <button type="button" onClick={cloneFromMenu} role="menuitem">
                 <Copy size={14} />
-                <span>克隆</span>
+                <span>{t("克隆")}</span>
               </button>
               <button type="button" onClick={renameServerFromMenu} role="menuitem">
                 <PencilLine size={14} />
-                <span>重命名</span>
+                <span>{t("重命名")}</span>
               </button>
               <div className="ctx-sep" />
               <button type="button" onClick={exportFromMenu} role="menuitem">
                 <Server size={14} />
-                <span>{selectedExportCount > 1 ? `导出所选（${selectedExportCount}）` : "导出"}</span>
+                <span>{selectedExportCount > 1 ? t("导出所选（{0}）", selectedExportCount) : t("导出")}</span>
               </button>
               <button type="button" onClick={importFromMenu} role="menuitem">
                 <FolderOpen size={14} />
-                <span>导入</span>
+                <span>{t("导入")}</span>
               </button>
               <div className="ctx-sep" />
               <button type="button" className="danger" onClick={deleteFromMenu} role="menuitem">
                 <Trash2 size={14} />
-                <span>{selectedExportCount > 1 ? `删除所选（${selectedExportCount}）` : "删除"}</span>
+                <span>{selectedExportCount > 1 ? t("删除所选（{0}）", selectedExportCount) : t("删除")}</span>
               </button>
             </>
           ) : (
             <>
               <button type="button" onClick={createServerFromMenu} role="menuitem">
                 <Server size={14} />
-                <span>新建连接</span>
+                <span>{t("新建连接")}</span>
               </button>
               <button type="button" onClick={createFolderFromMenu} role="menuitem">
                 <Folder size={14} />
-                <span>新建文件夹</span>
+                <span>{t("新建文件夹")}</span>
               </button>
               {menu.type === "folder" && (
                 <button type="button" onClick={renameFolderFromMenu} role="menuitem">
                   <PencilLine size={14} />
-                  <span>重命名</span>
+                  <span>{t("重命名")}</span>
                 </button>
               )}
               <div className="ctx-sep" />
               <button type="button" onClick={exportFromMenu} role="menuitem">
                 <Server size={14} />
-                <span>{selectedExportCount > 1 ? `导出所选（${selectedExportCount}）` : "导出"}</span>
+                <span>{selectedExportCount > 1 ? t("导出所选（{0}）", selectedExportCount) : t("导出")}</span>
               </button>
               <button type="button" onClick={importFromMenu} role="menuitem">
                 <FolderOpen size={14} />
-                <span>导入</span>
+                <span>{t("导入")}</span>
               </button>
               {menu.type === "folder" && (
                 <>
                   <div className="ctx-sep" />
                   <button type="button" className="danger" onClick={deleteFromMenu} role="menuitem">
                     <Trash2 size={14} />
-                    <span>{selectedExportCount > 1 ? `删除所选（${selectedExportCount}）` : "删除"}</span>
+                    <span>{selectedExportCount > 1 ? t("删除所选（{0}）", selectedExportCount) : t("删除")}</span>
                   </button>
                 </>
               )}

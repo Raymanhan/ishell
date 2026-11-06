@@ -16,7 +16,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 1420",
     "build": "tsc && vite build",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --import ./tests/register-ts.mjs --test tests/*.test.mjs",
     "preview": "vite preview",
     "tauri:build": "tauri build",
     "tauri": "tauri"

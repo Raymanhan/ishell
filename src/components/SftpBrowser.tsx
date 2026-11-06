@@ -31,6 +31,8 @@ import type { FolderDownloadMode, SftpEntry } from "../types";
 import { formatBytes } from "../utils/format";
 import type { CSSProperties } from "react";
 
+import { formatDateTime, t } from "../i18n";
+import { useLocale } from "../i18n/useLocale";
 interface ContextMenuState {
   x: number;
   y: number;
@@ -121,6 +123,8 @@ function SftpBrowserBase({
   onDelete: (entries: SftpEntry[], columnIndex: number) => void;
   onClose: () => void;
 }) {
+  // Re-render on language changes (memoized or a window root).
+  useLocale();
   const columns = tab.files;
   const [sort, setSort] = useState<SortState>({ key: null, direction: "asc" });
   const [showHidden, setShowHidden] = useState(false);
@@ -419,7 +423,7 @@ function SftpBrowserBase({
       onOpen(folderToOpen.entry, folderToOpen.columnIndex + 1);
     }
     setRenaming(null);
-    setCreatingDir({ parentPath, value: "新建文件夹" });
+    setCreatingDir({ parentPath, value: t("新建文件夹") });
   }
 
   function startCreateDirFromMenu(menuState: ContextMenuState) {
@@ -552,22 +556,20 @@ function SftpBrowserBase({
         </span>
         <div className="ctx-submenu">
           <button type="button" onClick={() => runMenu(() => onUpload(targetDir))}>
-            <Upload size={14} /> 上传文件
-          </button>
+            <Upload size={14} /> {t(" 上传文件")}</button>
           <button type="button" onClick={() => runMenu(() => onUploadFolder(targetDir))}>
-            <FolderUp size={14} /> 上传文件夹
-          </button>
+            <FolderUp size={14} /> {t(" 上传文件夹")}</button>
         </div>
       </div>
     );
   }
 
   const pathBar = (
-    <label className="pathbar" title="输入远程路径后按 Enter 跳转">
+    <label className="pathbar" title={t("输入远程路径后按 Enter 跳转")}>
       <HardDrive size={14} />
       <input
         value={pathValue}
-        aria-label="远程路径"
+        aria-label={t("远程路径")}
         spellCheck={false}
         onChange={(event) => setPathValue(event.target.value)}
         onContextMenu={(event) => event.stopPropagation()}
@@ -588,7 +590,7 @@ function SftpBrowserBase({
 
   const toolRail = (
     <div className="sftp-tools sftp-tools-rail">
-      <button type="button" className="tool" onClick={onClose} title="关闭文件面板">
+      <button type="button" className="tool" onClick={onClose} title={t("关闭文件面板")}>
         <X size={15} />
       </button>
       <span className="tool-sep" />
@@ -596,7 +598,7 @@ function SftpBrowserBase({
         type="button"
         className={`tool ${viewMode === "tree" ? "on" : ""}`}
         onClick={() => setViewMode("tree")}
-        title="目录树明细视图"
+        title={t("目录树明细视图")}
         aria-pressed={viewMode === "tree"}
       >
         <TableProperties size={15} />
@@ -605,7 +607,7 @@ function SftpBrowserBase({
         type="button"
         className={`tool ${viewMode === "columns" ? "on" : ""}`}
         onClick={() => setViewMode("columns")}
-        title="多列视图"
+        title={t("多列视图")}
         aria-pressed={viewMode === "columns"}
       >
         <Columns3 size={15} />
@@ -614,7 +616,7 @@ function SftpBrowserBase({
         type="button"
         className={`tool ${showHidden ? "on" : ""}`}
         onClick={() => setShowHidden((current) => !current)}
-        title={showHidden ? "隐藏隐藏文件" : "显示隐藏文件"}
+        title={showHidden ? t("隐藏隐藏文件") : t("显示隐藏文件")}
         aria-pressed={showHidden}
       >
         {showHidden ? <Eye size={15} /> : <EyeOff size={15} />}
@@ -625,8 +627,8 @@ function SftpBrowserBase({
         type="button"
         className={`tool ${uploadToolMenuPosition ? "on" : ""}`}
         onClick={toggleUploadToolMenu}
-        title="上传到当前目录"
-        aria-label="上传到当前目录"
+        title={t("上传到当前目录")}
+        aria-label={t("上传到当前目录")}
         aria-haspopup="menu"
         aria-expanded={Boolean(uploadToolMenuPosition)}
         aria-controls={uploadToolMenuPosition ? "sftp-upload-tool-menu" : undefined}
@@ -638,7 +640,7 @@ function SftpBrowserBase({
         className="tool"
         disabled={selectedDownloadEntries.length === 0}
         onClick={() => onDownload(selectedDownloadEntries)}
-        title={selectedDownloadEntries.length > 1 ? `下载所选 ${selectedDownloadEntries.length} 个文件` : "下载所选文件"}
+        title={selectedDownloadEntries.length > 1 ? t("下载所选 {0} 个文件", selectedDownloadEntries.length) : t("下载所选文件")}
       >
         <Download size={15} />
       </button>
@@ -647,13 +649,13 @@ function SftpBrowserBase({
           type="button"
           className="tool"
           onClick={() => onEdit(selectedEditableEntry)}
-          title="编辑文本文件"
+          title={t("编辑文本文件")}
         >
           <FilePenLine size={15} />
         </button>
       )}
       <span className="tool-sep" />
-      <button type="button" className="tool" onClick={onRefresh} title="刷新">
+      <button type="button" className="tool" onClick={onRefresh} title={t("刷新")}>
         <RefreshCw size={15} className={busy ? "spin" : ""} />
       </button>
     </div>
@@ -668,7 +670,7 @@ function SftpBrowserBase({
             <div className="sftp-tree-head">{pathBar}</div>
             <div className="tree-scroll">
               {columns.length === 0 ? (
-                <div className="column-state">正在打开目录…</div>
+                <div className="column-state">{t("正在打开目录…")}</div>
               ) : (
                 treeRows.map((row) => {
                   const isRoot = row.entry.path === "/";
@@ -729,25 +731,25 @@ function SftpBrowserBase({
               <div className="detail-row detail-header" style={detailGridStyle}>
                 <div className="detail-header-cell">
                   <button type="button" className={sort.key === "name" ? "on" : ""} onClick={() => setSortKey("name")}>
-                    文件名{sort.key === "name" ? sortArrow(sort.direction) : ""}
+                    {t("文件名")}{sort.key === "name" ? sortArrow(sort.direction) : ""}
                   </button>
                   <span
                     className={`detail-resizer ${resizingDetailDivider === 0 ? "active" : ""}`}
                     role="separator"
                     aria-orientation="vertical"
-                    aria-label="调整文件名列宽"
+                    aria-label={t("调整文件名列宽")}
                     onPointerDown={(event) => startDetailResize(event, 0)}
                   />
                 </div>
                 <div className="detail-header-cell">
                   <button type="button" className={sort.key === "size" ? "on" : ""} onClick={() => setSortKey("size")}>
-                    大小{sort.key === "size" ? sortArrow(sort.direction) : ""}
+                    {t("大小")}{sort.key === "size" ? sortArrow(sort.direction) : ""}
                   </button>
                   <span
                     className={`detail-resizer ${resizingDetailDivider === 1 ? "active" : ""}`}
                     role="separator"
                     aria-orientation="vertical"
-                    aria-label="调整大小列宽"
+                    aria-label={t("调整大小列宽")}
                     onPointerDown={(event) => startDetailResize(event, 1)}
                   />
                 </div>
@@ -757,35 +759,35 @@ function SftpBrowserBase({
                     className={sort.key === "modifiedAt" ? "on" : ""}
                     onClick={() => setSortKey("modifiedAt")}
                   >
-                    修改时间{sort.key === "modifiedAt" ? sortArrow(sort.direction) : ""}
+                    {t("修改时间")}{sort.key === "modifiedAt" ? sortArrow(sort.direction) : ""}
                   </button>
                   <span
                     className={`detail-resizer ${resizingDetailDivider === 2 ? "active" : ""}`}
                     role="separator"
                     aria-orientation="vertical"
-                    aria-label="调整修改时间列宽"
+                    aria-label={t("调整修改时间列宽")}
                     onPointerDown={(event) => startDetailResize(event, 2)}
                   />
                 </div>
                 <div className="detail-header-cell">
-                  <span>权限</span>
+                  <span>{t("权限")}</span>
                   <span
                     className={`detail-resizer ${resizingDetailDivider === 3 ? "active" : ""}`}
                     role="separator"
                     aria-orientation="vertical"
-                    aria-label="调整权限列宽"
+                    aria-label={t("调整权限列宽")}
                     onPointerDown={(event) => startDetailResize(event, 3)}
                   />
                 </div>
                 <div className="detail-header-cell">
-                  <span>用户/组</span>
+                  <span>{t("用户/组")}</span>
                 </div>
               </div>
               <div className="detail-body" onContextMenu={(event) => openMenu(event, null, currentColumnIndex)}>
                 {columns.length === 0 ? (
                   <div className="sftp-empty">
                     <Folder size={22} />
-                    <p>正在打开目录…</p>
+                    <p>{t("正在打开目录…")}</p>
                   </div>
                 ) : currentColumn?.error ? (
                   <div className="column-state bad">{currentColumn.error}</div>
@@ -805,7 +807,7 @@ function SftpBrowserBase({
                             ref={createInputRef}
                             className="entry-rename"
                             value={creatingDir.value}
-                            aria-label="新建文件夹名称"
+                            aria-label={t("新建文件夹名称")}
                             onChange={(event) =>
                               setCreatingDir((current) =>
                                 current ? { ...current, value: event.target.value } : current,
@@ -828,7 +830,7 @@ function SftpBrowserBase({
                       </div>
                     )}
                     {currentEntries.length === 0 ? (
-                      <div className="column-state">空目录</div>
+                      <div className="column-state">{t("空目录")}</div>
                     ) : (
                       currentEntries.map((entry) => {
                         const isActive = selectedPathSet.has(entry.path);
@@ -884,7 +886,7 @@ function SftpBrowserBase({
                                 <span>{entry.name}</span>
                               )}
                             </span>
-                            <span className="mono">{entry.isDir ? "文件夹" : formatBytes(entry.size)}</span>
+                            <span className="mono">{entry.isDir ? t("文件夹") : formatBytes(entry.size)}</span>
                             <span className="mono">{formatModifiedAt(entry.modifiedAt)}</span>
                             <span className="mono">{formatPermissions(entry)}</span>
                             <span className="mono">{formatOwnerGroup(entry)}</span>
@@ -904,14 +906,14 @@ function SftpBrowserBase({
           <div className="sftp-tree-head">{pathBar}</div>
           <div className="sftp-left-note">
             <Columns3 size={14} />
-            <span>多列浏览</span>
+            <span>{t("多列浏览")}</span>
           </div>
         </aside>
         <div className="columns" ref={columnsRef}>
           {columns.length === 0 ? (
             <div className="sftp-empty">
               <Folder size={22} />
-              <p>正在打开目录…</p>
+              <p>{t("正在打开目录…")}</p>
             </div>
           ) : (
             columns.map((column, index) => {
@@ -934,7 +936,7 @@ function SftpBrowserBase({
                           ref={createInputRef}
                           className="entry-rename"
                           value={creatingDir.value}
-                          aria-label="新建文件夹名称"
+                          aria-label={t("新建文件夹名称")}
                           onChange={(event) =>
                             setCreatingDir((current) =>
                               current ? { ...current, value: event.target.value } : current,
@@ -960,7 +962,7 @@ function SftpBrowserBase({
                         ))}
                       </div>
                     ) : columnEntries.length === 0 ? (
-                      <div className="column-state">空目录</div>
+                      <div className="column-state">{t("空目录")}</div>
                     ) : (
                       columnEntries.map((entry) => {
                         const isActive = selectedPathSet.has(entry.path);
@@ -1030,7 +1032,7 @@ function SftpBrowserBase({
         </div>
         </>
       )}
-        <aside className="sftp-tool-rail" aria-label="文件操作">
+        <aside className="sftp-tool-rail" aria-label={t("文件操作")}>
           {toolRail}
         </aside>
       </div>
@@ -1039,7 +1041,7 @@ function SftpBrowserBase({
         <div className="sftp-drop">
           <div className="sftp-drop-card">
             <UploadCloud size={26} />
-            <p>松开以上传到</p>
+            <p>{t("松开以上传到")}</p>
             <code>{currentDir}</code>
           </div>
         </div>
@@ -1051,7 +1053,7 @@ function SftpBrowserBase({
           ref={uploadToolMenuRef}
           className="ctx-menu sftp-upload-tool-menu"
           role="menu"
-          aria-label="选择上传类型"
+          aria-label={t("选择上传类型")}
           style={{ left: uploadToolMenuPosition.x, top: uploadToolMenuPosition.y }}
           onClick={(event) => event.stopPropagation()}
           onContextMenu={(event) => event.preventDefault()}
@@ -1062,15 +1064,13 @@ function SftpBrowserBase({
             autoFocus
             onClick={() => runUploadToolMenu(() => onUpload(currentDir))}
           >
-            <Upload size={14} /> 上传文件
-          </button>
+            <Upload size={14} /> {t(" 上传文件")}</button>
           <button
             type="button"
             role="menuitem"
             onClick={() => runUploadToolMenu(() => onUploadFolder(currentDir))}
           >
-            <FolderUp size={14} /> 上传文件夹
-          </button>
+            <FolderUp size={14} /> {t(" 上传文件夹")}</button>
         </div>,
         document.body,
       )}
@@ -1091,8 +1091,7 @@ function SftpBrowserBase({
                     type="button"
                     onClick={() => runMenu(() => menu.entry && onOpen(menu.entry, menu.columnIndex + 1))}
                   >
-                    <FolderOpen size={14} /> 打开
-                  </button>
+                    <FolderOpen size={14} /> {t(" 打开")}</button>
                   <div
                     className={[
                       "ctx-menu-item",
@@ -1114,22 +1113,19 @@ function SftpBrowserBase({
                     }}
                   >
                     <span className="ctx-menu-row">
-                      <Download size={14} /> 下载
-                      <ChevronRight size={12} className="ctx-submenu-caret" />
+                      <Download size={14} /> {t(" 下载")}<ChevronRight size={12} className="ctx-submenu-caret" />
                     </span>
                     <div className="ctx-submenu">
                       <button
                         type="button"
                         onClick={() => runMenu(() => menu.entry && onDownloadFolder(menu.entry, "archive"))}
                       >
-                        <FileArchive size={14} /> 压缩下载
-                      </button>
+                        <FileArchive size={14} /> {t(" 压缩下载")}</button>
                       <button
                         type="button"
                         onClick={() => runMenu(() => menu.entry && onDownloadFolder(menu.entry, "raw"))}
                       >
-                        <Download size={14} /> 直接下载
-                      </button>
+                        <Download size={14} /> {t(" 直接下载")}</button>
                     </div>
                   </div>
                 </>
@@ -1143,35 +1139,30 @@ function SftpBrowserBase({
                     }
                   >
                     <Download size={14} /> {selectedBatchFor(menu.entry).filter((entry) => !entry.isDir).length > 1
-                      ? `下载所选（${selectedBatchFor(menu.entry).filter((entry) => !entry.isDir).length}）`
-                      : "下载"}
+                      ? t("下载所选（{0}）", selectedBatchFor(menu.entry).filter((entry) => !entry.isDir).length)
+                      : t("下载")}
                   </button>
                   {isEditableTextEntry(menu.entry) && (
                     <button
                       type="button"
                       onClick={() => runMenu(() => menu.entry && onEdit(menu.entry))}
                     >
-                      <FilePenLine size={14} /> 编辑
-                    </button>
+                      <FilePenLine size={14} /> {t(" 编辑")}</button>
                   )}
                   <button
                     type="button"
                     onClick={() => runMenu(() => menu.entry && onTailView(menu.entry))}
                   >
-                    <ScrollText size={14} /> 实时查看
-                  </button>
+                    <ScrollText size={14} /> {t(" 实时查看")}</button>
                 </>
               )}
-              {renderUploadSubmenu(targetDirFor(menu.entry, menu.columnIndex), "上传")}
+              {renderUploadSubmenu(targetDirFor(menu.entry, menu.columnIndex), t("上传"))}
               <button type="button" onClick={() => runMenu(() => onTerminalJump(targetDirFor(menu.entry, menu.columnIndex)))}>
-                <SquareTerminal size={14} /> 终端跳转
-              </button>
+                <SquareTerminal size={14} /> {t(" 终端跳转")}</button>
               <button type="button" onClick={() => runMenu(() => startCreateDirFromMenu(menu))}>
-                <FolderPlus size={14} /> 新建文件夹
-              </button>
+                <FolderPlus size={14} /> {t(" 新建文件夹")}</button>
               <button type="button" onClick={() => runMenu(() => menu.entry && startRename(menu.entry, menu.columnIndex))}>
-                <Pencil size={14} /> 重命名
-              </button>
+                <Pencil size={14} /> {t(" 重命名")}</button>
               <div className="ctx-sep" />
               <button
                 type="button"
@@ -1179,23 +1170,20 @@ function SftpBrowserBase({
                 onClick={() => runMenu(() => menu.entry && onDelete(selectedBatchFor(menu.entry), menu.columnIndex))}
               >
                 <Trash2 size={14} /> {menu.entry && selectedBatchFor(menu.entry).length > 1
-                  ? `删除所选（${selectedBatchFor(menu.entry).length}）`
-                  : "删除"}
+                  ? t("删除所选（{0}）", selectedBatchFor(menu.entry).length)
+                  : t("删除")}
               </button>
             </>
           ) : (
             <>
-              {renderUploadSubmenu(targetDirFor(null, menu.columnIndex), "上传")}
+              {renderUploadSubmenu(targetDirFor(null, menu.columnIndex), t("上传"))}
               <button type="button" onClick={() => runMenu(() => onTerminalJump(targetDirFor(null, menu.columnIndex)))}>
-                <SquareTerminal size={14} /> 终端跳转
-              </button>
+                <SquareTerminal size={14} /> {t(" 终端跳转")}</button>
               <button type="button" onClick={() => runMenu(() => startCreateDirFromMenu(menu))}>
-                <FolderPlus size={14} /> 新建文件夹
-              </button>
+                <FolderPlus size={14} /> {t(" 新建文件夹")}</button>
               <div className="ctx-sep" />
               <button type="button" onClick={() => runMenu(onRefresh)}>
-                <RefreshCw size={14} /> 刷新
-              </button>
+                <RefreshCw size={14} /> {t(" 刷新")}</button>
             </>
           )}
         </div>,
@@ -1380,7 +1368,7 @@ function normalizePath(path: string) {
 
 function formatModifiedAt(value: number | null | undefined) {
   if (!value) return "--";
-  return new Date(value * 1000).toLocaleString("zh-CN", {
+  return formatDateTime(value * 1000, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

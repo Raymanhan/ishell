@@ -12,6 +12,7 @@ import type { DiskMount, ProcessUsage } from "../types";
 import type { ShellTab } from "../features/shell/types";
 import { formatBytes, memoryPercent } from "../utils/format";
 
+import { t } from "../i18n";
 export function StatusDashboard({
   tab,
   onHostCopied,
@@ -75,9 +76,9 @@ export function StatusDashboard({
               type="button"
               className={`dash-host ${hostCopied ? "copied" : ""}`}
               onClick={copyHost}
-              title={hostCopied ? "已复制 IP 地址" : "点击复制 IP 地址"}
+              title={hostCopied ? t("已复制 IP 地址") : t("点击复制 IP 地址")}
             >
-              {hostCopied ? "已复制" : tab.host}
+              {hostCopied ? t("已复制") : tab.host}
             </button>
           )}
         </div>
@@ -86,8 +87,8 @@ export function StatusDashboard({
       <section className="network-card">
         <div className="network-head">
           <div className="network-speeds">
-            <SpeedPill icon={<ArrowDown size={12} />} value={tab.networkRxBps} label="下载" />
-            <SpeedPill icon={<ArrowUp size={12} />} value={tab.networkTxBps} label="上传" />
+            <SpeedPill icon={<ArrowDown size={12} />} value={tab.networkRxBps} label={t("下载")} />
+            <SpeedPill icon={<ArrowUp size={12} />} value={tab.networkTxBps} label={t("上传")} />
           </div>
         </div>
         <NetworkWave history={tab.networkHistory} />
@@ -100,17 +101,17 @@ export function StatusDashboard({
             label="CPU"
             value={cpu}
             valueText={`${cpu}%`}
-            detail="按 CPU 时间实时采样"
+            detail={t("按 CPU 时间实时采样")}
             tone="ok"
           />
           <MetricBar
             icon={<MemoryStick size={14} />}
-            label="内存"
+            label={t("内存")}
             value={mem}
             valueText={memoryValueText}
             detail={
               memoryUsedGb != null && memoryTotalGb != null && memoryAvailableGb != null
-                ? `${memoryUsedGb.toFixed(1)} / ${memoryTotalGb.toFixed(1)} GB · 可用 ${memoryAvailableGb.toFixed(1)} GB`
+                ? t("{0} / {1} GB · 可用 {2} GB", memoryUsedGb.toFixed(1), memoryTotalGb.toFixed(1), memoryAvailableGb.toFixed(1))
                 : "—"
             }
             tone="warn"
@@ -120,45 +121,45 @@ export function StatusDashboard({
             label="GPU"
             value={gpu ?? 0}
             valueText={gpu == null ? "—" : `${gpu}%`}
-            detail={gpu == null ? "未检测到受支持的 GPU" : "当前 GPU 中的最高占用率"}
+            detail={gpu == null ? t("未检测到受支持的 GPU") : t("当前 GPU 中的最高占用率")}
             tone="violet"
           />
           {gpuMemoryUsedMb != null && gpuMemoryTotalMb != null && gpuMemoryAvailableMb != null && (
             <MetricBar
               icon={<MemoryStick size={14} />}
-              label="显存"
+              label={t("显存")}
               value={gpuMemoryPercent}
               valueText={`${formatCapacityMb(gpuMemoryUsedMb, true)}/${formatCapacityMb(gpuMemoryTotalMb, true)}`}
-              detail={`已用 ${formatCapacityMb(gpuMemoryUsedMb)} / ${formatCapacityMb(gpuMemoryTotalMb)} · 可用 ${formatCapacityMb(gpuMemoryAvailableMb)}`}
+              detail={t("已用 {0} / {1} · 可用 {2}", formatCapacityMb(gpuMemoryUsedMb), formatCapacityMb(gpuMemoryTotalMb), formatCapacityMb(gpuMemoryAvailableMb))}
               tone="info"
             />
           )}
           <MetricBar
             icon={<MemoryStick size={14} />}
-            label="交换"
+            label={t("交换")}
             value={swapPercent}
             valueText={
               swapTotalMb == null
                 ? "—"
                 : swapEnabled && swapUsedMb != null
                   ? `${formatCapacityMb(swapUsedMb, true)}/${formatCapacityMb(swapTotalMb, true)}`
-                  : "关闭"
+                  : t("关闭")
             }
             detail={
               swapTotalMb == null
-                ? "暂不可用"
+                ? t("暂不可用")
                 : swapEnabled && swapUsedMb != null
-                  ? `${formatCapacityMb(swapUsedMb)} / ${formatCapacityMb(swapTotalMb)} · 可用 ${formatCapacityMb(swapFreeMb ?? 0)}`
-                  : "未启用交换空间"
+                  ? t("{0} / {1} · 可用 {2}", formatCapacityMb(swapUsedMb), formatCapacityMb(swapTotalMb), formatCapacityMb(swapFreeMb ?? 0))
+                  : t("未启用交换空间")
             }
             tone={swapEnabled && swapPercent >= 70 ? "warn" : "info"}
           />
           <MetricBar
             icon={<GaugeIcon size={14} />}
-            label="负载"
+            label={t("负载")}
             value={load1Percent}
             valueText={(status?.load1 ?? 0).toFixed(2)}
-            detail={`${cpuCores} 核 · 5m ${(status?.load5 ?? 0).toFixed(2)} · 15m ${(status?.load15 ?? 0).toFixed(2)}`}
+            detail={t("{0} 核 · 5m {1} · 15m {2}", cpuCores, (status?.load5 ?? 0).toFixed(2), (status?.load15 ?? 0).toFixed(2))}
             tone="violet"
           />
         </div>
@@ -181,7 +182,7 @@ export function StatusDashboard({
               />
             ))
           ) : (
-            <div className="metric-empty">暂无磁盘挂载数据</div>
+            <div className="metric-empty">{t("暂无磁盘挂载数据")}</div>
           )}
         </div>
       </section>
@@ -207,9 +208,8 @@ function ProcessTopCard({
       <div className="process-card-head">
         <span className="process-card-title">
           <Activity size={14} />
-          进程 Top 5
-        </span>
-        <div className="process-switch" role="group" aria-label="进程排行指标">
+          {t("进程 Top 5")}</span>
+        <div className="process-switch" role="group" aria-label={t("进程排行指标")}>
           <button
             type="button"
             className={mode === "cpu" ? "on" : ""}
@@ -224,8 +224,7 @@ function ProcessTopCard({
             aria-pressed={mode === "memory"}
             onClick={() => setMode("memory")}
           >
-            内存
-          </button>
+            {t("内存")}</button>
         </div>
       </div>
 
@@ -237,7 +236,7 @@ function ProcessTopCard({
               <div
                 className="process-row"
                 key={`${mode}-${process.pid}`}
-                title={`${process.name} · PID ${process.pid} · CPU ${formatPercent(process.cpuPercent)} · 内存 ${formatBytes(process.memoryBytes)}`}
+                title={t("{0} · PID {1} · CPU {2} · 内存 {3}", process.name, process.pid, formatPercent(process.cpuPercent), formatBytes(process.memoryBytes))}
               >
                 <span className="process-rank">{index + 1}</span>
                 <span className="process-name">
@@ -257,7 +256,7 @@ function ProcessTopCard({
           })}
         </div>
       ) : (
-        <div className="process-empty">正在采样进程数据…</div>
+        <div className="process-empty">{t("正在采样进程数据…")}</div>
       )}
     </div>
   );
@@ -291,7 +290,7 @@ async function copyText(text: string) {
   textarea.select();
   const copied = document.execCommand("copy");
   textarea.remove();
-  if (!copied) throw new Error("复制失败");
+  if (!copied) throw new Error(t("复制失败"));
 }
 
 function NetworkWave({ history }: { history: ShellTab["networkHistory"] }) {

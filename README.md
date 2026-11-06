@@ -26,6 +26,9 @@ Available packages:
 
 ## Highlights
 
+- **Interface languages**: Simplified Chinese, Traditional Chinese, and
+  English, following the system language by default and switchable live in
+  Settings → Appearance.
 - **SSH manager**: grouped and searchable connection tree with tags, notes, and
   per-host colors.
 - **Persistent ordering**: connection order and folder placement are stored in
@@ -237,6 +240,9 @@ Settings lists its categories on the left and the chosen category's settings
 on the right:
 
 - **Appearance**
+  - Language: 简体中文, 繁體中文, or English; switches immediately in every open
+    window. Error messages from the app are translated too; server output and AI
+    replies stay as they are.
   - Theme: Cloud, Dusk, Claude Dark, Claude Light, Graphite, Midnight, Jade,
     Obsidian, or Ivory
   - Window transparency: 100% keeps each theme's own glass, lower values let
@@ -299,6 +305,24 @@ cargo clippy --all-targets --features force-russh -- -D warnings
 cargo test
 cargo test --features force-russh
 ```
+
+### Translations
+
+UI text is written in Simplified Chinese and wrapped in `t("…")`; the source
+text is the message id, and `src/i18n/locales/*.ts` map it to each language.
+Backend messages (Rust and the remote runner) are extracted as templates, so
+`translateMessage()` also translates filled-in errors such as
+`模型 API 返回 401：…`.
+
+```bash
+node scripts/i18n.mjs check
+```
+
+`check` lists missing or unused entries (CI fails on missing ones through
+`npm test`). Add translations with `node scripts/i18n.mjs merge en new.json`,
+where `new.json` maps source text to English. Traditional Chinese is generated
+with OpenCC (`pip install opencc-python-reimplemented`, then
+`node scripts/i18n.mjs zh-tw`).
 
 ## Local Installer Build
 

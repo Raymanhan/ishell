@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import { Search, TerminalSquare } from "lucide-react";
 
+import { t } from "../i18n";
 const HISTORY_PAGE_SIZE = 120;
 
 export function CommandHistoryPanel({
@@ -32,13 +33,13 @@ export function CommandHistoryPanel({
   }
 
   return (
-    <section className="history-panel" aria-label="历史命令">
+    <section className="history-panel" aria-label={t("历史命令")}>
       <label className="history-search">
         <Search size={13} />
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="搜索命令"
+          placeholder={t("搜索命令")}
           spellCheck={false}
         />
       </label>
@@ -59,13 +60,13 @@ export function CommandHistoryPanel({
               </button>
             ))}
             {visibleCommands.length < filteredCommands.length && (
-              <div className="history-more">继续向下滚动加载更多</div>
+              <div className="history-more">{t("继续向下滚动加载更多")}</div>
             )}
           </>
         ) : (
           <div className="history-empty">
             <TerminalSquare size={16} />
-            <span>{commands.length === 0 ? "暂无历史命令" : "没有匹配命令"}</span>
+            <span>{commands.length === 0 ? t("暂无历史命令") : t("没有匹配命令")}</span>
           </div>
         )}
       </div>

@@ -3,6 +3,7 @@ import { Eye, EyeOff, PlugZap, X } from "lucide-react";
 import { swatches } from "../constants/theme";
 import type { ServerInput, ServerRecord } from "../types";
 
+import { t } from "../i18n";
 export type ServerForm = ServerInput & { password: string; tagsText: string };
 
 export function ServerEditor({
@@ -33,7 +34,7 @@ export function ServerEditor({
   const update = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => {
     setForm({ ...form, [key]: value });
   };
-  const title = form.id ? "编辑服务器" : "新增服务器";
+  const title = form.id ? t("编辑服务器") : t("新增服务器");
 
   return (
     <div
@@ -58,7 +59,7 @@ export function ServerEditor({
             <span>SSH CONNECTION</span>
             <h2 id="server-editor-title">{title}</h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose} title="关闭" aria-label="关闭">
+          <button type="button" className="icon-button" onClick={onClose} title={t("关闭")} aria-label={t("关闭")}>
             <X size={16} />
           </button>
         </header>
@@ -68,29 +69,29 @@ export function ServerEditor({
             <section className="editor-section">
               <div className="form-grid">
                 <label className="field">
-                  <span>名称</span>
+                  <span>{t("名称")}</span>
                   <input value={form.name} onChange={(event) => update("name", event.target.value)} autoFocus />
                 </label>
                 <label className="field username-field">
-                  <span>用户</span>
+                  <span>{t("用户")}</span>
                   <input value={form.username} onChange={(event) => update("username", event.target.value)} />
                 </label>
                 <label className="field host-field">
-                  <span>主机</span>
+                  <span>{t("主机")}</span>
                   <input value={form.host} onChange={(event) => update("host", event.target.value)} />
                 </label>
                 <label className="field port-field">
-                  <span>端口</span>
+                  <span>{t("端口")}</span>
                   <input type="number" inputMode="numeric" min={1} max={65535} value={form.port} onChange={(event) => update("port", Number(event.target.value))} />
                 </label>
               </div>
               <label className="field">
-                <span>跳板机</span>
+                <span>{t("跳板机")}</span>
                 <select
                   value={form.jumpServerId ?? ""}
                   onChange={(event) => update("jumpServerId", event.target.value || null)}
                 >
-                  <option value="">直接连接</option>
+                  <option value="">{t("直接连接")}</option>
                   {jumpHostCandidates.map((server) => (
                     <option key={server.id} value={server.id}>
                       {server.name}（{server.username}@{server.host}）
@@ -99,40 +100,39 @@ export function ServerEditor({
                 </select>
                 {form.jumpServerId && (
                   <small className="field-hint">
-                    先连接跳板机，再从跳板机连到这台服务器；跳板机使用它自己保存的账号和密码或私钥。
-                  </small>
+                    {t("先连接跳板机，再从跳板机连到这台服务器；跳板机使用它自己保存的账号和密码或私钥。")}</small>
                 )}
               </label>
             </section>
 
             <section className="editor-section">
-              <span className="field-group-label">认证</span>
-              <div className="auth-switch" role="group" aria-label="认证方式">
+              <span className="field-group-label">{t("认证")}</span>
+              <div className="auth-switch" role="group" aria-label={t("认证方式")}>
                 <button type="button" className={form.authType === "password" ? "active" : ""} aria-pressed={form.authType === "password"} onClick={() => update("authType", "password")}>
-                  <span>密码</span>
+                  <span>{t("密码")}</span>
                 </button>
                 <button type="button" className={form.authType === "key" ? "active" : ""} aria-pressed={form.authType === "key"} onClick={() => update("authType", "key")}>
-                  <span>私钥</span>
+                  <span>{t("私钥")}</span>
                 </button>
               </div>
 
               {form.authType === "key" && (
                 <label className="field">
-                  <span>私钥路径</span>
+                  <span>{t("私钥路径")}</span>
                   <input value={form.keyPath ?? ""} onChange={(event) => update("keyPath", event.target.value)} />
                 </label>
               )}
 
               <label className="field">
-                <span>{form.authType === "key" ? "私钥密码" : "密码"}</span>
+                <span>{form.authType === "key" ? t("私钥密码") : t("密码")}</span>
                 <div className="password-input-wrap">
-                  <input type={passwordVisible ? "text" : "password"} value={form.password} onChange={(event) => update("password", event.target.value)} placeholder={form.id ? "留空则不修改" : ""} />
+                  <input type={passwordVisible ? "text" : "password"} value={form.password} onChange={(event) => update("password", event.target.value)} placeholder={form.id ? t("留空则不修改") : ""} />
                   <button
                     type="button"
                     className="password-toggle"
                     onClick={() => setPasswordVisible((visible) => !visible)}
-                    title={passwordVisible ? "隐藏密码" : "显示密码"}
-                    aria-label={passwordVisible ? "隐藏密码" : "显示密码"}
+                    title={passwordVisible ? t("隐藏密码") : t("显示密码")}
+                    aria-label={passwordVisible ? t("隐藏密码") : t("显示密码")}
                   >
                     {passwordVisible ? <Eye size={15} /> : <EyeOff size={15} />}
                   </button>
@@ -141,12 +141,12 @@ export function ServerEditor({
             </section>
 
             <section className="editor-section">
-              <span className="field-group-label">归档</span>
+              <span className="field-group-label">{t("归档")}</span>
               <label className="field">
-                <span>标签</span>
+                <span>{t("标签")}</span>
                 <input value={form.tagsText} onChange={(event) => update("tagsText", event.target.value)} />
               </label>
-              <div className="swatches" role="group" aria-label="连接颜色">
+              <div className="swatches" role="group" aria-label={t("连接颜色")}>
                 {swatches.map((color) => (
                   <button key={color} type="button" className={form.color === color ? "active" : ""} style={{ backgroundColor: color }} onClick={() => update("color", color)} aria-label={color} aria-pressed={form.color === color} />
                 ))}
@@ -155,7 +155,7 @@ export function ServerEditor({
 
             <section className="editor-section">
               <label className="field">
-                <span>备注</span>
+                <span>{t("备注")}</span>
                 <textarea value={form.notes} onChange={(event) => update("notes", event.target.value)} />
               </label>
             </section>
@@ -165,8 +165,7 @@ export function ServerEditor({
         <div className="editor-actions">
           {onDelete && (
             <button className="danger-button" type="button" onClick={onDelete}>
-              删除
-            </button>
+              {t("删除")}</button>
           )}
           <span
             className={`connection-test-feedback ${testFeedback ? testFeedback.kind : ""}`}
@@ -175,14 +174,13 @@ export function ServerEditor({
             {testFeedback?.message}
           </span>
           <button className="btn-ghost" type="button" onClick={onClose}>
-            取消
-          </button>
+            {t("取消")}</button>
           <button className="btn-ghost" type="button" onClick={onTest} disabled={saving || testing}>
             <PlugZap size={14} />
-            {testing ? "测试中" : "测试连接"}
+            {testing ? t("测试中") : t("测试连接")}
           </button>
           <button className="solid-button" type="submit" disabled={saving}>
-            {saving ? "保存中" : "保存"}
+            {saving ? t("保存中") : t("保存")}
           </button>
         </div>
       </form>

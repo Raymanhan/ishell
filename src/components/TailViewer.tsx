@@ -19,6 +19,8 @@ import type {
   TailViewerConfig,
 } from "../types";
 
+import { t, translateMessage } from "../i18n";
+import { useLocale } from "../i18n/useLocale";
 const MAX_BUFFER_CHARS = 8 * 1024 * 1024;
 
 export function readTailViewerConfigFromUrl(): TailViewerConfig | null {
@@ -53,6 +55,8 @@ export function readTailViewerConfigFromUrl(): TailViewerConfig | null {
 }
 
 export function TailViewer({ config }: { config: TailViewerConfig }) {
+  // Re-render on language changes (memoized or a window root).
+  useLocale();
   const [content, setContent] = useState("");
   const [lineLimit, setLineLimit] = useState(config.initialLines);
   const [lineDraft, setLineDraft] = useState(String(config.initialLines));
@@ -97,7 +101,7 @@ export function TailViewer({ config }: { config: TailViewerConfig }) {
   const startMonitor = useCallback(async (lines: number) => {
     if (!isTauri) {
       setStatus("error");
-      setStatusMessage("滚动查看仅支持桌面应用");
+      setStatusMessage(t("滚动查看仅支持桌面应用"));
       return;
     }
     setStatus("connecting");
@@ -143,7 +147,7 @@ export function TailViewer({ config }: { config: TailViewerConfig }) {
       const statusCleanup = await listen<TailStatusPayload>("tail:status", (event) => {
         if (event.payload.viewerId !== config.viewerId) return;
         setStatus(event.payload.state);
-        setStatusMessage(event.payload.message ?? null);
+        setStatusMessage(event.payload.message ? translateMessage(event.payload.message) : null);
       });
       if (cancelled) {
         dataCleanup();
@@ -194,12 +198,12 @@ export function TailViewer({ config }: { config: TailViewerConfig }) {
   }
 
   const statusLabel = status === "streaming"
-    ? following ? "监听中" : "已暂停滚动"
+    ? following ? t("监听中") : t("已暂停滚动")
     : status === "connecting"
-      ? "正在连接"
+      ? t("正在连接")
       : status === "stopped"
-        ? "监听已结束"
-        : "连接异常";
+        ? t("监听已结束")
+        : t("连接异常");
 
   return (
     <main className="tail-viewer">
@@ -216,9 +220,9 @@ export function TailViewer({ config }: { config: TailViewerConfig }) {
         </div>
       </header>
 
-      <section className="tail-viewer-toolbar" aria-label="滚动查看控制">
+      <section className="tail-viewer-toolbar" aria-label={t("滚动查看控制")}>
         <label className="tail-lines-field">
-          <span>保留最近</span>
+          <span>{t("保留最近")}</span>
           <input
             type="number"
             min={MIN_TAIL_VIEWER_LINES}
@@ -230,23 +234,20 @@ export function TailViewer({ config }: { config: TailViewerConfig }) {
               if (event.key === "Enter") void applyLineLimit();
             }}
           />
-          <span>行</span>
+          <span>{t("行")}</span>
           <button type="button" className="tail-toolbar-button" onClick={() => void applyLineLimit()}>
-            应用
-          </button>
+            {t("应用")}</button>
         </label>
         <span className="tail-toolbar-spacer" />
         {status === "error" || status === "stopped" ? (
           <button type="button" className="tail-toolbar-button" onClick={() => void startMonitor(lineLimit)}>
-            <RefreshCw size={14} /> 重新连接
-          </button>
+            <RefreshCw size={14} /> {t(" 重新连接")}</button>
         ) : following ? (
           <button type="button" className="tail-toolbar-button" onClick={() => setFollowing(false)}>
-            <Pause size={14} /> 暂停滚动
-          </button>
+            <Pause size={14} /> {t(" 暂停滚动")}</button>
         ) : (
           <button type="button" className="tail-toolbar-button primary" onClick={resumeFollowing}>
-            <Play size={14} /> 开始滚动{unseenLines > 0 ? `（${unseenLines} 行）` : ""}
+            <Play size={14} /> {t(" 开始滚动")}{unseenLines > 0 ? t("（{0} 行）", unseenLines) : ""}
           </button>
         )}
         <button
@@ -257,16 +258,15 @@ export function TailViewer({ config }: { config: TailViewerConfig }) {
             setUnseenLines(0);
           }}
         >
-          <Eraser size={14} /> 清空
-        </button>
+          <Eraser size={14} /> {t(" 清空")}</button>
       </section>
 
       {statusMessage && <div className={`tail-viewer-message ${status === "error" ? "error" : ""}`}>{statusMessage}</div>}
 
-      <div ref={outputRef} className="tail-viewer-output" aria-label={`${config.fileName} 实时内容`}>
+      <div ref={outputRef} className="tail-viewer-output" aria-label={t("{0} 实时内容", config.fileName)}>
         {content ? <pre>{content}</pre> : (
           <div className="tail-viewer-empty">
-            {status === "connecting" ? "正在建立远程监听…" : "等待文件产生新内容…"}
+            {status === "connecting" ? t("正在建立远程监听…") : t("等待文件产生新内容…")}
           </div>
         )}
       </div>

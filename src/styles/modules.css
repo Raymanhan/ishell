@@ -2779,3 +2779,12 @@ button.detail-row:hover {
   padding-right: 30px;
   background-position: right 17px center, right 12px center !important;
 }
+
+/* Language choice reuses the theme cards in a compact form. */
+.language-options {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+.theme-option.language-option {
+  min-height: 0;
+  padding: 11px 12px;
+}
