@@ -36,3 +36,14 @@ test('manual models survive discovery failures and custom levels are kept only w
   assert.equal(manual.manualEffort, true);
   assert.equal(modelSelection(models, 'custom', 'max-custom').effort, 'minimal');
 });
+
+test('compaction threshold follows the declared context window like the backend budget', async () => {
+  const { compactionThreshold, historyWriteDelay } = await import('../src/features/ai/types.ts');
+  // Same samples as context::tests in src-tauri/src/ai/context.rs.
+  assert.equal(compactionThreshold(undefined), 200000);
+  assert.equal(compactionThreshold(null), 200000);
+  assert.equal(compactionThreshold(1000000), 200000);
+  assert.equal(compactionThreshold(128000), 96000);
+  assert.equal(compactionThreshold(2000), 8000);
+  assert.ok(historyWriteDelay(true) > historyWriteDelay(false));
+});

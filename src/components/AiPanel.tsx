@@ -26,6 +26,7 @@ import {
   permissionOptions,
   serverHistory,
   conversationTitle,
+  compactionThreshold,
   type AiEntry,
 } from "../features/ai/types";
 import type { ShellTab } from "../features/shell/types";
@@ -286,6 +287,10 @@ export function AiPanel({
     conversation.manualModel,
     conversation.manualEffort,
   );
+  const selectedWindow = models.find(
+    (model) => model.id === selection.model,
+  )?.contextWindow;
+  const contextLimit = compactionThreshold(selectedWindow);
   function openManual(kind: "model" | "effort") {
     setEditing(kind);
     setManualDraft(
@@ -804,13 +809,17 @@ export function AiPanel({
         </span>
         <span
           className="ai-context-usage"
-          title="估算的模型上下文用量；达到 200k tokens 时自动压缩"
+          title={`估算的模型上下文用量；达到 ${Math.round(contextLimit / 1000)}k tokens 时自动压缩${
+            selectedWindow
+              ? `（模型声明上下文窗口 ${Math.round(selectedWindow / 1000)}k）`
+              : ""
+          }`}
         >
           ≈
           {conversation.contextTokens >= 1000
             ? `${(conversation.contextTokens / 1000).toFixed(1)}k`
             : conversation.contextTokens}{" "}
-          / 200k
+          / {Math.round(contextLimit / 1000)}k
         </span>
       </footer>
     </section>

@@ -227,7 +227,7 @@ Approval cards show the target server, complete command/code, paths, risk level,
 
 Conversations and tasks stay bound to their originating terminal connection. Switching tabs does not redirect a running task. Closing the sidebar preserves the conversation; closing or reconnecting the terminal requests cancellation. Stop is available at any time; completed changes are retained. Tools default to a 120-second timeout, allow up to 1800 seconds, and return bounded output with truncation markers.
 
-Context automatically compacts at **200k estimated tokens** into a summary that retains the original task, recent complete tool groups, key results, and remaining work. Visible chat history remains available; failed/canceled compaction preserves the original context. A provider context-limit error also triggers one compaction attempt. Conversations and tool results are encrypted locally and can be reopened after restarting; interrupted tasks never resume automatically. Task messages, necessary server details, and tool output are sent to the configured model API.
+Context automatically compacts at **200k estimated tokens** (or 75% of the context window when the model metadata declares a smaller one) into a summary that retains the original task, recent complete tool groups, key results, and remaining work. Visible chat history remains available; failed/canceled compaction preserves the original context. A provider context-limit error also triggers one compaction attempt. Automatic mode treats wildcards, device files, credential-like paths, `docker inspect`/`systemctl show` (which print environment values) as requiring approval, and an auto-approved `read_file` refuses links that resolve to credential files. Conversations and tool results are encrypted locally and can be reopened after restarting; interrupted tasks never resume automatically. Task messages, necessary server details, and tool output are sent to the configured model API.
 
 Open **Settings → About and Updates → Version History** to expand release notes, with the installed version expanded by default. Available updates show their notes too. History is bundled for offline use and shares the release changelog source.
 
@@ -245,7 +245,7 @@ on the right:
 - **Terminal**
   - Terminal font size
   - Default line count for new live tail viewer windows
-- **AI Assistant**: API endpoint, encrypted key, model list, default agent permissions, and 200k context compaction
+- **AI Assistant**: API endpoint, encrypted key, model list, default agent permissions, and context compaction (200k or 75% of the declared window)
 - **About and updates**: current version, a manual update check, and automatic
   checks (on launch and every 6 hours)
 

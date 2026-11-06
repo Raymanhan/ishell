@@ -83,6 +83,21 @@ pub struct Context {
     pub terminals: Arc<TerminalRegistry>,
     pub cancel: Arc<AtomicBool>,
     pub events: Channel<Event>,
+    /// Set when the call runs without a human decision; the remote runner then
+    /// refuses reads whose real path (after symlinks) looks like a secret.
+    pub guard_sensitive: bool,
+}
+
+/// Poll quickly while output changes, then back off so a quiet long-running
+/// command does not cost an SSH exec and a remote interpreter start every 400 ms.
+pub(crate) fn next_poll_interval(current: Duration, changed: bool) -> Duration {
+    const MIN: Duration = Duration::from_millis(400);
+    const MAX: Duration = Duration::from_millis(2000);
+    if changed {
+        MIN
+    } else {
+        (current + current / 2).clamp(MIN, MAX)
+    }
 }
 
 pub fn execute(context: Context, id: String, name: String, args: Value) -> Result<Value, String> {
@@ -94,19 +109,25 @@ pub fn execute(context: Context, id: String, name: String, args: Value) -> Resul
         terminals,
         cancel,
         events,
+        guard_sensitive,
     } = context;
     if cancel.load(Ordering::Relaxed) || !terminals.connected_to(&session, &server) {
         return Err("已停止或服务器连接已关闭".into());
     }
     let job_id = uuid::Uuid::new_v4().to_string();
+    let mut input = json!({"name":name,"args":args});
+    if guard_sensitive {
+        input["sensitivePatterns"] = json!(super::permissions::SENSITIVE_PATTERNS);
+    }
     job(
         &app,
         &server,
-        json!({"action":"start","job":job_id,"input":{"name":name,"args":args},"runner":include_str!("runner.py")}),
+        json!({"action":"start","job":job_id,"input":input,"runner":include_str!("runner.py")}),
     )?;
     let started = Instant::now();
     let mut previous = Value::Null;
     let mut stopping_since = None;
+    let mut interval = Duration::from_millis(400);
     loop {
         let stopping = cancel.load(Ordering::Relaxed)
             || !terminals.connected_to(&session, &server)
@@ -124,7 +145,8 @@ pub fn execute(context: Context, id: String, name: String, args: Value) -> Resul
                 return Err(format!("工具状态无法获取，无法确认远端是否已停止：{error}"));
             }
         };
-        if state != previous {
+        let changed = state != previous;
+        if changed {
             let _ = events.send(Event::new("tool_output", json!({"id":id,"result":state})));
             previous = state.clone();
         }
@@ -135,16 +157,44 @@ pub fn execute(context: Context, id: String, name: String, args: Value) -> Resul
         if stopping {
             let since = stopping_since.get_or_insert_with(Instant::now);
             if since.elapsed() > Duration::from_secs(15) {
+                // job.py removes stale job directories on later starts.
                 return Err("停止请求已发送，但尚未确认远端进程退出".into());
             }
+            interval = Duration::from_millis(400);
+        } else {
+            interval = next_poll_interval(interval, changed);
         }
-        std::thread::sleep(Duration::from_millis(400));
+        // Sleep in short slices so a stop click is noticed without waiting
+        // for a backed-off poll interval.
+        let wake = Instant::now() + interval;
+        while Instant::now() < wake {
+            if !stopping && cancel.load(Ordering::Relaxed) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(100).min(wake - Instant::now()));
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn polling_backs_off_while_quiet_and_resets_on_output() {
+        let mut interval = Duration::from_millis(400);
+        for _ in 0..10 {
+            interval = next_poll_interval(interval, false);
+        }
+        assert_eq!(interval, Duration::from_millis(2000));
+        assert_eq!(
+            next_poll_interval(interval, true),
+            Duration::from_millis(400)
+        );
+        assert_eq!(
+            next_poll_interval(Duration::from_millis(400), false),
+            Duration::from_millis(600)
+        );
+    }
     #[test]
     fn validate_before_any_remote_execution() {
         assert!(validate(

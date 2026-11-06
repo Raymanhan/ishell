@@ -7,6 +7,63 @@ use std::sync::{
 use tauri::ipc::Channel;
 
 pub const COMPACTION_THRESHOLD: usize = 200_000;
+const MIN_THRESHOLD: usize = 8_000;
+
+/// Token budgets for automatic compaction. Without a declared context window
+/// the historical 200k threshold applies; with one, compaction starts at 75%
+/// of the window so the system prompt, tool schemas and the reply still fit.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Budget {
+    pub threshold: usize,
+    /// Recent messages kept verbatim after compaction.
+    keep: usize,
+    /// Size of each transcript slice sent to the summarizer.
+    chunk: usize,
+}
+
+impl Budget {
+    pub fn for_window(window: Option<u64>) -> Self {
+        let threshold = window
+            .map(|tokens| (tokens as usize).saturating_mul(3) / 4)
+            .map_or(COMPACTION_THRESHOLD, |tokens| {
+                tokens.clamp(MIN_THRESHOLD, COMPACTION_THRESHOLD)
+            });
+        Self {
+            threshold,
+            keep: (threshold / 5).min(40_000),
+            chunk: (threshold * 3 / 10).min(60_000),
+        }
+    }
+}
+
+impl Default for Budget {
+    fn default() -> Self {
+        Self::for_window(None)
+    }
+}
+
+/// Provider error texts that mean the request exceeded the context window.
+pub fn is_overflow_error(reason: &str) -> bool {
+    let lower = reason.to_lowercase();
+    [
+        "context_length_exceeded",
+        "context_length",
+        "maximum context",
+        "context window",
+        "context limit",
+        "exceeds the context",
+        "too many tokens",
+        "prompt is too long",
+        "input is too long",
+        "too long for the context",
+        "maximum input length",
+        "reduce the length",
+        "上下文长度",
+        "超出上下文",
+    ]
+    .iter()
+    .any(|part| lower.contains(part))
+}
 
 /// Model-independent approximation. CJK/non-ASCII characters are counted more
 /// conservatively than Latin text. The UI explicitly labels this as estimated.
@@ -47,26 +104,27 @@ fn split_text(text: &str, budget: usize) -> Vec<String> {
     chunks
 }
 
-pub fn should_compact(messages: &[Value]) -> bool {
-    tokens(messages) >= COMPACTION_THRESHOLD
+pub fn should_compact(messages: &[Value], budget: &Budget) -> bool {
+    tokens(messages) >= budget.threshold
 }
 
 pub async fn compact(
     config: &Config,
     model: &str,
+    budget: &Budget,
     messages: &mut Vec<Value>,
     active_request: &str,
     cancel: Arc<AtomicBool>,
     events: &Channel<Event>,
 ) -> Result<(), String> {
     let before = tokens(messages);
-    // Keep recent complete assistant/tool groups, with a target of 40k tokens.
+    // Keep recent complete assistant/tool groups within the budget.
     // Never split a tool result from the assistant call it answers.
     let mut cut = messages.len();
     let mut kept = 0;
     for (index, message) in messages.iter().enumerate().rev() {
         kept += tokens(std::slice::from_ref(message));
-        if kept > 40_000 {
+        if kept > budget.keep {
             break;
         }
         if matches!(message["role"].as_str(), Some("user" | "assistant")) {
@@ -88,7 +146,7 @@ pub async fn compact(
         json!({"beforeTokens":before}),
     ));
     let transcript = serde_json::to_string(&messages[..cut]).map_err(|e| e.to_string())?;
-    let chunks = split_text(&transcript, 60_000);
+    let chunks = split_text(&transcript, budget.chunk);
     let quiet = Channel::<Event>::new(|_| Ok(()));
     let mut summaries = Vec::new();
     for (index, chunk) in chunks.iter().enumerate() {
@@ -130,19 +188,53 @@ mod tests {
     use super::*;
     #[test]
     fn threshold_is_200k_estimated_tokens_and_unicode_chunks_are_valid() {
-        assert!(!should_compact(&[
-            json!({"role":"user","content":"x".repeat(700_000)})
-        ]));
-        assert!(should_compact(&[
-            json!({"role":"user","content":"x".repeat(800_000)})
-        ]));
-        assert!(should_compact(&[
-            json!({"role":"user","content":"中".repeat(140_000)})
-        ]));
+        let budget = Budget::default();
+        assert!(!should_compact(
+            &[json!({"role":"user","content":"x".repeat(700_000)})],
+            &budget
+        ));
+        assert!(should_compact(
+            &[json!({"role":"user","content":"x".repeat(800_000)})],
+            &budget
+        ));
+        assert!(should_compact(
+            &[json!({"role":"user","content":"中".repeat(140_000)})],
+            &budget
+        ));
         let text = "中🙂abc".repeat(100);
         let chunks = split_text(&text, 50);
         assert_eq!(chunks.concat(), text);
         assert!(chunks.iter().all(|chunk| text_tokens(chunk) <= 51));
+    }
+    #[test]
+    fn declared_context_windows_lower_the_threshold_and_overflow_errors_are_recognized() {
+        assert_eq!(
+            Budget::for_window(None),
+            Budget {
+                threshold: 200_000,
+                keep: 40_000,
+                chunk: 60_000
+            }
+        );
+        assert_eq!(Budget::for_window(Some(1_000_000)).threshold, 200_000);
+        let small = Budget::for_window(Some(128_000));
+        assert_eq!(small.threshold, 96_000);
+        assert!(small.keep < small.threshold && small.chunk < small.threshold);
+        assert_eq!(Budget::for_window(Some(2_000)).threshold, 8_000);
+        let messages = [json!({"role":"user","content":"x".repeat(400_000)})];
+        assert!(should_compact(&messages, &small));
+        assert!(!should_compact(&messages, &Budget::default()));
+        for error in [
+            "模型 API 返回 400：{\"error\":{\"code\":\"context_length_exceeded\"}}",
+            "prompt is too long: 210000 tokens > 200000 maximum",
+            "This model's maximum context length is 128000 tokens",
+            "Input is too long for requested model",
+        ] {
+            assert!(is_overflow_error(error), "{error}");
+        }
+        assert!(!is_overflow_error(
+            "Rate limit reached for model on tokens per min (TPM)"
+        ));
     }
 }
 
@@ -173,6 +265,7 @@ mod summary_tests {
         compact(
             &config,
             "fixture",
+            &Budget::default(),
             &mut messages,
             "继续但不要删除数据库",
             Arc::new(AtomicBool::new(false)),
@@ -216,6 +309,7 @@ mod summary_tests {
         assert!(compact(
             &config,
             "fixture",
+            &Budget::default(),
             &mut messages,
             "continue",
             Arc::new(AtomicBool::new(false)),
@@ -228,6 +322,7 @@ mod summary_tests {
         assert!(compact(
             &config,
             "fixture",
+            &Budget::default(),
             &mut messages,
             "continue",
             Arc::new(AtomicBool::new(true)),

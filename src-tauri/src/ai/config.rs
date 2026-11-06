@@ -159,15 +159,28 @@ pub fn merge(old: Config, input: ConfigInput) -> Result<Config, String> {
     if !default_model.is_empty() && !models.contains(&default_model) {
         models.insert(0, default_model.clone());
     }
-    let api_key = input.api_key.unwrap_or(old.api_key).trim().to_string();
+    let api_key = input
+        .api_key
+        .unwrap_or_else(|| old.api_key.clone())
+        .trim()
+        .to_string();
     if api_key.len() > 4096 || api_key.contains(['\r', '\n']) {
         return Err("API 密钥格式无效".into());
     }
+    let base_url = normalize_url(&input.base_url)?;
+    // The previous catalog still describes the same service, so a temporary
+    // /models failure while saving (say) the permission mode must not wipe
+    // the model list and default model. A new endpoint or key starts empty.
+    let model_metadata = if base_url == old.base_url && api_key == old.api_key {
+        old.model_metadata
+    } else {
+        vec![]
+    };
     Ok(Config {
-        base_url: normalize_url(&input.base_url)?,
+        base_url,
         models,
         manual_models,
-        model_metadata: vec![],
+        model_metadata,
         default_model,
         api_key,
         default_permission: input.default_permission,
@@ -190,10 +203,8 @@ pub fn apply_metadata(config: &mut Config, result: Result<Vec<Model>, String>) -
             config.model_metadata = models;
             None
         }
-        Err(error) => {
-            config.model_metadata.clear();
-            Some(error)
-        }
+        // `merge` already kept or dropped the previous catalog.
+        Err(error) => Some(error),
     };
     config.models = config
         .model_metadata
@@ -228,11 +239,47 @@ mod tests {
         assert!(apply_metadata(&mut config, Ok(catalog)).is_none());
         assert_eq!(config.default_model, "remote");
         assert_eq!(config.models, ["remote"]);
+        // Same service, temporary failure: the known catalog stays usable.
+        let same = merge(
+            config.clone(),
+            ConfigInput {
+                base_url: config.base_url.clone(),
+                models: vec![],
+                manual_models: vec![],
+                default_model: "remote".into(),
+                api_key: None,
+                default_permission: "ask".into(),
+            },
+        )
+        .unwrap();
+        let mut retained = same;
         assert_eq!(
-            apply_metadata(&mut config, Err("401".into())).as_deref(),
+            apply_metadata(&mut retained, Err("timeout".into())).as_deref(),
+            Some("timeout")
+        );
+        assert_eq!(retained.models, ["remote"]);
+        assert_eq!(retained.default_model, "remote");
+        // A different endpoint never inherits the old catalog.
+        let mut moved = merge(
+            config.clone(),
+            ConfigInput {
+                base_url: "https://other.example/v1".into(),
+                models: vec![],
+                manual_models: vec![],
+                default_model: "remote".into(),
+                api_key: None,
+                default_permission: "auto".into(),
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            apply_metadata(&mut moved, Err("401".into())).as_deref(),
             Some("401")
         );
-        assert!(config.model_metadata.is_empty());
+        assert!(moved.model_metadata.is_empty());
+        assert!(moved.models.is_empty());
+        config.model_metadata.clear();
+        apply_metadata(&mut config, Err("401".into()));
         assert!(config.models.is_empty());
         assert!(config.api_key.is_empty());
         config.manual_models = vec!["private-model".into()];

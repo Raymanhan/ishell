@@ -238,6 +238,30 @@ pub struct ChatResult {
     context_tokens: usize,
 }
 
+/// Messages as sent to the provider. Reasoning from earlier user turns is
+/// dropped: providers such as DeepSeek reject `reasoning_content` in input,
+/// while reasoning inside the current tool loop is kept for providers that
+/// require it to continue a thinking-mode tool call.
+fn request_history(messages: &[Value]) -> Vec<Value> {
+    let current_turn = messages
+        .iter()
+        .rposition(|message| message["role"] == "user")
+        .unwrap_or(0);
+    messages
+        .iter()
+        .enumerate()
+        .map(|(index, message)| {
+            let mut message = message.clone();
+            if index < current_turn {
+                if let Some(object) = message.as_object_mut() {
+                    object.remove("reasoning_content");
+                }
+            }
+            message
+        })
+        .collect()
+}
+
 struct RunGuard {
     registry: Arc<AiRegistry>,
     id: String,
@@ -336,6 +360,12 @@ pub async fn ai_chat(
         input.manual_model,
         input.manual_effort,
     )?;
+    let budget = context::Budget::for_window(
+        available_models
+            .iter()
+            .find(|model| model.id == input.model)
+            .and_then(|model| model.context_window),
+    );
     // Retrieve the server ID from the immutable server snapshot, not the selected UI tab.
     let mut messages = input.messages.clone();
     let active_request = input
@@ -364,10 +394,11 @@ pub async fn ai_chat(
             break;
         }
         let _ = on_event.send(Event::new("round", json!({"round":round})));
-        if context::should_compact(&messages) {
+        if context::should_compact(&messages, &budget) {
             if let Err(reason) = context::compact(
                 &config,
                 &input.model,
+                &budget,
                 &mut messages,
                 active_request,
                 cancel.clone(),
@@ -382,7 +413,7 @@ pub async fn ai_chat(
             }
         }
         let mut request_messages = vec![json!({"role":"system","content":system})];
-        request_messages.extend(messages.clone());
+        request_messages.extend(request_history(&messages));
         let mut body = json!({"model":input.model,"messages":request_messages,"tools":tools::definitions(),"tool_choice":"auto","stream":true});
         if input.permission == "suggest" {
             body.as_object_mut().unwrap().remove("tools");
@@ -394,23 +425,16 @@ pub async fn ai_chat(
         let message = match provider::completion(&config, body, cancel.clone(), &on_event).await {
             Ok(message) => message,
             Err(reason) => {
-                let lower = reason.to_lowercase();
                 if !context_retried
                     && !cancel.load(Ordering::Relaxed)
                     && messages.len() > 1
-                    && [
-                        "context_length_exceeded",
-                        "maximum context",
-                        "context window",
-                        "too many tokens",
-                    ]
-                    .iter()
-                    .any(|part| lower.contains(part))
+                    && context::is_overflow_error(&reason)
                 {
                     context_retried = true;
                     match context::compact(
                         &config,
                         &input.model,
+                        &budget,
                         &mut messages,
                         active_request,
                         cancel.clone(),
@@ -467,18 +491,26 @@ pub async fn ai_chat(
                             let risk = permissions::assess(&name, &args);
                             let detail = json!({"id":id,"name":name,"arguments":args,"rawArguments":raw,"risk":risk});
                             let _ = on_event.send(Event::new("tool_risk", detail.clone()));
-                            if permissions::needs_approval(&input.permission, &risk) && !request_approval(&registry, &input.request_id, &cancel, &on_event, detail).await? {
+                            if !permissions::needs_approval(&input.permission, &risk) {
+                                // Executed without a human decision: let the remote
+                                // runner refuse links that resolve to secrets.
+                                return Ok(input.permission == "auto");
+                            }
+                            if !request_approval(&registry, &input.request_id, &cancel, &on_event, detail).await? {
                                 return Err("用户拒绝了该操作，未执行。不得改写命令或更换工具绕过拒绝。".to_string());
                             }
-                            Ok(())
+                            Ok(false)
                         }.await;
-                        if let Err(reason) = approved {
-                            let result = json!({"status":"done","error":reason,"exitCode":null,"stdout":"","stderr":""});
-                            let _ = on_event
-                                .send(Event::new("tool_end", json!({"id":id,"result":result})));
-                            messages.push(json!({"role":"tool","tool_call_id":id,"content":result.to_string()}));
-                            continue;
-                        }
+                        let guard_sensitive = match approved {
+                            Ok(guard) => guard,
+                            Err(reason) => {
+                                let result = json!({"status":"done","error":reason,"exitCode":null,"stdout":"","stderr":""});
+                                let _ = on_event
+                                    .send(Event::new("tool_end", json!({"id":id,"result":result})));
+                                messages.push(json!({"role":"tool","tool_call_id":id,"content":result.to_string()}));
+                                continue;
+                            }
+                        };
                         let context = tools::Context {
                             app: app.clone(),
                             server: server.id.clone(),
@@ -486,6 +518,7 @@ pub async fn ai_chat(
                             terminals: terminals.inner().clone(),
                             cancel: cancel.clone(),
                             events: on_event.clone(),
+                            guard_sensitive,
                         };
                         let tool_id = id.clone();
                         tauri::async_runtime::spawn_blocking(move || {
@@ -590,6 +623,21 @@ mod tests {
         let cancel = registry.begin("other", "b").unwrap();
         registry.cancel("other".into()).unwrap();
         assert!(cancel.load(Ordering::Relaxed));
+    }
+    #[test]
+    fn earlier_turn_reasoning_is_not_sent_back_but_current_tool_loop_keeps_it() {
+        let messages = [
+            json!({"role":"user","content":"a"}),
+            json!({"role":"assistant","content":"x","reasoning_content":"old"}),
+            json!({"role":"user","content":"b"}),
+            json!({"role":"assistant","content":"","reasoning_content":"now","tool_calls":[]}),
+            json!({"role":"tool","tool_call_id":"c","content":"{}"}),
+        ];
+        let sent = request_history(&messages);
+        assert!(sent[1].get("reasoning_content").is_none());
+        assert_eq!(sent[1]["content"], "x");
+        assert_eq!(sent[3]["reasoning_content"], "now");
+        assert_eq!(messages[1]["reasoning_content"], "old");
     }
     #[test]
     fn history_cannot_replace_system_instructions() {

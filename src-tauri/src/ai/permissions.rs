@@ -16,22 +16,83 @@ fn risk(level: &'static str, label: &'static str, reason: &str) -> Risk {
     }
 }
 
-fn sensitive(text: &str) -> bool {
+/// Substrings that mark a path or command as touching credentials. The same
+/// list is sent to the remote runner so a low-risk `read_file` cannot reach a
+/// secret through a symbolic link.
+pub const SENSITIVE_PATTERNS: &[&str] = &[
+    ".ssh",
+    "id_rsa",
+    "id_ecdsa",
+    "id_ed25519",
+    "id_dsa",
+    ".env",
+    "environ",
+    "secret",
+    "credential",
+    "token",
+    "password",
+    "passwd",
+    "shadow",
+    "sudoers",
+    "private",
+    ".pem",
+    ".key",
+    ".p12",
+    ".pfx",
+    ".keystore",
+    "_history",
+    ".netrc",
+    ".pgpass",
+    ".my.cnf",
+    ".aws",
+    ".kube",
+    ".docker/config",
+    ".gnupg",
+    ".git-credentials",
+];
+
+pub fn sensitive(text: &str) -> bool {
     let text = text.to_lowercase();
-    [
-        ".ssh",
-        "id_rsa",
-        "id_ed25519",
-        ".env",
-        "secret",
-        "credential",
-        "token",
-        "/etc/shadow",
-        "/etc/sudoers",
-        "/etc/passwd",
-    ]
-    .iter()
-    .any(|part| text.contains(part))
+    SENSITIVE_PATTERNS.iter().any(|part| text.contains(part))
+}
+
+/// Lexically normalize an absolute path (`//etc/./a/../b` -> `/etc/b`) so
+/// prefix checks cannot be bypassed with redundant separators or dot segments.
+fn normalize_path(path: &str) -> String {
+    let (prefix, rest) = match path.strip_prefix('~') {
+        Some(rest) => ("~", rest),
+        None => ("", path),
+    };
+    let mut parts: Vec<&str> = Vec::new();
+    for part in rest.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop();
+            }
+            part => parts.push(part),
+        }
+    }
+    format!("{prefix}/{}", parts.join("/"))
+}
+
+/// Commands that keep streaming until the tool timeout (`tail -f`,
+/// `docker stats`) are harmless but would block the agent for minutes.
+fn follows_forever(program: &str, words: &[&str]) -> bool {
+    let follow = |word: &&str| {
+        matches!(*word, "-f" | "-F" | "--follow")
+            || word.starts_with("--follow=")
+            || (word.starts_with('-') && !word.starts_with("--") && word.contains(['f', 'F']))
+    };
+    match program {
+        "tail" => words[1..].iter().any(follow),
+        "docker" => match words.get(1).copied() {
+            Some("logs") => words[2..].iter().any(follow),
+            Some("stats") => !words.contains(&"--no-stream"),
+            _ => false,
+        },
+        _ => false,
+    }
 }
 
 /// Conservative classification: arbitrary code and unrecognized shell syntax
@@ -45,7 +106,8 @@ pub fn assess(name: &str, args: &Value) -> Risk {
         );
     }
     if name == "write_file" {
-        let path = args["path"].as_str().unwrap_or_default();
+        let path = normalize_path(args["path"].as_str().unwrap_or_default());
+        let path = path.as_str();
         if sensitive(path)
             || ["/etc/", "/boot/", "/usr/", "/bin/", "/sbin/", "/lib/"]
                 .iter()
@@ -56,12 +118,15 @@ pub fn assess(name: &str, args: &Value) -> Risk {
         return risk("medium", "中风险", "将创建或完整覆盖远端文件");
     }
     if name == "read_file" {
-        return if sensitive(args["path"].as_str().unwrap_or_default()) {
+        let path = normalize_path(args["path"].as_str().unwrap_or_default());
+        return if sensitive(&path) {
             risk(
                 "high",
                 "高风险",
                 "文件名可能涉及密钥或秘密，读取内容会发送给模型",
             )
+        } else if path.starts_with("/dev/") {
+            risk("high", "高风险", "读取设备文件可能无限输出或泄露磁盘数据")
         } else {
             risk("low", "低风险", "读取文本文件，不主动修改服务器")
         };
@@ -82,8 +147,26 @@ pub fn assess(name: &str, args: &Value) -> Risk {
             "包含组合命令、重定向、替换或复杂 Shell 语法，无法静态确认影响",
         );
     }
+    // The command runs through `sh -lc`, so wildcards expand to names that the
+    // sensitive-path check never saw (`cat ~/.ss?/id_*`).
+    if command.contains(['*', '?', '[', ']']) {
+        return risk("high", "高风险", "包含通配符，展开后的实际文件无法静态确认");
+    }
     let words = command.split_whitespace().collect::<Vec<_>>();
     let program = words.first().copied().unwrap_or_default();
+    if words
+        .iter()
+        .any(|word| word.starts_with('/') && normalize_path(word).starts_with("/dev/"))
+    {
+        return risk("high", "高风险", "读取设备文件可能无限输出或泄露磁盘数据");
+    }
+    if follows_forever(program, &words) {
+        return risk(
+            "medium",
+            "中风险",
+            "持续输出的命令会一直运行到超时，建议改用一次性查询（如 tail -n、docker stats --no-stream）",
+        );
+    }
     let read_only = match program {
         "pwd" | "whoami" | "id" | "uname" | "uptime" | "df" | "free" | "ps" | "ls" | "cat"
         | "head" | "tail" | "wc" | "stat" | "readlink" | "which" | "date" | "hostname" => {
@@ -93,16 +176,18 @@ pub fn assess(name: &str, args: &Value) -> Risk {
                     || words.len() == 1
                     || (words.len() == 2 && matches!(words[1], "-f" | "-I" | "-i" | "-s")))
         }
+        // `systemctl show` and `docker inspect` print Environment= values, which
+        // commonly hold passwords, so they require approval in automatic mode.
         "systemctl" => words.get(1).is_some_and(|arg| {
             matches!(
                 *arg,
-                "status" | "show" | "list-units" | "list-unit-files" | "is-active" | "is-enabled"
+                "status" | "list-units" | "list-unit-files" | "is-active" | "is-enabled"
             )
         }),
         "docker" => words.get(1).is_some_and(|arg| {
             matches!(
                 *arg,
-                "ps" | "images" | "info" | "version" | "inspect" | "stats" | "top" | "logs"
+                "ps" | "images" | "info" | "version" | "stats" | "top" | "logs"
             )
         }),
         _ => false,
@@ -161,6 +246,71 @@ mod tests {
                 "{command}"
             );
         }
+    }
+    #[test]
+    fn wildcards_secret_dumps_devices_and_path_tricks_are_not_low_risk() {
+        for command in [
+            "cat /root/.ss?/id_*",
+            "cat /etc/shado?",
+            "head /home/a/.ssh*/id_[er]*",
+            "cat /proc/1/environ",
+            "cat /root/.bash_history",
+            "docker inspect db",
+            "systemctl show nginx",
+            "cat /dev/sda",
+            "head //dev/./zero",
+            "cat /srv/app/tls.key",
+        ] {
+            assert_eq!(
+                assess("shell", &json!({"command":command})).level,
+                "high",
+                "{command}"
+            );
+        }
+        for command in [
+            "tail -f /var/log/syslog",
+            "tail -qF a.log",
+            "docker logs --follow web",
+            "docker stats",
+        ] {
+            assert_eq!(
+                assess("shell", &json!({"command":command})).level,
+                "medium",
+                "{command}"
+            );
+        }
+        for command in [
+            "tail -n 100 /var/log/syslog",
+            "docker logs --tail 50 web",
+            "docker stats --no-stream",
+            "ls ~/app",
+        ] {
+            assert_eq!(
+                assess("shell", &json!({"command":command})).level,
+                "low",
+                "{command}"
+            );
+        }
+        for path in [
+            "//etc/nginx/nginx.conf",
+            "/srv/../etc/hosts",
+            "/./usr/bin/x",
+        ] {
+            assert_eq!(
+                assess("write_file", &json!({"path":path,"content":""})).level,
+                "high",
+                "{path}"
+            );
+        }
+        assert_eq!(
+            assess("read_file", &json!({"path":"/srv/../root/.ssh/id_rsa"})).level,
+            "high"
+        );
+        assert_eq!(
+            assess("read_file", &json!({"path":"/dev/zero"})).level,
+            "high"
+        );
+        assert_eq!(normalize_path("~/a/../b//c"), "~/b/c");
     }
     #[test]
     fn permissions_enforce_read_only_auto_and_explicit_full_access() {

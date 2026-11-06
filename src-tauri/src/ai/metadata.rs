@@ -16,6 +16,36 @@ pub struct Model {
     pub name: String,
     pub reasoning_efforts: Vec<ReasoningEffort>,
     pub default_reasoning_effort: Option<String>,
+    /// Context window in tokens when the service declares one; drives the
+    /// automatic compaction threshold. Absent in settings saved by older versions.
+    #[serde(default)]
+    pub context_window: Option<u64>,
+}
+
+fn context_window(value: &Value) -> Option<u64> {
+    [
+        "/context_window",
+        "/context_length",
+        "/max_context_length",
+        "/max_context_window",
+        "/max_model_len",
+        "/max_input_tokens",
+        "/input_token_limit",
+        "/top_provider/context_length",
+        "/limits/context_window",
+        "/limits/max_context_tokens",
+        "/metadata/context_window",
+        "/metadata/context_length",
+        "/capabilities/context_window",
+    ]
+    .iter()
+    .find_map(|path| {
+        let value = value.pointer(path)?;
+        value
+            .as_u64()
+            .or_else(|| value.as_str().and_then(|text| text.trim().parse().ok()))
+    })
+    .filter(|tokens| (1_024..=100_000_000).contains(tokens))
 }
 
 fn text_at<'a>(value: &'a Value, paths: &[&str]) -> Option<&'a str> {
@@ -112,6 +142,7 @@ pub fn model(value: &Value) -> Option<Model> {
         name,
         reasoning_efforts,
         default_reasoning_effort,
+        context_window: context_window(value),
     })
 }
 
@@ -201,6 +232,24 @@ mod tests {
         assert!(validate_selection(&models, "missing", "default", false, false).is_err());
         assert_eq!(models[1].reasoning_efforts[0].value, "none");
         assert!(catalog(&json!({"error":"failed"})).is_err());
+    }
+    #[test]
+    fn context_windows_are_read_from_common_metadata_shapes() {
+        let models = catalog(&json!({"data":[
+            {"id":"openrouter","context_length":131072},
+            {"id":"nested","top_provider":{"context_length":"32768"}},
+            {"id":"vllm","max_model_len":8192},
+            {"id":"plain"},
+            {"id":"bogus","context_window":12}
+        ]}))
+        .unwrap();
+        let windows = models.iter().map(|m| m.context_window).collect::<Vec<_>>();
+        assert_eq!(windows, [Some(131072), Some(32768), Some(8192), None, None]);
+        let saved: Model = serde_json::from_value(
+            json!({"id":"old","name":"old","reasoningEfforts":[],"defaultReasoningEffort":null}),
+        )
+        .unwrap();
+        assert_eq!(saved.context_window, None);
     }
 }
 

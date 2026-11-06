@@ -100,6 +100,38 @@ class RemoteTools(unittest.TestCase):
         self.assertEqual(result['exitCode'], 1)
         self.assertTrue(result['error'])
 
+    def test_auto_approved_read_refuses_links_to_secrets(self):
+        secret = self.root / '.ssh'
+        secret.mkdir()
+        (secret / 'id_rsa').write_text('PRIVATE KEY')
+        link = self.root / 'notes.txt'
+        link.symlink_to(secret / 'id_rsa')
+        job_id = str(uuid.uuid4())
+        self.jobs.append(job_id)
+        self.job('start', job_id, runner=RUNNER,
+                 input=dict(name='read_file', args=dict(path=str(link)), sensitivePatterns=['.ssh', 'id_rsa']))
+        result = self.wait(job_id)
+        self.assertEqual(result['exitCode'], 1)
+        self.assertNotIn('PRIVATE', result['stdout'])
+        self.assertIn('密钥', result['error'])
+        # Without the guard (user approved or full access) the same read works.
+        result = self.wait(self.start('read_file', dict(path=str(link))))
+        self.assertEqual(result['stdout'], 'PRIVATE KEY')
+
+    def test_missing_job_reports_done_and_stale_jobs_are_removed(self):
+        result = self.job('cancel', str(uuid.uuid4()))
+        self.assertEqual(result['status'], 'done')
+        base = Path(tempfile.gettempdir()) / f'ishell-ai-{os.getuid()}'
+        stale = base / str(uuid.uuid4())
+        stale.mkdir(parents=True)
+        (stale / 'input.json').write_text('{"secret": "left behind"}')
+        old = time.time() - 7200
+        for path in (stale / 'input.json', stale):
+            os.utime(path, (old, old))
+        fresh = self.start('shell', dict(command='true'))
+        self.assertFalse(stale.exists())
+        self.assertTrue((base / fresh).exists())
+
     def test_slow_file_io_can_timeout_or_be_canceled(self):
         path = self.root / 'file.slow'
         path.write_text('data')

@@ -46,6 +46,13 @@ try:
         if os.path.exists(path) and not stat.S_ISREG(os.stat(path).st_mode):
             raise ValueError('仅支持普通文本文件，不读取设备、管道或目录')
     if name == 'read_file':
+        patterns = data.get('sensitivePatterns') or []
+        if patterns:
+            # Auto-approved reads were classified by the requested name only;
+            # refuse when a link resolves to something that looks like a secret.
+            real = os.path.realpath(expand(args['path'])).lower()
+            if any(pattern in real for pattern in patterns):
+                raise PermissionError('该路径实际指向可能含密钥的文件，自动模式下未读取，需要用户确认')
         with open(expand(args['path']), encoding='utf-8', errors='replace') as f:
             text = f.read(LIMIT + 1)
         result.update(stdout=text[:LIMIT], truncated=len(text) > LIMIT, exitCode=0)

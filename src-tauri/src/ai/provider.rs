@@ -15,9 +15,12 @@ use super::{config::Config, metadata, Event};
 
 pub fn client() -> Result<Client, String> {
     let _ = rustls::crypto::ring::default_provider().install_default();
+    // `timeout` would bound the whole streamed body, cutting off reasoning
+    // models that legitimately stream for more than five minutes. Bound the
+    // idle gap between reads instead; the user can stop a run at any time.
     Client::builder()
         .connect_timeout(Duration::from_secs(20))
-        .timeout(Duration::from_secs(300))
+        .read_timeout(Duration::from_secs(300))
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|e| e.to_string())
@@ -159,6 +162,12 @@ impl Accumulator {
                             &mut entry[path[0]][path[1]]
                         };
                         let mut value = target.as_str().unwrap_or_default().to_string();
+                        // OpenAI sends id and name once, but some compatible
+                        // gateways repeat them in every chunk; only arguments
+                        // are true fragments.
+                        if path.last() != Some(&"arguments") && value == fragment {
+                            continue;
+                        }
                         if value.len() + fragment.len() > 524_288 {
                             return Err("工具参数超过 512 KB".into());
                         }
@@ -286,6 +295,20 @@ mod tests {
         )
         .unwrap();
         assert!(acc.finish().is_err());
+    }
+    #[test]
+    fn repeated_ids_and_names_from_compatible_gateways_are_not_duplicated() {
+        let mut acc = Accumulator::default();
+        for (arguments, finish) in [("{\"command\":", None), ("\"pwd\"}", Some("tool_calls"))] {
+            acc.ingest(&json!({"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"shell","arguments":arguments}}]},"finish_reason":finish}]}), &|_| {}).unwrap();
+        }
+        let message = acc.finish().unwrap();
+        assert_eq!(message["tool_calls"][0]["id"], "call_1");
+        assert_eq!(message["tool_calls"][0]["function"]["name"], "shell");
+        assert_eq!(
+            message["tool_calls"][0]["function"]["arguments"],
+            "{\"command\":\"pwd\"}"
+        );
     }
     #[test]
     fn truncation_and_api_errors_never_become_commands() {

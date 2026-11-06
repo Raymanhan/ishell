@@ -11,6 +11,7 @@ import {
 import {
   applyAiEvent,
   defaultAiConfig,
+  historyWriteDelay,
   createConversation,
   restoreConversation,
   serverHistory,
@@ -70,13 +71,16 @@ export function useAi(tabs: ShellTab[]) {
     setDeletingIds((ids) => ids.filter((value) => value !== id));
   }
 
+  // Writes one snapshot of the queue. Versions that arrive while it is
+  // writing (a streaming reply updates on every token) wait for the next
+  // debounced flush instead of being rewritten back-to-back.
   function flushHistory(): Promise<void> {
     if (!isTauri || !pendingWrites.current.size) return Promise.resolve();
     if (writing.current) return writing.current;
     writing.current = (async () => {
+      let failed = false;
       try {
-        while (pendingWrites.current.size) {
-          const [id, value] = pendingWrites.current.entries().next().value!;
+        for (const [id, value] of [...pendingWrites.current.entries()]) {
           if (value) await command("ai_save_history", { input: value });
           else {
             await command("ai_delete_history", { id });
@@ -87,22 +91,36 @@ export function useAi(tabs: ShellTab[]) {
         }
         setHistoryError("");
       } catch (error) {
+        failed = true;
         setHistoryError(`历史记录保存或删除失败：${error}`);
       } finally {
         writing.current = null;
+        // A failure is retried on the next change or by the retry button,
+        // never in a tight loop.
+        if (!failed && pendingWrites.current.size) scheduleFlush();
       }
     })();
     return writing.current;
   }
 
+  function scheduleFlush() {
+    if (writeTimer.current) return;
+    const running = [...pendingWrites.current.values()].some(
+      (value) => value?.requestId,
+    );
+    writeTimer.current = setTimeout(
+      () => {
+        writeTimer.current = null;
+        void flushHistory();
+      },
+      historyWriteDelay(running),
+    );
+  }
+
   function persist(id: string, value: AiConversation | null) {
     if (!isTauri) return;
     pendingWrites.current.set(id, value);
-    if (!writeTimer.current)
-      writeTimer.current = setTimeout(() => {
-        writeTimer.current = null;
-        void flushHistory();
-      }, 500);
+    scheduleFlush();
   }
 
   function update(
@@ -163,14 +181,23 @@ export function useAi(tabs: ShellTab[]) {
   async function loadHistory() {
     const generation = ++historyGeneration.current;
     try {
-      const saved = await command<AiConversation[]>("ai_get_history");
+      const saved = await command<
+        { records: AiConversation[]; skipped: number } | AiConversation[]
+      >("ai_get_history");
       if (generation !== historyGeneration.current) return;
+      const { records, skipped } = Array.isArray(saved)
+        ? { records: saved, skipped: 0 }
+        : saved;
       current.current = Object.fromEntries(
-        saved.map((value) => [value.id, restoreConversation(value)]),
+        records.map((value) => [value.id, restoreConversation(value)]),
       );
       setConversations(current.current);
       setHistoryLoaded(true);
-      setHistoryError("");
+      setHistoryError(
+        skipped
+          ? `${skipped} 条历史记录无法解密或已损坏，已跳过（数据仍保留在本机）。`
+          : "",
+      );
     } catch (error) {
       if (generation === historyGeneration.current)
         setHistoryError(`历史记录读取失败：${error}`);

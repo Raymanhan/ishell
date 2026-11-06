@@ -22,7 +22,22 @@ export interface AiModel {
   name: string;
   reasoningEfforts: { value: string; label: string; description: string }[];
   defaultReasoningEffort: string | null;
+  /** Declared context window in tokens, when the service reports one. */
+  contextWindow?: number | null;
   manual?: boolean;
+}
+export const DEFAULT_COMPACTION_THRESHOLD = 200_000;
+/** Mirrors `context::Budget::for_window` in the desktop backend. */
+export function compactionThreshold(contextWindow?: number | null): number {
+  if (!contextWindow || contextWindow <= 0) return DEFAULT_COMPACTION_THRESHOLD;
+  return Math.min(
+    DEFAULT_COMPACTION_THRESHOLD,
+    Math.max(8_000, Math.floor((contextWindow * 3) / 4)),
+  );
+}
+/** Saving re-encrypts the whole conversation; batch more while a task streams. */
+export function historyWriteDelay(running: boolean): number {
+  return running ? 2000 : 500;
 }
 export function mergeModelSources(
   models: AiModel[],
