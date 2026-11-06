@@ -226,7 +226,7 @@ Choose permissions below the composer, or set the default for new chats in setti
 | Automatic, low risk (default) | Recognized low-risk queries run automatically; writes, arbitrary code, and unrecognized commands require approval |
 | Full access | Tools for the requested task run without individual approval |
 
-Approvals open a dialog showing what the step is for, its risk level and reason, the target server, the working directory, and the complete command/code; deny (or press Esc) or allow once. High-risk steps focus Deny, and clicking outside the dialog does not answer it. Tool cards stay collapsed and are titled with the model's short description of the step; consecutive tool calls are grouped. Classification uses conservative rules and is not a sandbox; SSH account privileges still apply.
+A step that needs approval opens its tool card to show the target server, the working directory, and the complete command/code, with Deny and Allow once; the risk assessment decides whether to ask but is not shown on the card. Tool cards stay collapsed and are titled with the model's short description of the step; consecutive tool calls are grouped. Classification uses conservative rules and is not a sandbox; SSH account privileges still apply.
 
 Conversations and tasks stay bound to their originating terminal connection. Switching tabs does not redirect a running task. Closing the sidebar preserves the conversation; closing or reconnecting the terminal requests cancellation. Stop is available at any time; completed changes are retained. Tools default to a 120-second timeout, allow up to 1800 seconds, and return bounded output with truncation markers.
 

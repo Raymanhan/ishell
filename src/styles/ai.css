@@ -791,63 +791,35 @@
 .ai-tool.awaiting summary > svg:first-child {
   color: var(--vivid-orange);
 }
-/* Approval dialog: the risk assessment and the exact command. */
-.delete-confirm.ai-approval-dialog {
-  width: min(480px, 100%);
-  --modal-surface-border: rgba(255, 159, 10, 0.4);
+.ai-approval {
+  padding: 9px 10px;
+  border-top: 1px solid var(--hairline);
+  background: rgba(255, 159, 10, 0.04);
 }
-.delete-confirm.ai-approval-dialog.risk-high {
-  --modal-surface-border: rgba(245, 107, 107, 0.45);
-}
-.delete-confirm.ai-approval-dialog.risk-low {
-  --modal-surface-border: var(--hairline-2);
-}
-.delete-confirm.ai-approval-dialog h2 {
-  font-size: 16px;
-  overflow-wrap: anywhere;
-}
-.delete-confirm.ai-approval-dialog p {
-  display: grid;
-  gap: 6px;
+.ai-approval p {
+  margin: 0 0 9px;
+  font-size: 10.5px;
   color: var(--dim);
-  font-size: 12px;
+  line-height: 1.6;
 }
-.ai-approval-risk {
+.ai-approval > div {
   display: flex;
-  gap: 8px;
-  padding: 7px 9px;
-  border-radius: 7px;
-  background: rgba(255, 159, 10, 0.08);
-  color: var(--text);
+  gap: 7px;
+  justify-content: flex-end;
 }
-.ai-approval-risk strong {
-  flex-shrink: 0;
-  font-weight: 600;
-  color: var(--vivid-orange);
+.ai-approval button {
+  padding: 6px 12px;
+  border: 1px solid var(--hairline-2);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dim);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
 }
-.risk-high .ai-approval-risk {
-  background: rgba(245, 107, 107, 0.1);
-}
-.risk-high .ai-approval-risk strong {
-  color: var(--danger);
-}
-.risk-low .ai-approval-risk {
-  background: var(--surface-soft-bg);
-}
-.risk-low .ai-approval-risk strong {
-  color: var(--vivid-green);
-}
-.ai-approval-dialog .delete-target.labeled code {
-  display: block;
-  max-height: 240px;
-  overflow: auto;
-  font-size: 11.5px;
-  line-height: 1.55;
-}
-/* Low and medium risk approve with the regular solid button. */
-.ai-approval-dialog:not(.risk-high) .danger-button {
-  border-color: transparent;
+.ai-approval button:last-child {
   background: var(--solid-bg, #f0f1f5);
+  border-color: transparent;
   color: var(--solid-text, #1f2025);
 }
 /*
@@ -1089,9 +1061,4 @@
 }
 .ai-history-error {
   margin: 8px 13px 0;
-}
-.ai-approval-dialog:not(.risk-high) .danger-button:hover:not(:disabled) {
-  background: var(--solid-bg, #f0f1f5);
-  color: var(--solid-text, #1f2025);
-  filter: brightness(0.94);
 }

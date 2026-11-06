@@ -18,7 +18,6 @@ export function ConfirmDialog({
   cancelLabel = t("取消"),
   focusCancel = false,
   className,
-  backdropCancels = true,
   onConfirm,
   onCancel,
 }: {
@@ -37,8 +36,6 @@ export function ConfirmDialog({
   /** Focus the cancel button instead of the confirm button. */
   focusCancel?: boolean;
   className?: string;
-  /** Whether a click outside the dialog cancels (Escape always does). */
-  backdropCancels?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -52,7 +49,7 @@ export function ConfirmDialog({
       className="delete-confirm-backdrop"
       role="presentation"
       onPointerDown={(event) => {
-        if (backdropCancels && event.target === event.currentTarget) cancel();
+        if (event.target === event.currentTarget) cancel();
       }}
     >
       <div

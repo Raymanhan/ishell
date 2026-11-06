@@ -42,8 +42,6 @@ import {
   type AiEntry,
 } from "../features/ai/types";
 import { useImeGuard } from "../features/ai/ime";
-import { createPortal } from "react-dom";
-import { ConfirmDialog } from "./ConfirmDialog";
 import { useSmoothText } from "../features/ai/useSmoothText";
 import {
   localSlashCommand,
@@ -93,7 +91,15 @@ function CopyButton({ text }: { text: string }) {
     </button>
   );
 }
-function ToolCard({ entry }: { entry: AiEntry }) {
+function ToolCard({
+  entry,
+  target,
+  onApprove,
+}: {
+  entry: AiEntry;
+  target: string;
+  onApprove: (allow: boolean) => void;
+}) {
   const result = entry.result;
   const status = toolStatus(entry);
   // Slide in only cards that appear while the task runs, not restored ones.
@@ -103,12 +109,21 @@ function ToolCard({ entry }: { entry: AiEntry }) {
   const failed = status.kind === "error";
   const args = entry.arguments;
   const { title, literal } = toolTitle(entry);
-  const code = toolCode(entry);
+  const code = String(
+    args?.command ??
+      args?.code ??
+      args?.content ??
+      args?.path ??
+      entry.rawArguments ??
+      "",
+  );
   return (
     <details
       className={`ai-tool ${failed ? "failed" : ""} ${status.kind === "neutral" ? "neutral" : ""} ${entry.approvalPending ? "awaiting" : ""} ${live ? "ai-enter" : ""}`}
-      // Collapsed; the user opens it for the details. An approval is asked
-      // in a dialog (ApprovalDialog), not inside the card.
+      // Collapsed while it runs; the user opens it when they want the
+      // details. Only an approval opens it, since it needs a decision. The
+      // risk assessment decides whether to ask but is not shown.
+      open={entry.approvalPending || undefined}
     >
       <summary>
         {entry.approvalPending ? (
@@ -141,6 +156,36 @@ function ToolCard({ entry }: { entry: AiEntry }) {
         <CopyButton text={code} />
         <pre>{code}</pre>
       </div>
+      {entry.approvalPending && (
+        <div className="ai-approval">
+          <p>
+            {t("目标：")}
+            {target}
+            {t("。请检查命令、代码和路径。")}
+          </p>
+          <div>
+            <button
+              type="button"
+              disabled={entry.approvalBusy}
+              onClick={() => onApprove(false)}
+            >
+              {t("拒绝")}
+            </button>
+            <button
+              type="button"
+              disabled={entry.approvalBusy}
+              onClick={() => onApprove(true)}
+            >
+              {entry.approvalBusy ? t("提交中…") : t("仅此次允许")}
+            </button>
+          </div>
+        </div>
+      )}
+      {entry.approvalError && (
+        <div className="ai-error" role="alert">
+          {entry.approvalError}
+        </div>
+      )}
       {result?.stdout && (
         <pre className="ai-tool-output">
           {entry.name === "write_file"
@@ -292,80 +337,18 @@ function groupTools(entries: AiEntry[]): (AiEntry | AiEntry[])[] {
   return blocks;
 }
 
-/** The tool command or code under review, as shown in the card. */
-function toolCode(entry: AiEntry): string {
-  const args = entry.arguments;
-  return String(
-    args?.command ??
-      args?.code ??
-      args?.content ??
-      args?.path ??
-      entry.rawArguments ??
-      "",
-  );
-}
-
-/**
- * Asks before a tool call the permission mode does not allow on its own. The
- * risk assessment is shown here, not on the card. Escape or 拒绝 denies; a
- * click outside does nothing, so a stray click cannot answer.
- */
-function ApprovalDialog({
+const Message = memo(function Message({
   entry,
   target,
   onApprove,
-}: {
-  entry: AiEntry;
-  target: string;
-  onApprove: (entryId: string, allow: boolean) => void;
-}) {
-  const args = entry.arguments;
-  const level = entry.risk?.level || "medium";
-  const where =
-    entry.name === "shell" || entry.name === "run_code"
-      ? t("目录：{0}", String(args?.cwd || t("~（远端主目录）")))
-      : entry.name === "write_file"
-        ? t("写入文件")
-        : t("读取文件");
-  return createPortal(
-    <ConfirmDialog
-      className={`ai-approval-dialog risk-${level}`}
-      title={toolTitle(entry).title}
-      description={
-        <>
-          {entry.risk && (
-            <span className="ai-approval-risk">
-              <strong>{translateMessage(entry.risk.label)}</strong>
-              {translateMessage(entry.risk.reason)}
-            </span>
-          )}
-          <span>{t("将在 {0} 上执行，请检查命令、代码和路径。", target)}</span>
-        </>
-      }
-      targetLabel={where}
-      target={<code>{toolCode(entry)}</code>}
-      error={entry.approvalError}
-      busy={entry.approvalBusy}
-      confirmLabel={t("仅此次允许")}
-      busyLabel={t("提交中…")}
-      cancelLabel={t("拒绝")}
-      focusCancel={level === "high"}
-      backdropCancels={false}
-      onConfirm={() => onApprove(entry.id, true)}
-      onCancel={() => onApprove(entry.id, false)}
-    />,
-    document.body,
-  );
-}
-
-const Message = memo(function Message({
-  entry,
   editing,
   editBlock,
   onEdit,
   streaming,
 }: {
   entry: AiEntry;
+  target: string;
+  onApprove: (entryId: string, allow: boolean) => void;
   editing: boolean;
   editBlock: EditBlock;
   onEdit: MessageEdit;
@@ -374,7 +357,14 @@ const Message = memo(function Message({
 }) {
   // Re-render on language changes (memoized or a window root).
   useLocale();
-  if (entry.kind === "tool") return <ToolCard entry={entry} />;
+  if (entry.kind === "tool")
+    return (
+      <ToolCard
+        entry={entry}
+        target={target}
+        onApprove={(allow) => onApprove(entry.id, allow)}
+      />
+    );
   if (entry.kind === "notice" || entry.kind === "error")
     return (
       <div
@@ -630,21 +620,10 @@ export function AiPanel({
   const permission = permissionOptions.find(
     (option) => option.value === conversation.permission,
   )!;
-  const pendingApproval = conversation.entries.find(
-    (entry) => entry.approvalPending,
-  );
-  const awaiting = Boolean(pendingApproval);
+  const awaiting = conversation.entries.some((entry) => entry.approvalPending);
   const lastEntryId = conversation.entries[conversation.entries.length - 1]?.id;
   return (
     <section className="ai-panel" aria-label={t("AI 助手")}>
-      {pendingApproval && (
-        <ApprovalDialog
-          key={pendingApproval.id}
-          entry={pendingApproval}
-          target={`${tab.title} (${tab.host})`}
-          onApprove={approve}
-        />
-      )}
       <header className="ai-head">
         <div>
           <Sparkles size={16} />
@@ -910,6 +889,8 @@ export function AiPanel({
               <Message
                 key={entry.id}
                 entry={entry}
+                target={`${tab.title} (${tab.host})`}
+                onApprove={approve}
                 editing={editingId === entry.id}
                 editBlock={
                   entry.kind !== "user"
