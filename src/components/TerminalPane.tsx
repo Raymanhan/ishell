@@ -103,7 +103,7 @@ function TerminalPaneBase({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const themeRef = useRef(theme);
-  const fitRef = useRef<FitAddon | null>(null);
+  const requestFitRef = useRef<(() => void) | null>(null);
   const sessionRef = useRef<string | null>(tab.sessionId);
   const closedSessionRef = useRef<string | null>(null);
   const readySessionRef = useRef<string | null>(null);
@@ -527,19 +527,32 @@ function TerminalPaneBase({
 
     terminal.onData((data) => sendTerminalInput(data));
 
+    let disposed = false;
+    let fitFrame = 0;
+    let settledFrame = 0;
     const fitWhenVisible = () => {
       // Skip while hidden (display:none) — the container has no size then.
-      if (containerRef.current?.offsetParent === null) return;
-      requestAnimationFrame(() => {
+      if (disposed || containerRef.current?.offsetParent === null) return;
+      cancelAnimationFrame(fitFrame);
+      cancelAnimationFrame(settledFrame);
+      fitFrame = requestAnimationFrame(() => {
+        if (
+          disposed ||
+          !containerRef.current?.clientWidth ||
+          !containerRef.current?.clientHeight
+        ) return;
         fit.fit();
         reportTerminalSize();
-        requestAnimationFrame(() => {
+        settledFrame = requestAnimationFrame(() => {
+          if (disposed || containerRef.current?.offsetParent === null) return;
           fit.fit();
           reportTerminalSize();
+          terminal.refresh(0, terminal.rows - 1);
         });
       });
     };
     const refit = () => {
+      if (disposed) return;
       if (fitTimerRef.current !== null) window.clearTimeout(fitTimerRef.current);
       if (fitSettledTimerRef.current !== null) window.clearTimeout(fitSettledTimerRef.current);
       fitTimerRef.current = window.setTimeout(() => {
@@ -551,17 +564,46 @@ function TerminalPaneBase({
         fitWhenVisible();
       }, 210);
     };
+    requestFitRef.current = refit;
+    const onVisible = () => {
+      if (!document.hidden) refit();
+    };
+    const layoutRoot = containerRef.current.closest(".workbench-body");
+    const onTransitionEnd = (event: Event) => {
+      if (
+        !(event.target instanceof Element) ||
+        !event.target.matches(".connection-manager, .status-panel, .files-region, .terminal-region")
+      ) return;
+      const property = (event as TransitionEvent).propertyName;
+      if (/^(width|height|flex-basis|margin|padding|transform)/.test(property)) refit();
+    };
     window.addEventListener("resize", refit);
+    window.addEventListener("focus", refit);
+    window.addEventListener("pageshow", refit);
+    document.addEventListener("visibilitychange", onVisible);
+    document.fonts?.addEventListener("loadingdone", refit);
+    void document.fonts?.ready.then(refit);
+    layoutRoot?.addEventListener("transitionend", onTransitionEnd);
     // Refit when the container itself resizes (e.g. dragging the file dock).
     const observer = new ResizeObserver(refit);
     observer.observe(containerRef.current);
+    if (containerRef.current.parentElement) observer.observe(containerRef.current.parentElement);
 
     terminalRef.current = terminal;
-    fitRef.current = fit;
     setSearchAddon(search);
+    refit();
 
     return () => {
+      disposed = true;
+      requestFitRef.current = null;
+      cancelAnimationFrame(fitFrame);
+      cancelAnimationFrame(settledFrame);
       window.removeEventListener("resize", refit);
+      window.removeEventListener("focus", refit);
+      window.removeEventListener("pageshow", refit);
+      document.removeEventListener("visibilitychange", onVisible);
+      document.fonts?.removeEventListener("loadingdone", refit);
+      layoutRoot?.removeEventListener("transitionend", onTransitionEnd);
       if (fitTimerRef.current !== null) window.clearTimeout(fitTimerRef.current);
       if (fitSettledTimerRef.current !== null) window.clearTimeout(fitSettledTimerRef.current);
       observer.disconnect();
@@ -604,15 +646,13 @@ function TerminalPaneBase({
     themeRef.current = theme;
     if (!terminalRef.current) return;
     terminalRef.current.options.theme = getTerminalTheme(theme);
+    requestFitRef.current?.();
   }, [theme]);
 
   useEffect(() => {
     if (!terminalRef.current) return;
     terminalRef.current.options.fontSize = fontSize;
-    requestAnimationFrame(() => {
-      fitRef.current?.fit();
-      reportTerminalSize();
-    });
+    requestFitRef.current?.();
   }, [fontSize]);
 
   useEffect(() => {
@@ -709,23 +749,8 @@ function TerminalPaneBase({
   }, [tab.sessionId, tab.state, tab.title]);
 
   useEffect(() => {
-    if (visible) {
-      window.setTimeout(() => {
-        fitRef.current?.fit();
-        reportTerminalSize();
-      }, 120);
-    }
-  }, [visible]);
-
-  useEffect(() => {
     if (!visible) return;
-    const timers = [0, 40, 120, 240].map((delay) =>
-      window.setTimeout(() => {
-        fitRef.current?.fit();
-        reportTerminalSize();
-      }, delay),
-    );
-    return () => timers.forEach((timer) => window.clearTimeout(timer));
+    requestFitRef.current?.();
   }, [layoutSignal, visible]);
 
   useEffect(() => {

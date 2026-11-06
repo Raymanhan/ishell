@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.5.8](https://github.com/Raymanhan/ishell/releases/tag/v1.5.8)**
+**[Download iShell v1.5.9](https://github.com/Raymanhan/ishell/releases/tag/v1.5.9)**
 
 Available packages:
 
@@ -349,8 +349,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.5.8
-git push origin v1.5.8
+git tag v1.5.9
+git push origin v1.5.9
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -410,6 +410,8 @@ src-tauri/src/
 ```
 
 ## Recent Changes
+
+- `v1.5.9` constrains terminal cards and side panels to the available workspace height. Terminal dimensions and rendering refresh after window focus, visibility restoration, font loading, theme changes and completed sidebar transitions. AI panel headers, composer and footer stay in place while long replies scroll.
 
 - `v1.5.8` adds interface languages: Simplified Chinese, Traditional Chinese, and English, following the system language and switchable live in Settings → Appearance (open windows update too). App error messages are translated, including errors from the desktop backend; server output and AI replies stay as they are, and dates follow the chosen language. AI context compaction now follows the context window declared in the model metadata (at 75% of the window, no longer capped at 200k), with 200k estimated tokens as the default when none is declared. Type `/compact` in the AI chat to compact on demand, optionally followed by what the summary should keep. About and Updates shows the latest versions, with older ones in a collapsible, scrollable list.
 

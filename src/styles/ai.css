@@ -7,6 +7,15 @@
   color: var(--text);
   font-size: 12px;
 }
+.status-panel-content > .ai-panel {
+  flex: 1 1 0;
+  height: auto;
+}
+.ai-head,
+.ai-target,
+.ai-foot {
+  flex: 0 0 auto;
+}
 .ai-head {
   display: flex;
   align-items: center;
@@ -87,7 +96,7 @@
   text-overflow: ellipsis;
 }
 .ai-messages {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   overflow: auto;
   padding: 15px 14px;

@@ -2512,7 +2512,7 @@ dependencies = [
 
 [[package]]
 name = "ishell"
-version = "1.5.8"
+version = "1.5.9"
 dependencies = [
  "aes-gcm 0.10.3",
  "base64 0.22.1",

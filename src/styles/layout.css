@@ -5,6 +5,7 @@
   --rail-gap: 12px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   width: 100vw;
   height: 100vh;
   overflow: hidden;
@@ -732,7 +733,9 @@
 }
 .workbench-main {
   position: relative;
-  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
   min-width: 0;
   min-height: 0;
   padding: 0;
@@ -771,6 +774,8 @@
   width: 10px;
 }
 .status-panel {
+  display: flex;
+  flex-direction: column;
   flex: 0 0 auto;
   width: 0;
   min-width: 0;
@@ -806,9 +811,12 @@
     0 0 0 1px rgba(255, 255, 255, 0.07);
 }
 .status-panel-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
   width: 100%;
-  height: 100%;
   min-height: 0;
+  overflow: hidden;
   padding-top: 6px;
   animation: side-panel-content-in 170ms cubic-bezier(0.2, 0.85, 0.25, 1);
 }
@@ -906,7 +914,7 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
   background: var(--inset);
@@ -919,7 +927,7 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
   background: var(--inset);
@@ -1142,7 +1150,7 @@
 }
 .terminal-stack {
   position: relative;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
 }
