@@ -15,7 +15,7 @@ history, live telemetry, and a translucent desktop UI.
 
 Get the latest installers from GitHub Releases:
 
-**[Download iShell v1.5.9](https://github.com/Raymanhan/ishell/releases/tag/v1.5.9)**
+**[Download iShell v1.5.10](https://github.com/Raymanhan/ishell/releases/tag/v1.5.10)**
 
 Available packages:
 
@@ -349,8 +349,8 @@ Release builds are generated automatically when a `v*` tag is pushed. They can
 also be run manually from the **Build installers** workflow in GitHub Actions.
 
 ```bash
-git tag v1.5.9
-git push origin v1.5.9
+git tag v1.5.10
+git push origin v1.5.10
 ```
 
 The release workflow builds Windows, Linux, macOS Intel, and macOS Apple Silicon
@@ -410,6 +410,8 @@ src-tauri/src/
 ```
 
 ## Recent Changes
+
+- `v1.5.10` fixes the terminal card sitting a few pixels above the neighbouring cards on macOS after opening a server, until the file panel was opened. The resize handles of the closed file and monitor panels no longer extend past the window edge, and layout containers that must not scroll are put back in place if the system scrolls them.
 
 - `v1.5.9` constrains terminal cards and side panels to the available workspace height. Terminal dimensions and rendering refresh after window focus, visibility restoration, font loading, theme changes and completed sidebar transitions. AI panel headers, composer and footer stay in place while long replies scroll.
 

@@ -12,7 +12,7 @@ iShell 是一个基于 Tauri + React + Rust 的轻量级 SSH 桌面工作台，�
 
 请从 GitHub Releases 下载最新版安装包：
 
-**[下载 iShell v1.5.9](https://github.com/Raymanhan/ishell/releases/tag/v1.5.9)**
+**[下载 iShell v1.5.10](https://github.com/Raymanhan/ishell/releases/tag/v1.5.10)**
 
 可用安装包：
 
@@ -269,8 +269,8 @@ npm run tauri -- build --target aarch64-apple-darwin
 推送 `v*` 标签后，GitHub Actions 会自动构建 Release。也可以在 GitHub Actions 页面手动运行 **Build installers** 工作流。
 
 ```bash
-git tag v1.5.9
-git push origin v1.5.9
+git tag v1.5.10
+git push origin v1.5.10
 ```
 
 发布工作流会构建 Windows、Linux、macOS Intel 和 macOS Apple Silicon 安装包，并把产物上传到 GitHub Release。
@@ -319,6 +319,8 @@ src-tauri/src/
 ```
 
 ## 最近更新
+
+- `v1.5.10` 修复 macOS 上打开服务器后终端卡片比相邻卡片高出一截、需打开文件栏才恢复的问题：文件栏和监控栏关闭时，其拖动分隔条不再超出窗口边缘；布局容器若被系统意外滚动会立即归位，终端与侧栏卡片保持对齐。
 
 - `v1.5.9` 改进终端卡片与侧栏的高度约束，统一使用工作区可用空间；窗口重新获得焦点、恢复显示、字体加载、主题变化和侧栏动画结束后，自动同步终端尺寸并重绘。长对话只在消息区域滚动，AI 面板的标题、输入区和底部提示不再被挤压。
 
